@@ -1,0 +1,152 @@
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+
+class VideoService extends ChangeNotifier {
+  final ImagePicker _picker = ImagePicker();
+  String? _currentVideoPath;
+  List<String> _recentVideos = [];
+
+  String? get currentVideoPath => _currentVideoPath;
+  List<String> get recentVideos => List.unmodifiable(_recentVideos);
+
+  /// Capture a new video using the device camera
+  Future<String?> captureVideo() async {
+    try {
+      final XFile? video = await _picker.pickVideo(
+        source: ImageSource.camera,
+        maxDuration: const Duration(seconds: 30),
+      );
+      
+      if (video != null) {
+        _currentVideoPath = video.path;
+        _addToRecentVideos(video.path);
+        notifyListeners();
+        return video.path;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error capturing video: $e');
+      return null;
+    }
+  }
+
+  /// Select an existing video from the gallery
+  Future<String?> selectVideo() async {
+    try {
+      final XFile? video = await _picker.pickVideo(
+        source: ImageSource.gallery,
+      );
+      
+      if (video != null) {
+        _currentVideoPath = video.path;
+        _addToRecentVideos(video.path);
+        notifyListeners();
+        return video.path;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error selecting video: $e');
+      return null;
+    }
+  }
+
+  /// Set the current video path manually
+  void setCurrentVideo(String path) {
+    _currentVideoPath = path;
+    _addToRecentVideos(path);
+    notifyListeners();
+  }
+
+  /// Clear the current video
+  void clearCurrentVideo() {
+    _currentVideoPath = null;
+    notifyListeners();
+  }
+
+  /// Add a video to recent videos list
+  void _addToRecentVideos(String path) {
+    // Remove if already exists
+    _recentVideos.remove(path);
+    
+    // Add to beginning
+    _recentVideos.insert(0, path);
+    
+    // Keep only last 10 videos
+    if (_recentVideos.length > 10) {
+      _recentVideos = _recentVideos.sublist(0, 10);
+    }
+  }
+
+  /// Remove a video from recent videos
+  void removeFromRecent(String path) {
+    _recentVideos.remove(path);
+    notifyListeners();
+  }
+
+  /// Clear all recent videos
+  void clearRecentVideos() {
+    _recentVideos.clear();
+    notifyListeners();
+  }
+
+  /// Check if a video file exists
+  bool videoExists(String path) {
+    try {
+      return File(path).existsSync();
+    } catch (e) {
+      debugPrint('Error checking video existence: $e');
+      return false;
+    }
+  }
+
+  /// Get video file size in MB
+  Future<double?> getVideoSize(String path) async {
+    try {
+      final file = File(path);
+      if (await file.exists()) {
+        final bytes = await file.length();
+        return bytes / (1024 * 1024); // Convert to MB
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error getting video size: $e');
+      return null;
+    }
+  }
+
+  /// Delete a video file
+  Future<bool> deleteVideo(String path) async {
+    try {
+      final file = File(path);
+      if (await file.exists()) {
+        await file.delete();
+        removeFromRecent(path);
+        
+        if (_currentVideoPath == path) {
+          _currentVideoPath = null;
+        }
+        
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Error deleting video: $e');
+      return false;
+    }
+  }
+
+  /// Get thumbnail from video (placeholder for future implementation)
+  Future<String?> getVideoThumbnail(String videoPath) async {
+    // TODO: Implement thumbnail generation using video_thumbnail package
+    // For now, return null
+    return null;
+  }
+
+  /// Validate video file
+  bool isValidVideoFile(String path) {
+    final validExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.m4v'];
+    return validExtensions.any((ext) => path.toLowerCase().endsWith(ext));
+  }
+}
