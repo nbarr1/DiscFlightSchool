@@ -3,6 +3,7 @@ import 'package:video_player/video_player.dart';
 import 'package:provider/provider.dart';
 import '../../services/posture_analysis_service.dart';
 import '../../models/form_analysis.dart';
+import '../../widgets/skeleton_overlay.dart';
 import 'dart:io';
 
 class PostureAnalysisScreen extends StatefulWidget {
@@ -27,6 +28,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   bool _isAnalyzing = false;
   FormAnalysis? _analysis;
   int _currentFrame = 0;
+  bool _showSkeleton = true;
 
   @override
   void initState() {
@@ -47,7 +49,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
     _controller!.addListener(() {
       if (_analysis != null && _controller!.value.isPlaying) {
         final position = _controller!.value.position.inMilliseconds;
-        final frameNumber = (position / 33).floor(); // Assuming 30fps
+        final frameNumber = (position / 33).floor();
         if (frameNumber < _analysis!.frames.length) {
           setState(() {
             _currentFrame = frameNumber;
@@ -84,6 +86,20 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Form Analysis'),
+        actions: [
+          if (_analysis != null)
+            IconButton(
+              icon: Icon(
+                _showSkeleton ? Icons.visibility : Icons.visibility_off,
+              ),
+              onPressed: () {
+                setState(() {
+                  _showSkeleton = !_showSkeleton;
+                });
+              },
+              tooltip: _showSkeleton ? 'Hide Skeleton' : 'Show Skeleton',
+            ),
+        ],
       ),
       body: _isAnalyzing
           ? const Center(
@@ -95,7 +111,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                   Text('Analyzing your form...'),
                   SizedBox(height: 8),
                   Text(
-                    'This may take a few moments',
+                    'Detecting pose and calculating joint angles',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ],
@@ -106,23 +122,20 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
               : SingleChildScrollView(
                   child: Column(
                     children: [
-                      // Video player
+                      // Video player with skeleton overlay
                       if (_isInitialized && _controller != null)
-                        AspectRatio(
-                          aspectRatio: _controller!.value.aspectRatio,
-                          child: VideoPlayer(_controller!),
-                        ),
-                      
+                        _buildVideoWithOverlay(),
+
                       // Video controls
                       if (_isInitialized && _controller != null)
                         _buildVideoControls(),
-                      
+
                       // Score card
                       _buildScoreCard(),
-                      
+
                       // Angle charts
                       _buildAngleCharts(),
-                      
+
                       // Suggestions
                       _buildSuggestions(postureService),
                     ],
@@ -131,43 +144,114 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
     );
   }
 
+  Widget _buildVideoWithOverlay() {
+    return Stack(
+      children: [
+        AspectRatio(
+          aspectRatio: _controller!.value.aspectRatio,
+          child: VideoPlayer(_controller!),
+        ),
+        if (_showSkeleton && _analysis != null && _analysis!.frames.isNotEmpty)
+          Positioned.fill(
+            child: AspectRatio(
+              aspectRatio: _controller!.value.aspectRatio,
+              child: CustomPaint(
+                painter: SkeletonOverlay(
+                  analysis: _analysis!,
+                  currentFrame: _currentFrame,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _buildVideoControls() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       color: Colors.black87,
-      child: Row(
+      child: Column(
         children: [
-          IconButton(
-            icon: Icon(
-              _controller!.value.isPlaying ? Icons.pause : Icons.play_arrow,
-              color: Colors.white,
+          Row(
+            children: [
+              // Frame step back
+              IconButton(
+                icon: const Icon(Icons.skip_previous, color: Colors.white),
+                onPressed: () {
+                  final pos = _controller!.value.position -
+                      const Duration(milliseconds: 33);
+                  _controller!.seekTo(pos.isNegative ? Duration.zero : pos);
+                  setState(() {
+                    _currentFrame = (_currentFrame - 1).clamp(0, (_analysis?.frames.length ?? 1) - 1);
+                  });
+                },
+                tooltip: 'Previous Frame',
+              ),
+              IconButton(
+                icon: Icon(
+                  _controller!.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                  color: Colors.white,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _controller!.value.isPlaying
+                        ? _controller!.pause()
+                        : _controller!.play();
+                  });
+                },
+              ),
+              // Frame step forward
+              IconButton(
+                icon: const Icon(Icons.skip_next, color: Colors.white),
+                onPressed: () {
+                  final pos = _controller!.value.position +
+                      const Duration(milliseconds: 33);
+                  _controller!.seekTo(pos);
+                  setState(() {
+                    _currentFrame = (_currentFrame + 1).clamp(0, (_analysis?.frames.length ?? 1) - 1);
+                  });
+                },
+                tooltip: 'Next Frame',
+              ),
+              Expanded(
+                child: Slider(
+                  value: _controller!.value.position.inMilliseconds
+                      .toDouble()
+                      .clamp(0, _controller!.value.duration.inMilliseconds.toDouble()),
+                  min: 0,
+                  max: _controller!.value.duration.inMilliseconds.toDouble(),
+                  onChanged: (value) {
+                    _controller!.seekTo(Duration(milliseconds: value.toInt()));
+                    if (_analysis != null) {
+                      final frame = (value / 33).floor().clamp(0, _analysis!.frames.length - 1);
+                      setState(() {
+                        _currentFrame = frame;
+                      });
+                    }
+                  },
+                ),
+              ),
+              Text(
+                '${_formatDuration(_controller!.value.position)} / ${_formatDuration(_controller!.value.duration)}',
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+              ),
+            ],
+          ),
+          if (_analysis != null)
+            Text(
+              'Frame ${_currentFrame + 1} / ${_analysis!.frames.length}',
+              style: const TextStyle(color: Colors.grey, fontSize: 11),
             ),
-            onPressed: () {
-              setState(() {
-                _controller!.value.isPlaying ? _controller!.pause() : _controller!.play();
-              });
-            },
-          ),
-          Expanded(
-            child: Slider(
-              value: _controller!.value.position.inMilliseconds.toDouble(),
-              min: 0,
-              max: _controller!.value.duration.inMilliseconds.toDouble(),
-              onChanged: (value) {
-                _controller!.seekTo(Duration(milliseconds: value.toInt()));
-              },
-            ),
-          ),
-          Text(
-            '${_formatDuration(_controller!.value.position)} / ${_formatDuration(_controller!.value.duration)}',
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-          ),
         ],
       ),
     );
   }
 
   Widget _buildScoreCard() {
+    final score = _analysis!.score;
+    final color = _getScoreColor(score);
+
     return Card(
       margin: const EdgeInsets.all(16),
       child: Padding(
@@ -180,20 +264,36 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                     fontWeight: FontWeight.bold,
                   ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              '${_analysis!.score.toStringAsFixed(1)}',
-              style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                    color: _getScoreColor(_analysis!.score),
-                    fontWeight: FontWeight.bold,
+            const SizedBox(height: 12),
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 120,
+                  height: 120,
+                  child: CircularProgressIndicator(
+                    value: score / 100,
+                    strokeWidth: 10,
+                    backgroundColor: Colors.grey[800],
+                    valueColor: AlwaysStoppedAnimation<Color>(color),
                   ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              _getScoreLabel(_analysis!.score),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
-                  ),
+                ),
+                Column(
+                  children: [
+                    Text(
+                      score.toStringAsFixed(1),
+                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                            color: color,
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    Text(
+                      _getScoreLabel(score),
+                      style: TextStyle(color: color, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ],
         ),
@@ -211,7 +311,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
     if (score >= 90) return 'Excellent';
     if (score >= 80) return 'Good';
     if (score >= 70) return 'Fair';
-    if (score >= 60) return 'Needs Improvement';
+    if (score >= 60) return 'Needs Work';
     return 'Poor';
   }
 
@@ -275,7 +375,6 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   }
 
   String _formatAngleName(String name) {
-    // Convert camelCase to Title Case
     final result = name.replaceAllMapped(
       RegExp(r'([A-Z])'),
       (match) => ' ${match.group(0)}',
@@ -298,9 +397,9 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.blue.shade50,
+        color: Colors.blue.withAlpha(30),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: Colors.blue.withAlpha(80)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -317,7 +416,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.check_circle, size: 16, color: Colors.blue),
+                    const Icon(Icons.lightbulb_outline, size: 16, color: Colors.amber),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -354,7 +453,7 @@ class AngleWaveformPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     final fillPaint = Paint()
-      ..color = Colors.blue.withOpacity(0.2)
+      ..color = Colors.blue.withAlpha(50)
       ..style = PaintingStyle.fill;
 
     final currentFramePaint = Paint()
@@ -371,7 +470,7 @@ class AngleWaveformPainter extends CustomPainter {
     // Draw waveform
     final path = Path();
     final fillPath = Path();
-    
+
     for (int i = 0; i < angleData.length; i++) {
       final x = (i / (angleData.length - 1)) * size.width;
       final normalizedValue = (angleData[i] - minAngle) / range;
@@ -387,11 +486,9 @@ class AngleWaveformPainter extends CustomPainter {
       }
     }
 
-    // Complete fill path
     fillPath.lineTo(size.width, size.height);
     fillPath.close();
 
-    // Draw fill and stroke
     canvas.drawPath(fillPath, fillPaint);
     canvas.drawPath(path, paint);
 
@@ -406,7 +503,7 @@ class AngleWaveformPainter extends CustomPainter {
 
     // Draw grid lines
     final gridPaint = Paint()
-      ..color = Colors.grey.withOpacity(0.3)
+      ..color = Colors.grey.withAlpha(76)
       ..strokeWidth = 1;
 
     for (int i = 0; i <= 4; i++) {

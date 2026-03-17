@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../services/video_service.dart';
 import '../../services/posture_analysis_service.dart';
 import 'posture_analysis_screen.dart';
+import 'comparison_screen.dart';
 
 class FormCoachScreen extends StatefulWidget {
   const FormCoachScreen({Key? key}) : super(key: key);
@@ -13,7 +14,7 @@ class FormCoachScreen extends StatefulWidget {
 
 class _FormCoachScreenState extends State<FormCoachScreen> {
   String? _selectedPro;
-  
+
   final List<String> _proDgPlayers = [
     'Paul McBeth',
     'Ricky Wysocki',
@@ -77,7 +78,7 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
               onPressed: () async {
                 final videoPath = await videoService.selectVideo();
                 if (videoPath != null && mounted) {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => PostureAnalysisScreen(videoPath: videoPath)));
+                  _navigateToAnalysis(videoPath);
                 }
               },
               icon: const Icon(Icons.video_library),
@@ -91,7 +92,7 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
               onPressed: () async {
                 final videoPath = await videoService.captureVideo();
                 if (videoPath != null && mounted) {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => PostureAnalysisScreen(videoPath: videoPath)));    
+                  _navigateToAnalysis(videoPath);
                 }
               },
               icon: const Icon(Icons.videocam),
@@ -103,7 +104,6 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
             const SizedBox(height: 20),
             if (postureService.currentAnalysis != null) ...[
               Card(
-                color: Colors.blue.shade50,
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -115,21 +115,64 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Frames Analyzed: ${postureService.currentAnalysis!.frames.length}',
+                        'Score: ${postureService.currentAnalysis!.score.toStringAsFixed(1)}',
                       ),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => PostureAnalysisScreen(
-                                analysis: postureService.currentAnalysis!,
+                      Text(
+                        'Frames: ${postureService.currentAnalysis!.frames.length}',
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => PostureAnalysisScreen(
+                                      analysis: postureService.currentAnalysis!,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: const Text('View Analysis'),
+                            ),
+                          ),
+                          if (_selectedPro != null) ...[
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  // Load pro data and navigate to comparison
+                                  await postureService.loadProFormData(_selectedPro!);
+                                  if (!mounted) return;
+
+                                  // Get the user analysis and create pro analysis
+                                  final userAnalysis = postureService.currentAnalysis!;
+                                  final proAnalysis = postureService.analyses.length > 1
+                                      ? postureService.analyses.last
+                                      : userAnalysis;
+
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ComparisonScreen(
+                                        userAnalysis: userAnalysis,
+                                        proAnalysis: proAnalysis,
+                                        proName: _selectedPro!,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.compare_arrows),
+                                label: const Text('Compare'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                ),
                               ),
                             ),
-                          );
-                        },
-                        child: const Text('View Analysis'),
+                          ],
+                        ],
                       ),
                     ],
                   ),
@@ -140,7 +183,9 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
         ),
       ),
     );
-  }  void _navigateToAnalysis(String path) {
+  }
+
+  void _navigateToAnalysis(String path) {
     Navigator.push(
       context,
       MaterialPageRoute(

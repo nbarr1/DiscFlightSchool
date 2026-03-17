@@ -11,7 +11,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Disc Golf Training App'),
+        title: const Text('Disc Flight School'),
         centerTitle: true,
       ),
       body: Center(
@@ -28,7 +28,7 @@ class HomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 40),
                 const Text(
-                  'Welcome to Disc Golf Trainer',
+                  'Welcome to Disc Flight School',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,

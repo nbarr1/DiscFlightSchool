@@ -13,6 +13,13 @@ dependencies:
   fl_chart: ^0.66.0
   video_player: ^2.8.2
   path_provider: ^2.1.2
+  provider: ^6.1.1
+  image_picker: ^1.0.7
+  video_thumbnail: ^0.5.3
+  google_mlkit_pose_detection: ^0.11.0
+  shared_preferences: ^2.2.2
+  tflite_flutter: ^0.11.0
+  image: ^4.1.4
 
 dev_dependencies:
   flutter_test:
@@ -21,7 +28,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  
+
   assets:
     - assets/data/output_coordinates.json
     - assets/data/analysis_results.json
+    - assets/models/disc_detector.tflite
