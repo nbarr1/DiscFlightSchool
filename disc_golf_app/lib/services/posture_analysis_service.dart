@@ -9,6 +9,7 @@ import 'dart:math';
 class PostureAnalysisService extends ChangeNotifier {
   final List<FormAnalysis> _analyses = [];
   FormAnalysis? _currentAnalysis;
+  FormAnalysis? _proAnalysis;
   
   final PoseDetector _poseDetector = PoseDetector(
     options: PoseDetectorOptions(
@@ -20,46 +21,69 @@ class PostureAnalysisService extends ChangeNotifier {
 
   List<FormAnalysis> get analyses => _analyses;
   FormAnalysis? get currentAnalysis => _currentAnalysis;
+  FormAnalysis? get proAnalysis => _proAnalysis;
 
-  Future<FormAnalysis> analyzeForm(String videoPath) async {
+  Future<FormAnalysis> analyzeForm(String videoPath, {int startMs = 0, int frameCount = 30}) async {
     List<String>? framePaths;
-    
+
     try {
-      print('Starting form analysis for: $videoPath');
-      
+      debugPrint('Starting form analysis for: $videoPath (start: ${startMs}ms, frames: $frameCount)');
+
       // Extract frames from video
-      framePaths = await _frameExtractor.extractFrames(videoPath, frameCount: 30);
-      print('Extracted ${framePaths.length} frames');
+      framePaths = await _frameExtractor.extractFrames(videoPath, frameCount: frameCount, startMs: startMs);
+      debugPrint('Extracted ${framePaths.length} frames');
       
+      // Read image dimensions from first frame
+      double? imgWidth;
+      double? imgHeight;
+      if (framePaths.isNotEmpty) {
+        final firstFile = File(framePaths.first);
+        final bytes = await firstFile.readAsBytes();
+        final decoded = await decodeImageFromList(bytes);
+        imgWidth = decoded.width.toDouble();
+        imgHeight = decoded.height.toDouble();
+        debugPrint('Frame dimensions: ${imgWidth}x$imgHeight');
+      }
+
       // Analyze each frame
       final frames = <FormFrame>[];
-      
+      const intervalMs = 200; // Must match VideoFrameExtractor.intervalMs
+
       for (int i = 0; i < framePaths.length; i++) {
         final framePath = framePaths[i];
-        print('Analyzing frame ${i + 1}/${framePaths.length}');
-        
+        if (i % 10 == 0) {
+          debugPrint('Analyzing frame ${i + 1}/${framePaths.length}');
+        }
+
         final inputImage = InputImage.fromFilePath(framePath);
         final poses = await _poseDetector.processImage(inputImage);
-        
+
         if (poses.isNotEmpty) {
           final pose = poses.first;
           final angles = _calculateAngles(pose);
           final keyPoints = _extractKeyPoints(pose);
-          
+
           frames.add(FormFrame(
-            timestamp: Duration(milliseconds: (i * 100)),
+            timestamp: Duration(milliseconds: i * intervalMs),
             angles: angles,
             keyPoints: keyPoints,
+            imageWidth: imgWidth,
+            imageHeight: imgHeight,
           ));
-          
-          print('Frame $i angles: $angles');
         } else {
-          print('No pose detected in frame $i');
+          // Add empty frame so skeleton hides when person not visible
+          frames.add(FormFrame(
+            timestamp: Duration(milliseconds: i * intervalMs),
+            angles: {},
+            keyPoints: {},
+            imageWidth: imgWidth,
+            imageHeight: imgHeight,
+          ));
         }
       }
       
       if (frames.isEmpty) {
-        print('No poses detected in any frame, using mock data');
+        debugPrint('No poses detected in any frame, using mock data');
         return _generateMockAnalysis(videoPath);
       }
       
@@ -77,7 +101,7 @@ class PostureAnalysisService extends ChangeNotifier {
 
       return analysis;
     } catch (e) {
-      print('Error analyzing form: $e');
+      debugPrint('Error analyzing form: $e');
       return _generateMockAnalysis(videoPath);
     } finally {
       // Cleanup extracted frames
@@ -228,8 +252,6 @@ class PostureAnalysisService extends ChangeNotifier {
   }
 
   Map<String, double> _generateRealisticAngles(double progress) {
-    final pi = 3.14159;
-    
     return {
       'rightElbowAngle': 140 - (sin(progress * pi) * 50),
       'leftElbowAngle': 140 + (sin(progress * pi) * 20),
@@ -260,7 +282,7 @@ class PostureAnalysisService extends ChangeNotifier {
       );
     });
 
-    _currentAnalysis = FormAnalysis(
+    final proFormAnalysis = FormAnalysis(
       id: 'pro_$proName',
       date: DateTime.now(),
       videoPath: '',
@@ -268,6 +290,8 @@ class PostureAnalysisService extends ChangeNotifier {
       score: 95.0,
     );
 
+    _proAnalysis = proFormAnalysis;
+    _currentAnalysis = proFormAnalysis;
     notifyListeners();
   }
 
@@ -321,6 +345,7 @@ class PostureAnalysisService extends ChangeNotifier {
   void clearAnalyses() {
     _analyses.clear();
     _currentAnalysis = null;
+    _proAnalysis = null;
     notifyListeners();
   }
 

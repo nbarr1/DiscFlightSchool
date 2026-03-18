@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../services/video_service.dart';
 import '../../services/posture_analysis_service.dart';
 import 'posture_analysis_screen.dart';
+import 'video_trim_screen.dart';
 import 'comparison_screen.dart';
 
 class FormCoachScreen extends StatefulWidget {
@@ -189,7 +190,7 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => PostureAnalysisScreen(
+        builder: (context) => VideoTrimScreen(
           videoPath: path,
           proPlayer: _selectedPro,
         ),

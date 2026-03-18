@@ -10,12 +10,18 @@ class PostureAnalysisScreen extends StatefulWidget {
   final String? videoPath;
   final FormAnalysis? analysis;
   final String? proPlayer;
+  final int? analysisStartMs;
+  final int? analysisEndMs;
+  final int? analysisFrameCount;
 
   const PostureAnalysisScreen({
     Key? key,
     this.videoPath,
     this.analysis,
     this.proPlayer,
+    this.analysisStartMs,
+    this.analysisEndMs,
+    this.analysisFrameCount,
   }) : super(key: key);
 
   @override
@@ -28,7 +34,9 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   bool _isAnalyzing = false;
   FormAnalysis? _analysis;
   int _currentFrame = 0;
+  bool _inAnalysisRange = false;
   bool _showSkeleton = true;
+  bool _showThresholds = true;
 
   @override
   void initState() {
@@ -47,12 +55,17 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
       _isInitialized = true;
     });
     _controller!.addListener(() {
-      if (_analysis != null && _controller!.value.isPlaying) {
+      if (_analysis != null) {
         final position = _controller!.value.position.inMilliseconds;
-        final frameNumber = (position / 33).floor();
-        if (frameNumber < _analysis!.frames.length) {
+        final startMs = widget.analysisStartMs ?? 0;
+        final endMs = widget.analysisEndMs ?? (startMs + _analysis!.frames.length * 200);
+        final inRange = position >= startMs && position <= endMs;
+        // Frames extracted at 200ms intervals from the trim start
+        final frameNumber = ((position - startMs) / 200).floor().clamp(0, _analysis!.frames.length - 1);
+        if (frameNumber != _currentFrame || inRange != _inAnalysisRange) {
           setState(() {
             _currentFrame = frameNumber;
+            _inAnalysisRange = inRange;
           });
         }
       }
@@ -65,7 +78,11 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
     });
 
     final postureService = Provider.of<PostureAnalysisService>(context, listen: false);
-    final analysis = await postureService.analyzeForm(widget.videoPath!);
+    final analysis = await postureService.analyzeForm(
+      widget.videoPath!,
+      startMs: widget.analysisStartMs ?? 0,
+      frameCount: widget.analysisFrameCount ?? 30,
+    );
 
     setState(() {
       _analysis = analysis;
@@ -98,6 +115,18 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                 });
               },
               tooltip: _showSkeleton ? 'Hide Skeleton' : 'Show Skeleton',
+            ),
+          if (_analysis != null)
+            IconButton(
+              icon: Icon(
+                _showThresholds ? Icons.straighten : Icons.straighten_outlined,
+              ),
+              onPressed: () {
+                setState(() {
+                  _showThresholds = !_showThresholds;
+                });
+              },
+              tooltip: _showThresholds ? 'Hide Ideal Angles' : 'Show Ideal Angles',
             ),
         ],
       ),
@@ -151,7 +180,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
           aspectRatio: _controller!.value.aspectRatio,
           child: VideoPlayer(_controller!),
         ),
-        if (_showSkeleton && _analysis != null && _analysis!.frames.isNotEmpty)
+        if (_showSkeleton && _inAnalysisRange && _analysis != null && _analysis!.frames.isNotEmpty)
           Positioned.fill(
             child: AspectRatio(
               aspectRatio: _controller!.value.aspectRatio,
@@ -175,12 +204,11 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
         children: [
           Row(
             children: [
-              // Frame step back
               IconButton(
                 icon: const Icon(Icons.skip_previous, color: Colors.white),
                 onPressed: () {
                   final pos = _controller!.value.position -
-                      const Duration(milliseconds: 33);
+                      const Duration(milliseconds: 200);
                   _controller!.seekTo(pos.isNegative ? Duration.zero : pos);
                   setState(() {
                     _currentFrame = (_currentFrame - 1).clamp(0, (_analysis?.frames.length ?? 1) - 1);
@@ -201,12 +229,11 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                   });
                 },
               ),
-              // Frame step forward
               IconButton(
                 icon: const Icon(Icons.skip_next, color: Colors.white),
                 onPressed: () {
                   final pos = _controller!.value.position +
-                      const Duration(milliseconds: 33);
+                      const Duration(milliseconds: 200);
                   _controller!.seekTo(pos);
                   setState(() {
                     _currentFrame = (_currentFrame + 1).clamp(0, (_analysis?.frames.length ?? 1) - 1);
@@ -224,7 +251,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                   onChanged: (value) {
                     _controller!.seekTo(Duration(milliseconds: value.toInt()));
                     if (_analysis != null) {
-                      final frame = (value / 33).floor().clamp(0, _analysis!.frames.length - 1);
+                      final frame = (value / 200).floor().clamp(0, _analysis!.frames.length - 1);
                       setState(() {
                         _currentFrame = frame;
                       });
@@ -323,14 +350,25 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
       );
     }
 
+    final postureService = Provider.of<PostureAnalysisService>(context, listen: false);
+    final proFrames = postureService.proAnalysis?.frames;
+
     final angles = _analysis!.frames.first.angles.keys.toList();
 
     return Column(
-      children: angles.map((angleName) => _buildAngleChart(angleName)).toList(),
+      children: angles.map((angleName) {
+        final referenceData = proFrames
+            ?.map((f) => f.angles[angleName] ?? 0.0)
+            .toList();
+        return _buildAngleChart(
+          angleName,
+          referenceData: referenceData,
+        );
+      }).toList(),
     );
   }
 
-  Widget _buildAngleChart(String angleName) {
+  Widget _buildAngleChart(String angleName, {List<double>? referenceData}) {
     final angleData = _analysis!.frames.map((frame) {
       return frame.angles[angleName] ?? 0.0;
     }).toList();
@@ -358,6 +396,8 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                     painter: AngleWaveformPainter(
                       angleData: angleData,
                       currentFrame: _currentFrame,
+                      referenceData: referenceData,
+                      showThreshold: _showThresholds,
                     ),
                   );
                 },
@@ -437,11 +477,27 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
 class AngleWaveformPainter extends CustomPainter {
   final List<double> angleData;
   final int currentFrame;
+  final List<double>? referenceData;
+  final bool showThreshold;
 
   AngleWaveformPainter({
     required this.angleData,
     required this.currentFrame,
+    this.referenceData,
+    this.showThreshold = true,
   });
+
+  /// Resample reference data to match target length via linear interpolation.
+  List<double> _resampleReference(List<double> ref, int targetLength) {
+    if (ref.length == targetLength) return ref;
+    if (targetLength <= 1) return [ref.first];
+    return List.generate(targetLength, (i) {
+      final t = i / (targetLength - 1) * (ref.length - 1);
+      final lo = t.floor().clamp(0, ref.length - 2);
+      final frac = t - lo;
+      return ref[lo] * (1 - frac) + ref[lo + 1] * frac;
+    });
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -460,9 +516,20 @@ class AngleWaveformPainter extends CustomPainter {
       ..color = Colors.red
       ..strokeWidth = 2;
 
-    // Find min and max for scaling
-    final minAngle = angleData.reduce((a, b) => a < b ? a : b);
-    final maxAngle = angleData.reduce((a, b) => a > b ? a : b);
+    // Resample reference to match user frame count
+    final resampled = (showThreshold && referenceData != null && referenceData!.isNotEmpty)
+        ? _resampleReference(referenceData!, angleData.length)
+        : null;
+
+    // Find min and max for scaling (expand to include reference if shown)
+    var minAngle = angleData.reduce((a, b) => a < b ? a : b);
+    var maxAngle = angleData.reduce((a, b) => a > b ? a : b);
+    if (resampled != null) {
+      final refMin = resampled.reduce((a, b) => a < b ? a : b);
+      final refMax = resampled.reduce((a, b) => a > b ? a : b);
+      if (refMin < minAngle) minAngle = refMin - 5;
+      if (refMax > maxAngle) maxAngle = refMax + 5;
+    }
     final range = maxAngle - minAngle;
 
     if (range == 0) return;
@@ -510,11 +577,75 @@ class AngleWaveformPainter extends CustomPainter {
       final y = (i / 4) * size.height;
       canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
+
+    // Draw pro reference curve
+    if (resampled != null) {
+      final refPaint = Paint()
+        ..color = Colors.green.withAlpha(150)
+        ..strokeWidth = 1.5
+        ..style = PaintingStyle.stroke;
+
+      // Draw dashed curve
+      const dashLen = 6.0;
+      const gapLen = 4.0;
+      double accumulated = 0;
+      bool drawing = true;
+
+      for (int i = 0; i < resampled.length - 1; i++) {
+        final x1 = (i / (resampled.length - 1)) * size.width;
+        final y1 = size.height - ((resampled[i] - minAngle) / range) * size.height;
+        final x2 = ((i + 1) / (resampled.length - 1)) * size.width;
+        final y2 = size.height - ((resampled[i + 1] - minAngle) / range) * size.height;
+
+        final dx = x2 - x1;
+        final dy = y2 - y1;
+        final segLen = (dx * dx + dy * dy).abs();
+        final segDist = segLen > 0 ? segLen * 0.5 + (x2 - x1).abs() : 0.0; // approximate
+
+        if (drawing) {
+          canvas.drawLine(Offset(x1, y1), Offset(x2, y2), refPaint);
+        }
+
+        accumulated += segDist > 0 ? segDist : (x2 - x1).abs();
+        final threshold = drawing ? dashLen : gapLen;
+        if (accumulated >= threshold) {
+          accumulated = 0;
+          drawing = !drawing;
+        }
+      }
+
+      // "Pro" label at right end of curve
+      final lastY = size.height - ((resampled.last - minAngle) / range) * size.height;
+      final labelPainter = TextPainter(
+        text: TextSpan(
+          text: 'Pro',
+          style: TextStyle(
+            color: Colors.green.withAlpha(200),
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      labelPainter.layout();
+      final labelX = size.width - labelPainter.width - 2;
+      final labelY = (lastY - labelPainter.height - 4).clamp(0.0, size.height - labelPainter.height);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(labelX - 2, labelY - 1, labelPainter.width + 4, labelPainter.height + 2),
+          const Radius.circular(3),
+        ),
+        Paint()..color = Colors.black.withAlpha(160),
+      );
+      labelPainter.paint(canvas, Offset(labelX, labelY));
+    }
   }
 
   @override
   bool shouldRepaint(covariant AngleWaveformPainter oldDelegate) {
     return oldDelegate.currentFrame != currentFrame ||
-        oldDelegate.angleData != angleData;
+        oldDelegate.angleData != angleData ||
+        oldDelegate.referenceData != referenceData ||
+        oldDelegate.showThreshold != showThreshold;
   }
 }

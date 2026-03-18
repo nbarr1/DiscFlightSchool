@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'dart:math';
 import '../models/form_analysis.dart';
 
+/// Clean skeleton overlay — color-coded limbs, minimal labels.
 class SkeletonOverlay extends CustomPainter {
   final FormAnalysis analysis;
   final int currentFrame;
@@ -11,258 +11,210 @@ class SkeletonOverlay extends CustomPainter {
     required this.currentFrame,
   });
 
+  // Ideal angles for disc golf form
+  static const _idealAngles = {
+    'rightElbowAngle': 120.0,
+    'leftElbowAngle': 140.0,
+    'rightShoulderAngle': 100.0,
+    'leftShoulderAngle': 100.0,
+    'rightKneeAngle': 160.0,
+    'leftKneeAngle': 160.0,
+    'spineAngle': 85.0,
+  };
+
   @override
   void paint(Canvas canvas, Size size) {
     if (analysis.frames.isEmpty) return;
 
-    // Clamp to valid frame index
     final frameIndex = currentFrame.clamp(0, analysis.frames.length - 1);
     final frame = analysis.frames[frameIndex];
 
     if (frame.keyPoints.isEmpty) return;
 
-    // Draw skeleton connections
+    // Draw color-coded skeleton limbs
     _drawSkeleton(canvas, size, frame);
 
-    // Draw joints
-    for (var entry in frame.keyPoints.entries) {
-      final point = entry.value;
-      // Scale keypoints to canvas size
-      final scaledPoint = _scalePoint(point, size);
+    // Draw small joint dots
+    _drawJoints(canvas, size, frame);
 
-      final paint = Paint()
-        ..color = Colors.green
-        ..style = PaintingStyle.fill;
-
-      canvas.drawCircle(scaledPoint, 6, paint);
-
-      // Draw joint name label
-      final textPainter = TextPainter(
-        text: TextSpan(
-          text: _formatJointName(entry.key),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 9,
-            backgroundColor: Colors.black54,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      textPainter.layout();
-      textPainter.paint(canvas, scaledPoint + const Offset(8, -5));
-    }
-
-    // Draw angle annotations
-    _drawAngles(canvas, size, frame);
+    // Show angle values at key joints only (elbow, shoulder, knee)
+    _drawKeyAngleLabels(canvas, size, frame);
   }
 
-  Offset _scalePoint(Offset point, Size size) {
-    // If points are in pixel coordinates (>1.0), scale them down to canvas
-    // If points are normalized (0-1), scale them up to canvas
-    if (point.dx > 1.0 || point.dy > 1.0) {
-      // Assume points are in video pixel coords; scale to canvas
-      // Use a reference resolution of 640x480 (common frame extraction size)
+  Offset _scalePoint(Offset point, Size canvasSize, FormFrame frame) {
+    final imgW = frame.imageWidth;
+    final imgH = frame.imageHeight;
+
+    if (imgW != null && imgH != null && imgW > 0 && imgH > 0) {
+      // Scale from image pixel coordinates to canvas
       return Offset(
-        point.dx * size.width / 640,
-        point.dy * size.height / 480,
+        point.dx * canvasSize.width / imgW,
+        point.dy * canvasSize.height / imgH,
       );
-    } else {
-      return Offset(point.dx * size.width, point.dy * size.height);
     }
+
+    // Fallback: if coordinates are normalized (0-1), scale to canvas
+    if (point.dx <= 1.0 && point.dy <= 1.0) {
+      return Offset(point.dx * canvasSize.width, point.dy * canvasSize.height);
+    }
+
+    // Fallback: assume 640-wide frame
+    return Offset(
+      point.dx * canvasSize.width / 640,
+      point.dy * canvasSize.height / 640,
+    );
   }
 
   void _drawSkeleton(Canvas canvas, Size size, FormFrame frame) {
-    final connections = [
-      ['PoseLandmarkType.leftShoulder', 'PoseLandmarkType.rightShoulder'],
-      ['PoseLandmarkType.leftShoulder', 'PoseLandmarkType.leftElbow'],
-      ['PoseLandmarkType.leftElbow', 'PoseLandmarkType.leftWrist'],
-      ['PoseLandmarkType.rightShoulder', 'PoseLandmarkType.rightElbow'],
-      ['PoseLandmarkType.rightElbow', 'PoseLandmarkType.rightWrist'],
-      ['PoseLandmarkType.leftShoulder', 'PoseLandmarkType.leftHip'],
-      ['PoseLandmarkType.rightShoulder', 'PoseLandmarkType.rightHip'],
-      ['PoseLandmarkType.leftHip', 'PoseLandmarkType.rightHip'],
-      ['PoseLandmarkType.leftHip', 'PoseLandmarkType.leftKnee'],
-      ['PoseLandmarkType.leftKnee', 'PoseLandmarkType.leftAnkle'],
-      ['PoseLandmarkType.rightHip', 'PoseLandmarkType.rightKnee'],
-      ['PoseLandmarkType.rightKnee', 'PoseLandmarkType.rightAnkle'],
+    // Limb groups with their associated angle for color-coding
+    const limbGroups = [
+      _LimbGroup(
+        joints: [
+          ['PoseLandmarkType.rightShoulder', 'PoseLandmarkType.rightElbow'],
+          ['PoseLandmarkType.rightElbow', 'PoseLandmarkType.rightWrist'],
+        ],
+        angleKey: 'rightElbowAngle',
+      ),
+      _LimbGroup(
+        joints: [
+          ['PoseLandmarkType.leftShoulder', 'PoseLandmarkType.leftElbow'],
+          ['PoseLandmarkType.leftElbow', 'PoseLandmarkType.leftWrist'],
+        ],
+        angleKey: 'leftElbowAngle',
+      ),
+      _LimbGroup(
+        joints: [
+          ['PoseLandmarkType.rightHip', 'PoseLandmarkType.rightKnee'],
+          ['PoseLandmarkType.rightKnee', 'PoseLandmarkType.rightAnkle'],
+        ],
+        angleKey: 'rightKneeAngle',
+      ),
+      _LimbGroup(
+        joints: [
+          ['PoseLandmarkType.leftHip', 'PoseLandmarkType.leftKnee'],
+          ['PoseLandmarkType.leftKnee', 'PoseLandmarkType.leftAnkle'],
+        ],
+        angleKey: 'leftKneeAngle',
+      ),
+      _LimbGroup(
+        joints: [
+          ['PoseLandmarkType.leftShoulder', 'PoseLandmarkType.rightShoulder'],
+          ['PoseLandmarkType.leftShoulder', 'PoseLandmarkType.leftHip'],
+          ['PoseLandmarkType.rightShoulder', 'PoseLandmarkType.rightHip'],
+          ['PoseLandmarkType.leftHip', 'PoseLandmarkType.rightHip'],
+        ],
+        angleKey: 'spineAngle',
+      ),
     ];
 
-    final paint = Paint()
-      ..color = Colors.cyan
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
+    for (final group in limbGroups) {
+      final angle = frame.angles[group.angleKey];
+      final color = _getAngleColor(group.angleKey, angle);
 
-    for (var connection in connections) {
-      final p1 = frame.keyPoints[connection[0]];
-      final p2 = frame.keyPoints[connection[1]];
+      final paint = Paint()
+        ..color = color.withAlpha(200)
+        ..strokeWidth = 2.5
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round;
 
-      if (p1 != null && p2 != null) {
-        canvas.drawLine(
-          _scalePoint(p1, size),
-          _scalePoint(p2, size),
-          paint,
-        );
+      for (final pair in group.joints) {
+        final p1 = frame.keyPoints[pair[0]];
+        final p2 = frame.keyPoints[pair[1]];
+        if (p1 != null && p2 != null) {
+          canvas.drawLine(
+            _scalePoint(p1, size, frame),
+            _scalePoint(p2, size, frame),
+            paint,
+          );
+        }
       }
     }
   }
 
-  void _drawAngles(Canvas canvas, Size size, FormFrame frame) {
-    if (frame.angles.isEmpty) return;
+  void _drawJoints(Canvas canvas, Size size, FormFrame frame) {
+    final paint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
 
-    double yOffset = 20;
-    for (var entry in frame.angles.entries) {
-      final angleName = _formatAngleName(entry.key);
-      final angleValue = entry.value;
+    final borderPaint = Paint()
+      ..color = Colors.black.withAlpha(120)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
 
-      // Color based on how close to ideal
-      final color = _getAngleColor(entry.key, angleValue);
+    for (final point in frame.keyPoints.values) {
+      final scaled = _scalePoint(point, size, frame);
+      canvas.drawCircle(scaled, 3.5, paint);
+      canvas.drawCircle(scaled, 3.5, borderPaint);
+    }
+  }
 
+  /// Show angle labels at 3 key joints only: throwing elbow, shoulder, lead knee.
+  void _drawKeyAngleLabels(Canvas canvas, Size size, FormFrame frame) {
+    const labels = [
+      _AngleLabel(
+        vertexKey: 'PoseLandmarkType.rightElbow',
+        angleKey: 'rightElbowAngle',
+        offset: Offset(10, -14),
+      ),
+      _AngleLabel(
+        vertexKey: 'PoseLandmarkType.rightShoulder',
+        angleKey: 'rightShoulderAngle',
+        offset: Offset(10, -14),
+      ),
+      _AngleLabel(
+        vertexKey: 'PoseLandmarkType.rightKnee',
+        angleKey: 'rightKneeAngle',
+        offset: Offset(10, -14),
+      ),
+    ];
+
+    for (final label in labels) {
+      final vertex = frame.keyPoints[label.vertexKey];
+      final angle = frame.angles[label.angleKey];
+      if (vertex == null || angle == null) continue;
+
+      final pos = _scalePoint(vertex, size, frame) + label.offset;
+      final color = _getAngleColor(label.angleKey, angle);
+
+      // Draw pill background
+      final text = '${angle.toStringAsFixed(0)}°';
       final textPainter = TextPainter(
         text: TextSpan(
-          text: ' $angleName: ${angleValue.toStringAsFixed(1)}° ',
+          text: text,
           style: TextStyle(
             color: color,
-            fontSize: 13,
+            fontSize: 11,
             fontWeight: FontWeight.bold,
-            backgroundColor: Colors.black87,
           ),
         ),
         textDirection: TextDirection.ltr,
       );
       textPainter.layout();
-      textPainter.paint(canvas, Offset(8, yOffset));
-      yOffset += 20;
-    }
 
-    // Draw angle arcs at joint locations
-    _drawAngleArcs(canvas, size, frame);
-  }
-
-  void _drawAngleArcs(Canvas canvas, Size size, FormFrame frame) {
-    final arcPaint = Paint()
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    // Draw arc at right elbow
-    _drawArcAtJoint(
-      canvas, size, frame,
-      'PoseLandmarkType.rightShoulder',
-      'PoseLandmarkType.rightElbow',
-      'PoseLandmarkType.rightWrist',
-      frame.angles['rightElbowAngle'],
-      arcPaint,
-    );
-
-    // Draw arc at left elbow
-    _drawArcAtJoint(
-      canvas, size, frame,
-      'PoseLandmarkType.leftShoulder',
-      'PoseLandmarkType.leftElbow',
-      'PoseLandmarkType.leftWrist',
-      frame.angles['leftElbowAngle'],
-      arcPaint,
-    );
-
-    // Draw arc at right shoulder
-    _drawArcAtJoint(
-      canvas, size, frame,
-      'PoseLandmarkType.rightElbow',
-      'PoseLandmarkType.rightShoulder',
-      'PoseLandmarkType.rightHip',
-      frame.angles['rightShoulderAngle'],
-      arcPaint,
-    );
-
-    // Draw arc at right knee
-    _drawArcAtJoint(
-      canvas, size, frame,
-      'PoseLandmarkType.rightHip',
-      'PoseLandmarkType.rightKnee',
-      'PoseLandmarkType.rightAnkle',
-      frame.angles['rightKneeAngle'],
-      arcPaint,
-    );
-  }
-
-  void _drawArcAtJoint(
-    Canvas canvas,
-    Size size,
-    FormFrame frame,
-    String p1Key,
-    String vertexKey,
-    String p3Key,
-    double? angle,
-    Paint paint,
-  ) {
-    if (angle == null) return;
-
-    final p1 = frame.keyPoints[p1Key];
-    final vertex = frame.keyPoints[vertexKey];
-    final p3 = frame.keyPoints[p3Key];
-
-    if (p1 == null || vertex == null || p3 == null) return;
-
-    final scaledVertex = _scalePoint(vertex, size);
-    final scaledP1 = _scalePoint(p1, size);
-    final scaledP3 = _scalePoint(p3, size);
-
-    // Calculate angles for arc
-    final startAngle = atan2(
-      scaledP1.dy - scaledVertex.dy,
-      scaledP1.dx - scaledVertex.dx,
-    );
-    final endAngle = atan2(
-      scaledP3.dy - scaledVertex.dy,
-      scaledP3.dx - scaledVertex.dx,
-    );
-
-    final color = _getAngleColor('', angle);
-    paint.color = color.withAlpha(180);
-
-    const arcRadius = 20.0;
-    canvas.drawArc(
-      Rect.fromCircle(center: scaledVertex, radius: arcRadius),
-      startAngle,
-      endAngle - startAngle,
-      false,
-      paint,
-    );
-
-    // Draw angle value near the arc
-    final labelOffset = Offset(
-      scaledVertex.dx + arcRadius * cos((startAngle + endAngle) / 2) + 5,
-      scaledVertex.dy + arcRadius * sin((startAngle + endAngle) / 2) - 5,
-    );
-
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: '${angle.toStringAsFixed(0)}°',
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
+      final pillRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          pos.dx - 3,
+          pos.dy - 1,
+          textPainter.width + 6,
+          textPainter.height + 2,
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    textPainter.layout();
-    textPainter.paint(canvas, labelOffset);
+        const Radius.circular(4),
+      );
+
+      canvas.drawRRect(
+        pillRect,
+        Paint()..color = Colors.black.withAlpha(180),
+      );
+
+      textPainter.paint(canvas, pos);
+    }
   }
 
-  Color _getAngleColor(String angleName, double angle) {
-    // Ideal angles for disc golf form
-    final idealAngles = {
-      'rightElbowAngle': 120.0,
-      'leftElbowAngle': 140.0,
-      'rightShoulderAngle': 100.0,
-      'leftShoulderAngle': 100.0,
-      'rightKneeAngle': 160.0,
-      'leftKneeAngle': 160.0,
-      'spineAngle': 85.0,
-    };
+  Color _getAngleColor(String angleKey, double? angle) {
+    if (angle == null) return Colors.grey;
 
-    final ideal = idealAngles[angleName];
-    if (ideal == null) return Colors.yellow;
+    final ideal = _idealAngles[angleKey];
+    if (ideal == null) return Colors.cyan;
 
     final diff = (angle - ideal).abs();
     if (diff < 10) return Colors.green;
@@ -270,26 +222,27 @@ class SkeletonOverlay extends CustomPainter {
     return Colors.red;
   }
 
-  String _formatAngleName(String name) {
-    return name
-        .replaceAllMapped(RegExp(r'([A-Z])'), (m) => ' ${m.group(0)}')
-        .replaceFirst(name[0], name[0].toUpperCase())
-        .trim();
-  }
-
-  String _formatJointName(String name) {
-    // Convert PoseLandmarkType.leftShoulder -> L Shoulder
-    final cleaned = name.replaceAll('PoseLandmarkType.', '');
-    if (cleaned.startsWith('left')) {
-      return 'L ${cleaned.substring(4)}';
-    } else if (cleaned.startsWith('right')) {
-      return 'R ${cleaned.substring(5)}';
-    }
-    return cleaned;
-  }
-
   @override
   bool shouldRepaint(SkeletonOverlay oldDelegate) {
     return oldDelegate.currentFrame != currentFrame;
   }
+}
+
+class _LimbGroup {
+  final List<List<String>> joints;
+  final String angleKey;
+
+  const _LimbGroup({required this.joints, required this.angleKey});
+}
+
+class _AngleLabel {
+  final String vertexKey;
+  final String angleKey;
+  final Offset offset;
+
+  const _AngleLabel({
+    required this.vertexKey,
+    required this.angleKey,
+    required this.offset,
+  });
 }

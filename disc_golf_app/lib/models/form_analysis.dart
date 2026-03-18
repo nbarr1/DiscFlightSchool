@@ -4,11 +4,15 @@ class FormFrame {
   final Duration timestamp;
   final Map<String, double> angles;
   final Map<String, Offset> keyPoints;
+  final double? imageWidth;
+  final double? imageHeight;
 
   FormFrame({
     required this.timestamp,
     required this.angles,
     required this.keyPoints,
+    this.imageWidth,
+    this.imageHeight,
   });
 
   Map<String, dynamic> toJson() {
@@ -18,6 +22,8 @@ class FormFrame {
       'keyPoints': keyPoints.map(
         (key, value) => MapEntry(key, {'dx': value.dx, 'dy': value.dy}),
       ),
+      if (imageWidth != null) 'imageWidth': imageWidth,
+      if (imageHeight != null) 'imageHeight': imageHeight,
     };
   }
 
@@ -31,6 +37,8 @@ class FormFrame {
           Offset(value['dx'] as double, value['dy'] as double),
         ),
       ),
+      imageWidth: json['imageWidth'] as double?,
+      imageHeight: json['imageHeight'] as double?,
     );
   }
 }

@@ -10,6 +10,7 @@ class FollowFlightPainter extends CustomPainter {
   final bool showTrail;
   final bool showCurrentDisc;
   final int trailFadeFrames; // Trail visible for this many frames behind current
+  final bool showFullTrail; // Show entire trail at full opacity (for export)
 
   FollowFlightPainter({
     required this.trackingResult,
@@ -17,6 +18,7 @@ class FollowFlightPainter extends CustomPainter {
     this.showTrail = true,
     this.showCurrentDisc = true,
     this.trailFadeFrames = 30, // 3 seconds at 10fps
+    this.showFullTrail = false,
   });
 
   @override
@@ -40,12 +42,16 @@ class FollowFlightPainter extends CustomPainter {
       _drawCurrentDisc(canvas, size);
     }
 
-    // Draw start marker only if within fade window
+    // Draw start marker only if within fade window (or full trail mode)
     if (scaledTrail.isNotEmpty && allDetections.isNotEmpty) {
-      final startAge = currentFrame - allDetections.first.frameIndex;
-      if (startAge <= trailFadeFrames) {
-        final fade = 1.0 - (startAge / trailFadeFrames);
-        _drawStartMarker(canvas, scaledTrail.first, fade);
+      if (showFullTrail) {
+        _drawStartMarker(canvas, scaledTrail.first, 1.0);
+      } else {
+        final startAge = currentFrame - allDetections.first.frameIndex;
+        if (startAge <= trailFadeFrames) {
+          final fade = 1.0 - (startAge / trailFadeFrames);
+          _drawStartMarker(canvas, scaledTrail.first, fade);
+        }
       }
     }
   }
@@ -58,14 +64,19 @@ class FollowFlightPainter extends CustomPainter {
   ) {
     // Draw individual segments with per-segment fading
     for (int i = 1; i < scaledTrail.length; i++) {
-      final detIdx = min(i, detections.length - 1);
-      final segmentFrame = detections[detIdx].frameIndex;
-      final age = currentFrame - segmentFrame;
+      final double fade;
+      if (showFullTrail) {
+        fade = 1.0;
+      } else {
+        final detIdx = min(i, detections.length - 1);
+        final segmentFrame = detections[detIdx].frameIndex;
+        final age = currentFrame - segmentFrame;
 
-      // Skip segments outside fade window
-      if (age > trailFadeFrames) continue;
+        // Skip segments outside fade window
+        if (age > trailFadeFrames) continue;
 
-      final fade = (1.0 - (age / trailFadeFrames)).clamp(0.0, 1.0);
+        fade = (1.0 - (age / trailFadeFrames)).clamp(0.0, 1.0);
+      }
 
       // Glow layer
       final glowPaint = Paint()
@@ -89,10 +100,14 @@ class FollowFlightPainter extends CustomPainter {
     // Detection dots (also fading)
     for (int i = 0; i < scaledTrail.length && i < detections.length; i++) {
       if (detections[i].confidence > 0.9) {
-        final age = currentFrame - detections[i].frameIndex;
-        if (age > trailFadeFrames) continue;
-
-        final fade = (1.0 - (age / trailFadeFrames)).clamp(0.0, 1.0);
+        final double fade;
+        if (showFullTrail) {
+          fade = 1.0;
+        } else {
+          final age = currentFrame - detections[i].frameIndex;
+          if (age > trailFadeFrames) continue;
+          fade = (1.0 - (age / trailFadeFrames)).clamp(0.0, 1.0);
+        }
         final dotPaint = Paint()
           ..color = Colors.white.withAlpha((fade * 160).round())
           ..style = PaintingStyle.fill;

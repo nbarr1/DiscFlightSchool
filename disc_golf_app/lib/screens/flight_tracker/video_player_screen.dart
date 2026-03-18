@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:video_player/video_player.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/return_code.dart';
+import 'package:gal/gal.dart';
 import '../../services/disc_detection_service.dart';
 import '../../widgets/follow_flight_overlay.dart';
 import 'dart:io';
@@ -249,6 +253,108 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
   }
 
+  // --- Save video with overlay ---
+
+  Future<void> _saveVideoWithOverlay() async {
+    if (_trackingResult == null) return;
+
+    // Show loading dialog
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Saving video...'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    try {
+      // Request gallery access
+      await Gal.requestAccess(toAlbum: true);
+
+      // 1. Render full flight path overlay as transparent PNG at video resolution
+      final videoWidth = _controller.value.size.width;
+      final videoHeight = _controller.value.size.height;
+
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(
+        recorder,
+        Rect.fromLTWH(0, 0, videoWidth, videoHeight),
+      );
+
+      final painter = FollowFlightPainter(
+        trackingResult: _trackingResult!,
+        currentFrame: _trackingResult!.totalFrames,
+        showFullTrail: true,
+        showCurrentDisc: false,
+      );
+      painter.paint(canvas, Size(videoWidth, videoHeight));
+
+      final picture = recorder.endRecording();
+      final overlayImage = await picture.toImage(
+        videoWidth.toInt(),
+        videoHeight.toInt(),
+      );
+      final byteData = await overlayImage.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+      overlayImage.dispose();
+
+      if (byteData == null) throw Exception('Failed to render overlay');
+
+      // 2. Save overlay PNG to temp file
+      final tempDir = await getTemporaryDirectory();
+      final overlayPath = '${tempDir.path}/flight_overlay.png';
+      await File(overlayPath).writeAsBytes(byteData.buffer.asUint8List());
+
+      // 3. Use ffmpeg to composite overlay onto video
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final outputPath = '${tempDir.path}/flight_path_$timestamp.mp4';
+
+      final session = await FFmpegKit.execute(
+        '-y -i "${widget.videoPath}" -i "$overlayPath" '
+        '-filter_complex "[0:v][1:v]overlay=0:0:format=auto" '
+        '-codec:a copy "$outputPath"',
+      );
+
+      final returnCode = await session.getReturnCode();
+      if (!ReturnCode.isSuccess(returnCode)) {
+        final logs = await session.getAllLogsAsString();
+        throw Exception('FFmpeg failed: $logs');
+      }
+
+      // 4. Save to gallery
+      await Gal.putVideo(outputPath);
+
+      // 5. Cleanup temp files
+      try {
+        await File(overlayPath).delete();
+        await File(outputPath).delete();
+      } catch (_) {}
+
+      if (mounted) {
+        Navigator.of(context).pop(); // dismiss loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Video saved to gallery!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // dismiss loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save: $e')),
+        );
+      }
+    }
+  }
+
   // --- Frame stepping ---
 
   void _stepFrame(bool forward) {
@@ -275,6 +381,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       appBar: AppBar(
         title: const Text('Flight Tracker'),
         actions: [
+          if (_trackingResult != null)
+            IconButton(
+              icon: const Icon(Icons.save),
+              onPressed: _saveVideoWithOverlay,
+              tooltip: 'Save Video',
+            ),
           IconButton(
             icon: Icon(
                 _showOverlay ? Icons.visibility : Icons.visibility_off),

@@ -84,29 +84,22 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
             const SizedBox(height: 24),
             Expanded(
               child: Center(
-                child: AnimatedBuilder(
-                  animation: _animationController,
-                  builder: (context, child) {
-                    return Transform.rotate(
-                      angle: _animationController.value * 2 * pi * 3,
-                      child: RouletteWheel(isSpinning: _isSpinning),
-                    );
-                  },
+                child: GestureDetector(
+                  onTap: _isSpinning ? null : _spinRoulette,
+                  child: AnimatedBuilder(
+                    animation: _animationController,
+                    builder: (context, child) {
+                      return Transform.rotate(
+                        angle: _animationController.value * 2 * pi * 3,
+                        child: RouletteWheel(isSpinning: _isSpinning),
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 24),
             if (_currentResult != null) _buildResultCard(),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _isSpinning ? null : _spinRoulette,
-              icon: const Icon(Icons.casino),
-              label: Text(_isSpinning ? 'Spinning...' : 'Spin Roulette'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                textStyle: const TextStyle(fontSize: 18),
-              ),
-            ),
           ],
         ),
       ),
@@ -126,6 +119,7 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
               'Your Challenge',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
+                    color: Colors.black,
                   ),
             ),
             const Divider(height: 24),
@@ -176,9 +170,9 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
             children: [
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey,
+                  color: Colors.grey.shade700,
                 ),
               ),
               Text(
@@ -186,6 +180,7 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  color: Colors.black,
                 ),
               ),
             ],

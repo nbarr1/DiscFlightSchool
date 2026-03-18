@@ -19,7 +19,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.disc_golf_app"
-        minSdkVersion = flutter.minSdkVersion
+        minSdkVersion = 24
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
