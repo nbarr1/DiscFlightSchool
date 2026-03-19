@@ -5,7 +5,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:gal/gal.dart';
+import 'package:provider/provider.dart';
 import '../../services/disc_detection_service.dart';
+import '../../services/training_data_service.dart';
 import '../../widgets/follow_flight_overlay.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -240,6 +242,35 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 .round(),
       );
     });
+
+    // Collect training data if opted in
+    _collectTrainingData();
+  }
+
+  Future<void> _collectTrainingData() async {
+    final trainingService =
+        Provider.of<TrainingDataService>(context, listen: false);
+    if (!trainingService.isOptedIn) return;
+
+    final keyframeData = _keyframes
+        .map((kf) => KeyframeData(
+              frameIndex: kf.frameIndex,
+              x: kf.x,
+              y: kf.y,
+            ))
+        .toList();
+
+    final saved = await trainingService.collectFromKeyframes(
+      keyframeData,
+      widget.videoPath,
+      _frameFps,
+    );
+
+    if (saved > 0 && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved $saved training samples')),
+      );
+    }
   }
 
   double _catmullRom(

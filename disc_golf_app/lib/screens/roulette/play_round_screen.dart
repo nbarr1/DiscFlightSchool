@@ -14,24 +14,22 @@ class PlayRoundScreen extends StatefulWidget {
   State<PlayRoundScreen> createState() => _PlayRoundScreenState();
 }
 
-class _PlayRoundScreenState extends State<PlayRoundScreen> with SingleTickerProviderStateMixin {
-  RouletteResult? _currentChallenge;
-  bool _isSpinning = false;
+class _PlayRoundScreenState extends State<PlayRoundScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
-  int _strokes = 1;
-  int _currentHoleNumber = 1;
-  Map<String, RouletteResult> _playerChallenges = {};
-  Map<String, int> _playerStrokes = {};
-  Set<String> _completedPlayers = {};
 
-  final List<String> _discs = [
-    'Putter',
-    'Approach',
-    'Utility',
-    'Midrange',
-    'Fairway Driver',
-    'Distance Driver',
-  ];
+  int _currentHoleNumber = 1;
+  bool _isSpinning = false;
+  bool _isPutting = false;
+
+  // Per-throw state for current player
+  RouletteResult? _currentThrowChallenge;
+  List<ThrowRecord> _currentThrows = [];
+
+  // Multi-player tracking per hole
+  final Map<String, List<ThrowRecord>> _playerThrows = {};
+  final Map<String, int> _playerStrokes = {};
+  final Set<String> _completedPlayers = {};
 
   @override
   void initState() {
@@ -48,18 +46,108 @@ class _PlayRoundScreenState extends State<PlayRoundScreen> with SingleTickerProv
     super.dispose();
   }
 
+  List<String> get _availableDiscs =>
+      _isPutting ? DiscLists.putting : DiscLists.scoringRound;
+
   void _spinRoulette() {
     setState(() {
       _isSpinning = true;
-      _currentChallenge = null;
+      _currentThrowChallenge = null;
     });
 
     _animationController.forward(from: 0).then((_) {
       setState(() {
-        _currentChallenge = RouletteResult.generate(_discs);
+        if (_isPutting) {
+          _currentThrowChallenge =
+              RouletteResult.generatePutt(_availableDiscs);
+        } else {
+          _currentThrowChallenge =
+              RouletteResult.generate(_availableDiscs);
+        }
         _isSpinning = false;
-        _strokes = 1;
       });
+    });
+  }
+
+  void _recordThrow() {
+    if (_currentThrowChallenge == null) return;
+
+    final throwRecord = ThrowRecord(
+      throwNumber: _currentThrows.length + 1,
+      challenge: _currentThrowChallenge!,
+      isPutt: _isPutting,
+    );
+
+    setState(() {
+      _currentThrows.add(throwRecord);
+      _currentThrowChallenge = null;
+      // Reset putting toggle for next throw
+      _isPutting = false;
+    });
+  }
+
+  void _holedOut() {
+    // Record the final throw if there's an active challenge
+    if (_currentThrowChallenge != null) {
+      final throwRecord = ThrowRecord(
+        throwNumber: _currentThrows.length + 1,
+        challenge: _currentThrowChallenge!,
+        isPutt: _isPutting,
+      );
+      _currentThrows.add(throwRecord);
+    }
+
+    final scoringService =
+        Provider.of<ScoringService>(context, listen: false);
+    final round = scoringService.currentRound!;
+    final currentPlayer = scoringService.currentPlayer!;
+
+    final strokes = _currentThrows.length;
+
+    final holeScore = HoleScore(
+      holeNumber: _currentHoleNumber,
+      par: round.coursePars[_currentHoleNumber - 1],
+      strokes: strokes,
+      throws: List.from(_currentThrows),
+      playerName: currentPlayer,
+    );
+
+    scoringService.addHoleScore(holeScore);
+
+    setState(() {
+      _completedPlayers.add(currentPlayer);
+      _playerStrokes[currentPlayer] = strokes;
+      _playerThrows[currentPlayer] = List.from(_currentThrows);
+      _currentThrows = [];
+      _currentThrowChallenge = null;
+      _isPutting = false;
+
+      // Move to next remaining player
+      final remaining = round.playerNames
+          .where((p) => !_completedPlayers.contains(p))
+          .toList();
+      if (remaining.isNotEmpty) {
+        scoringService.setCurrentPlayer(remaining.first);
+        _currentThrows = _playerThrows[remaining.first] ?? [];
+      }
+    });
+  }
+
+  void _moveToNextHole() {
+    final scoringService =
+        Provider.of<ScoringService>(context, listen: false);
+    final round = scoringService.currentRound!;
+
+    setState(() {
+      _currentHoleNumber++;
+      _completedPlayers.clear();
+      _playerThrows.clear();
+      _playerStrokes.clear();
+      _currentThrows = [];
+      _currentThrowChallenge = null;
+      _isPutting = false;
+
+      scoringService.setCurrentPlayer(round.playerNames.first);
     });
   }
 
@@ -83,7 +171,8 @@ class _PlayRoundScreenState extends State<PlayRoundScreen> with SingleTickerProv
     }
 
     // Check if round is complete
-    if (_currentHoleNumber > round.coursePars.length && _completedPlayers.length == round.playerNames.length) {
+    if (_currentHoleNumber > round.coursePars.length &&
+        _completedPlayers.length == round.playerNames.length) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Navigator.pushReplacement(
           context,
@@ -97,13 +186,12 @@ class _PlayRoundScreenState extends State<PlayRoundScreen> with SingleTickerProv
       );
     }
 
-    final holePar = _currentHoleNumber <= round.coursePars.length 
-        ? round.coursePars[_currentHoleNumber - 1] 
+    final holePar = _currentHoleNumber <= round.coursePars.length
+        ? round.coursePars[_currentHoleNumber - 1]
         : 3;
 
-    // Get players who haven't completed this hole yet
     final remainingPlayers = round.playerNames
-        .where((player) => !_completedPlayers.contains(player))
+        .where((p) => !_completedPlayers.contains(p))
         .toList();
 
     return Scaffold(
@@ -112,14 +200,12 @@ class _PlayRoundScreenState extends State<PlayRoundScreen> with SingleTickerProv
         actions: [
           IconButton(
             icon: const Icon(Icons.receipt_long),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ScorecardScreen(),
-                ),
-              );
-            },
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ScorecardScreen(),
+              ),
+            ),
           ),
           if (round.scores.isNotEmpty)
             IconButton(
@@ -141,223 +227,50 @@ class _PlayRoundScreenState extends State<PlayRoundScreen> with SingleTickerProv
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildStatItem('Hole', '$_currentHoleNumber/18'),
+                    _buildStatItem(
+                        'Hole', '$_currentHoleNumber/${round.coursePars.length}'),
                     _buildStatItem('Par', '$holePar'),
-                    _buildStatItem('Completed', '${_completedPlayers.length}/${round.playerNames.length}'),
+                    _buildStatItem('Completed',
+                        '${_completedPlayers.length}/${round.playerNames.length}'),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 16),
 
-            // Show completed players for this hole
+            // Completed players for this hole
             if (_completedPlayers.isNotEmpty) ...[
-              Card(
-                color: Colors.green.shade50,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Completed This Hole:',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ..._completedPlayers.map((player) {
-                        final strokes = _playerStrokes[player] ?? 0;
-                        final scoreToPar = strokes - holePar;
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                player,
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                              Text(
-                                '$strokes (${_formatScore(scoreToPar)})',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: _getScoreColor(scoreToPar),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ],
-                  ),
-                ),
-              ),
+              _buildCompletedPlayersCard(holePar),
               const SizedBox(height: 16),
             ],
 
-            // Current player selector
             if (remainingPlayers.isNotEmpty) ...[
-              Card(
-                color: Colors.amber.shade50,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'Current Player',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      DropdownButton<String>(
-                        value: remainingPlayers.contains(currentPlayer) 
-                            ? currentPlayer 
-                            : remainingPlayers.first,
-                        isExpanded: true,
-                        items: remainingPlayers.map((player) {
-                          return DropdownMenuItem(
-                            value: player,
-                            child: Text(
-                              player,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (newPlayer) {
-                          if (newPlayer != null) {
-                            scoringService.setCurrentPlayer(newPlayer);
-                            // Restore saved challenge and strokes if available
-                            setState(() {
-                              _currentChallenge = _playerChallenges[newPlayer];
-                              _strokes = _playerStrokes[newPlayer] ?? 1;
-                            });
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
+              // Player selector
+              _buildPlayerSelector(
+                  scoringService, round, currentPlayer, remainingPlayers),
+              const SizedBox(height: 16),
 
-              // Challenge area
-              if (_currentChallenge == null) ...[
-                const Text(
-                  'Spin for Your Challenge!',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  height: 250,
-                  child: Center(
-                    child: AnimatedBuilder(
-                      animation: _animationController,
-                      builder: (context, child) {
-                        return Transform.rotate(
-                          angle: _animationController.value * 2 * pi * 3,
-                          child: RouletteWheel(isSpinning: _isSpinning),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: _isSpinning ? null : _spinRoulette,
-                  icon: const Icon(Icons.casino),
-                  label: Text(_isSpinning ? 'Spinning...' : 'Spin Roulette'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                    textStyle: const TextStyle(fontSize: 18),
-                  ),
-                ),
+              // Throw history for current player
+              if (_currentThrows.isNotEmpty) ...[
+                _buildThrowHistory(),
+                const SizedBox(height: 16),
+              ],
+
+              // Putting toggle
+              _buildPuttingToggle(),
+              const SizedBox(height: 16),
+
+              // Spin or challenge display
+              if (_currentThrowChallenge == null) ...[
+                _buildSpinArea(),
               ] else ...[
                 _buildChallengeCard(),
                 const SizedBox(height: 24),
-                _buildStrokeCounter(),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _currentChallenge = null;
-                          _playerChallenges.remove(currentPlayer);
-                          _playerStrokes.remove(currentPlayer);
-                          _strokes = 1;
-                        });
-                      },
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Re-spin'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                        backgroundColor: Colors.orange,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    ElevatedButton.icon(
-                      onPressed: _submitScore,
-                      icon: const Icon(Icons.check),
-                      label: const Text('Submit Score'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                        textStyle: const TextStyle(fontSize: 18),
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
+                _buildThrowActions(),
               ],
             ] else ...[
-              // All players completed, move to next hole
-              Card(
-                color: Colors.purple.shade50,
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.check_circle,
-                        size: 64,
-                        color: Colors.green,
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Hole Complete!',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton.icon(
-                        onPressed: _moveToNextHole,
-                        icon: const Icon(Icons.arrow_forward),
-                        label: Text(_currentHoleNumber < round.coursePars.length 
-                            ? 'Next Hole' 
-                            : 'Finish Round'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                          textStyle: const TextStyle(fontSize: 18),
-                          backgroundColor: Colors.purple,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              // All players done — next hole
+              _buildHoleCompleteCard(round),
             ],
           ],
         ),
@@ -368,170 +281,100 @@ class _PlayRoundScreenState extends State<PlayRoundScreen> with SingleTickerProv
   Widget _buildStatItem(String label, String value) {
     return Column(
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            color: Colors.grey,
-          ),
-        ),
+        Text(label,
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade700)),
         const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        Text(value,
+            style: const TextStyle(
+                fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black)),
       ],
     );
   }
 
-  Widget _buildChallengeCard() {
-    final difficulty = _currentChallenge!.getDifficultyMultiplier();
-
+  Widget _buildCompletedPlayersCard(int holePar) {
     return Card(
-      color: Colors.purple.shade50,
+      color: Colors.green.shade50,
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(12),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Your Challenge',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            const Text('Completed This Hole:',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Colors.black)),
+            const SizedBox(height: 8),
+            ..._completedPlayers.map((player) {
+              final strokes = _playerStrokes[player] ?? 0;
+              final scoreToPar = strokes - holePar;
+              final throws = _playerThrows[player] ?? [];
+              final avgMult = throws.isEmpty
+                  ? 1.0
+                  : throws.fold(0.0, (s, t) => s + t.multiplier) /
+                      throws.length;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(player,
+                        style: const TextStyle(
+                            fontSize: 14, color: Colors.black)),
+                    Text(
+                      '$strokes (${_formatScore(scoreToPar)}) ${avgMult.toStringAsFixed(1)}x',
+                      style: TextStyle(
+                        fontSize: 14,
                         fontWeight: FontWeight.bold,
+                        color: _getScoreColor(scoreToPar),
                       ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _getDifficultyColor(difficulty),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${difficulty.toStringAsFixed(1)}x',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-            const Divider(height: 24),
-            _buildChallengeRow(
-              'Shot Type',
-              _currentChallenge!.getShotTypeDescription(),
-              Icons.sports_golf,
-            ),
-            const SizedBox(height: 12),
-            _buildChallengeRow(
-              'Disc',
-              _currentChallenge!.discName ?? 'Any Disc',
-              Icons.album,
-            ),
-            const SizedBox(height: 12),
-            _buildChallengeRow(
-              'Power',
-              _currentChallenge!.powerModifier.name,
-              Icons.flash_on,
-            ),
-            const SizedBox(height: 12),
-            _buildChallengeRow(
-              'Challenge',
-              _currentChallenge!.hindrance == Hindrance.none
-                  ? 'No Hindrance'
-                  : _currentChallenge!.hindrance.name,
-              _currentChallenge!.hindrance == Hindrance.none
-                  ? Icons.check_circle
-                  : Icons.warning,
-              color: _currentChallenge!.hindrance == Hindrance.none
-                  ? Colors.green
-                  : Colors.orange,
-            ),
+              );
+            }),
           ],
         ),
       ),
     );
   }
 
-    Widget _buildChallengeRow(String label, String value, IconData icon, {Color? color}) {
-    return Row(
-      children: [
-        Icon(icon, color: color ?? Colors.purple),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey,
-                ),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStrokeCounter() {
+  Widget _buildPlayerSelector(ScoringService scoringService,
+      ScoredRound round, String currentPlayer, List<String> remainingPlayers) {
     return Card(
+      color: Colors.amber.shade50,
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        padding: const EdgeInsets.all(12),
+        child: Column(
           children: [
-            IconButton(
-              icon: const Icon(Icons.remove_circle, size: 36),
-              onPressed: _strokes > 1 ? () {
+            Text('Current Player',
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade700)),
+            const SizedBox(height: 8),
+            DropdownButton<String>(
+              value: remainingPlayers.contains(currentPlayer)
+                  ? currentPlayer
+                  : remainingPlayers.first,
+              isExpanded: true,
+              items: remainingPlayers
+                  .map((player) => DropdownMenuItem(
+                        value: player,
+                        child: Text(player,
+                            style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black)),
+                      ))
+                  .toList(),
+              onChanged: (newPlayer) {
+                if (newPlayer == null) return;
+                // Save current player's throws
+                _playerThrows[currentPlayer] = List.from(_currentThrows);
+
+                scoringService.setCurrentPlayer(newPlayer);
                 setState(() {
-                  _strokes--;
-                  final scoringService = Provider.of<ScoringService>(context, listen: false);
-                  _playerStrokes[scoringService.currentPlayer!] = _strokes;
-                });
-              } : null,
-            ),
-            const SizedBox(width: 24),
-            Column(
-              children: [
-                const Text(
-                  'Strokes',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
-                  ),
-                ),
-                Text(
-                  '$_strokes',
-                  style: const TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(width: 24),
-            IconButton(
-              icon: const Icon(Icons.add_circle, size: 36),
-              onPressed: () {
-                setState(() {
-                  _strokes++;
-                  final scoringService = Provider.of<ScoringService>(context, listen: false);
-                  _playerStrokes[scoringService.currentPlayer!] = _strokes;
+                  _currentThrows = _playerThrows[newPlayer] ?? [];
+                  _currentThrowChallenge = null;
+                  _isPutting = false;
                 });
               },
             ),
@@ -541,88 +384,378 @@ class _PlayRoundScreenState extends State<PlayRoundScreen> with SingleTickerProv
     );
   }
 
-  void _submitScore() {
-    final scoringService = Provider.of<ScoringService>(context, listen: false);
-    final round = scoringService.currentRound!;
-    final currentPlayer = scoringService.currentPlayer!;
-
-    // Create a new HoleScore for the current hole
-    HoleScore newScore = HoleScore(
-      holeNumber: _currentHoleNumber,
-      par: round.coursePars[_currentHoleNumber - 1],
-      strokes: _strokes,
-      challenge: _currentChallenge!,
-      difficultyMultiplier: _currentChallenge!.getDifficultyMultiplier(),
-      playerName: currentPlayer,
+  Widget _buildThrowHistory() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Throws: ${_currentThrows.length}',
+                  style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black),
+                ),
+                if (_currentThrows.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _currentThrows.removeLast();
+                      });
+                    },
+                    icon: const Icon(Icons.undo, size: 16),
+                    label: const Text('Undo'),
+                  ),
+              ],
+            ),
+            const Divider(),
+            ..._currentThrows.map((t) {
+              final challenge = t.challenge;
+              final label = t.isPutt
+                  ? challenge.getPuttStyleDescription()
+                  : '${challenge.getShotTypeDescription().split(' - ').first} · '
+                      '${challenge.discName ?? "Any"} · '
+                      '${challenge.hindrance == Hindrance.none ? "No hindrance" : challenge.hindrance.name}';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: t.isPutt
+                            ? Colors.teal.shade100
+                            : Colors.purple.shade100,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                          child: Text('${t.throwNumber}',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: Colors.black))),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(label,
+                          style: const TextStyle(
+                              fontSize: 13, color: Colors.black),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    Text('${t.multiplier.toStringAsFixed(1)}x',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: _getDifficultyColor(t.multiplier))),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
     );
-
-    scoringService.addHoleScore(newScore);
-    
-    // Mark player as completed for this hole
-    setState(() {
-      _completedPlayers.add(currentPlayer);
-      _playerStrokes[currentPlayer] = _strokes;
-      _playerChallenges[currentPlayer] = _currentChallenge!;
-      _currentChallenge = null;
-      _strokes = 1;
-      
-      // Move to next player who hasn't completed this hole
-      final remainingPlayers = round.playerNames
-          .where((player) => !_completedPlayers.contains(player))
-          .toList();
-      
-      if (remainingPlayers.isNotEmpty) {
-        scoringService.setCurrentPlayer(remainingPlayers.first);
-        // Restore their challenge if they have one
-        _currentChallenge = _playerChallenges[remainingPlayers.first];
-        _strokes = _playerStrokes[remainingPlayers.first] ?? 1;
-      }
-    });
   }
 
-  void _moveToNextHole() {
-    final scoringService = Provider.of<ScoringService>(context, listen: false);
-    final round = scoringService.currentRound!;
-    
-    setState(() {
-      _currentHoleNumber++;
-      _completedPlayers.clear();
-      _playerChallenges.clear();
-      _playerStrokes.clear();
-      _currentChallenge = null;
-      _strokes = 1;
-      
-      // Reset to first player
-      scoringService.setCurrentPlayer(round.playerNames.first);
-    });
+  Widget _buildPuttingToggle() {
+    return Card(
+      color: _isPutting ? Colors.teal.shade50 : null,
+      child: SwitchListTile(
+        title: Text(
+          _isPutting ? 'Putting Mode' : 'Throwing Mode',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: _isPutting ? Colors.teal.shade800 : Colors.black,
+          ),
+        ),
+        subtitle: Text(
+          _isPutting
+              ? 'Challenges: putt style (putter only)'
+              : 'Challenges: shot type, disc, power, hindrance',
+          style: TextStyle(color: Colors.grey.shade700),
+        ),
+        secondary: Icon(
+          _isPutting ? Icons.gps_fixed : Icons.sports_golf,
+          color: _isPutting ? Colors.teal : Colors.purple,
+        ),
+        value: _isPutting,
+        activeThumbColor: Colors.teal,
+        onChanged: _currentThrowChallenge != null
+            ? null // Disable toggle when a challenge is active
+            : (value) {
+                setState(() {
+                  _isPutting = value;
+                });
+              },
+      ),
+    );
+  }
+
+  Widget _buildSpinArea() {
+    return Column(
+      children: [
+        Text(
+          _currentThrows.isEmpty
+              ? 'Tap the wheel to spin for Throw #1!'
+              : 'Tap the wheel to spin for Throw #${_currentThrows.length + 1}!',
+          style: const TextStyle(
+              fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 24),
+        SizedBox(
+          height: 250,
+          child: Center(
+            child: GestureDetector(
+              onTap: _isSpinning ? null : _spinRoulette,
+              child: AnimatedBuilder(
+                animation: _animationController,
+                builder: (context, child) {
+                  return Transform.rotate(
+                    angle: _animationController.value * 2 * pi * 3,
+                    child: RouletteWheel(isSpinning: _isSpinning),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChallengeCard() {
+    final challenge = _currentThrowChallenge!;
+    final difficulty = challenge.getDifficultyMultiplier();
+
+    return Card(
+      color: _isPutting ? Colors.teal.shade50 : Colors.purple.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Throw #${_currentThrows.length + 1}${challenge.isPutt ? " (Putt)" : ""}',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold, color: Colors.black),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _getDifficultyColor(difficulty),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${difficulty.toStringAsFixed(1)}x',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            if (challenge.isPutt) ...[
+              _buildChallengeRow(
+                'Putt Style',
+                challenge.getPuttStyleDescription(),
+                Icons.gps_fixed,
+                color: Colors.teal,
+              ),
+              const SizedBox(height: 12),
+              _buildChallengeRow(
+                'Disc',
+                challenge.discName ?? 'Putter',
+                Icons.album,
+              ),
+            ] else ...[
+              _buildChallengeRow(
+                'Shot Type',
+                challenge.getShotTypeDescription(),
+                Icons.sports_golf,
+              ),
+              const SizedBox(height: 12),
+              _buildChallengeRow(
+                'Disc',
+                challenge.discName ?? 'Any Disc',
+                Icons.album,
+              ),
+              const SizedBox(height: 12),
+              _buildChallengeRow(
+                'Power',
+                challenge.powerModifier.name,
+                Icons.flash_on,
+              ),
+              const SizedBox(height: 12),
+              _buildChallengeRow(
+                'Challenge',
+                challenge.hindrance == Hindrance.none
+                    ? 'No Hindrance'
+                    : challenge.hindrance.name,
+                challenge.hindrance == Hindrance.none
+                    ? Icons.check_circle
+                    : Icons.warning,
+                color: challenge.hindrance == Hindrance.none
+                    ? Colors.green
+                    : Colors.orange,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChallengeRow(String label, String value, IconData icon,
+      {Color? color}) {
+    return Row(
+      children: [
+        Icon(icon, color: color ?? Colors.purple),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+              Text(value,
+                  style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildThrowActions() {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _currentThrowChallenge = null;
+                });
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Re-spin'),
+              style: ElevatedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton.icon(
+              onPressed: _recordThrow,
+              icon: const Icon(Icons.arrow_forward),
+              label: const Text('Next Throw'),
+              style: ElevatedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _holedOut,
+            icon: const Icon(Icons.flag),
+            label: const Text('Holed Out!'),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              textStyle: const TextStyle(fontSize: 18),
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHoleCompleteCard(ScoredRound round) {
+    return Card(
+      color: Colors.purple.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            const Icon(Icons.check_circle, size: 64, color: Colors.green),
+            const SizedBox(height: 16),
+            const Text('Hole Complete!',
+                style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black)),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _moveToNextHole,
+              icon: const Icon(Icons.arrow_forward),
+              label: Text(_currentHoleNumber < round.coursePars.length
+                  ? 'Next Hole'
+                  : 'Finish Round'),
+              style: ElevatedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                textStyle: const TextStyle(fontSize: 18),
+                backgroundColor: Colors.purple,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showUndoDialog() {
-    final scoringService = Provider.of<ScoringService>(context, listen: false);
+    final scoringService =
+        Provider.of<ScoringService>(context, listen: false);
     final round = scoringService.currentRound;
-    
+
     if (round == null || round.scores.isEmpty) return;
-    
+
     final lastScore = round.scores.last;
-    
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Undo Last Score'),
         content: Text(
           'Remove score for ${lastScore.playerName} on Hole ${lastScore.holeNumber}?\n\n'
-          'Strokes: ${lastScore.strokes}\n'
+          'Strokes: ${lastScore.strokes} (${lastScore.throws.length} throws)\n'
           'Par: ${lastScore.par}',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
               _undoLastScore();
-              Navigator.pop(context);
+              Navigator.pop(ctx);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -636,22 +769,20 @@ class _PlayRoundScreenState extends State<PlayRoundScreen> with SingleTickerProv
   }
 
   void _undoLastScore() {
-    final scoringService = Provider.of<ScoringService>(context, listen: false);
-    final round = scoringService.currentRound;
-    if (round != null && round.scores.isNotEmpty) {
-      round.scores.removeLast();
-    }
-    
+    final scoringService =
+        Provider.of<ScoringService>(context, listen: false);
+    scoringService.undoLastScore();
+
     setState(() {
-      // Recalculate the current hole and completed players
       final round = scoringService.currentRound!;
-      
-      // Find the current hole (lowest hole number with incomplete players)
+
+      // Find current hole
       _currentHoleNumber = 1;
       for (int hole = 1; hole <= round.coursePars.length; hole++) {
         int completedCount = 0;
         for (var player in round.playerNames) {
-          if (round.scores.any((s) => s.holeNumber == hole && s.playerName == player)) {
+          if (round.scores.any(
+              (s) => s.holeNumber == hole && s.playerName == player)) {
             completedCount++;
           }
         }
@@ -660,33 +791,38 @@ class _PlayRoundScreenState extends State<PlayRoundScreen> with SingleTickerProv
           break;
         }
       }
-      
-      // Rebuild completed players set for current hole
+
+      // Rebuild completed players
       _completedPlayers.clear();
+      _playerThrows.clear();
+      _playerStrokes.clear();
       for (var player in round.playerNames) {
-        if (round.scores.any((s) => s.holeNumber == _currentHoleNumber && s.playerName == player)) {
+        final holeScore = round.scores.cast<HoleScore?>().firstWhere(
+              (s) =>
+                  s!.holeNumber == _currentHoleNumber &&
+                  s.playerName == player,
+              orElse: () => null,
+            );
+        if (holeScore != null) {
           _completedPlayers.add(player);
-          // Restore their strokes
-          final score = round.scores.firstWhere(
-            (s) => s.holeNumber == _currentHoleNumber && s.playerName == player,
-          );
-          _playerStrokes[player] = score.strokes;
+          _playerStrokes[player] = holeScore.strokes;
+          _playerThrows[player] = holeScore.throws;
         }
       }
-      
-      _currentChallenge = null;
-      _strokes = 1;
-      _playerChallenges.clear();
+
+      _currentThrows = [];
+      _currentThrowChallenge = null;
+      _isPutting = false;
     });
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Score removed')),
     );
   }
 
   Color _getDifficultyColor(double difficulty) {
-    if (difficulty < 1.0) return Colors.green;
-    if (difficulty < 1.5) return Colors.yellow.shade700;
+    if (difficulty < 1.3) return Colors.green;
+    if (difficulty < 2.0) return Colors.orange;
     return Colors.red;
   }
 

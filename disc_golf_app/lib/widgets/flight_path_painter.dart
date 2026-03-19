@@ -45,7 +45,7 @@ class FlightPathPainter extends CustomPainter {
         ..style = PaintingStyle.fill;
       
       final glowPaint = Paint()
-        ..color = Colors.orange.withOpacity(0.3)
+        ..color = Colors.orange.withValues(alpha: 0.3)
         ..style = PaintingStyle.fill;
       
       canvas.drawCircle(scaledPoints[endIndex - 1], 12.0, glowPaint);

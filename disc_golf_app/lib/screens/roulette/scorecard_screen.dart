@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/scoring_service.dart';
 import '../../models/roulette_scoring.dart';
+import '../../models/roulette_data.dart';
 
 class ScorecardScreen extends StatelessWidget {
   const ScorecardScreen({Key? key}) : super(key: key);
@@ -59,10 +60,9 @@ class ScorecardScreen extends StatelessWidget {
                 style: TextStyle(color: Colors.grey[600]),
               ),
             const SizedBox(height: 24),
-            // Display scores for each player
             ...round.playerNames.map((playerName) {
               return _buildPlayerScorecard(context, round, playerName);
-            }).toList(),
+            }),
             if (round.isComplete) ...[
               const SizedBox(height: 24),
               _buildLeaderboard(context, round),
@@ -73,8 +73,10 @@ class ScorecardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPlayerScorecard(BuildContext context, ScoredRound round, String playerName) {
-    final playerScores = round.scores.where((s) => s.playerName == playerName).toList();
+  Widget _buildPlayerScorecard(
+      BuildContext context, ScoredRound round, String playerName) {
+    final playerScores =
+        round.scores.where((s) => s.playerName == playerName).toList();
     final totalRaw = round.getTotalRawStrokes(playerName);
     final scoreToPar = round.getRawScoreToPar(playerName);
     final totalWeighted = round.getTotalWeightedScore(playerName);
@@ -97,7 +99,8 @@ class ScorecardScreen extends StatelessWidget {
                       ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: _getScoreColor(scoreToPar),
                     borderRadius: BorderRadius.circular(12),
@@ -114,7 +117,6 @@ class ScorecardScreen extends StatelessWidget {
               ],
             ),
             const Divider(height: 24),
-            // Hole-by-hole scores
             if (playerScores.isNotEmpty) ...[
               const Text(
                 'Hole-by-Hole',
@@ -125,10 +127,9 @@ class ScorecardScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              _buildHoleScoresGrid(playerScores, round.coursePars),
+              _buildHoleScoresGrid(context, playerScores, round.coursePars),
               const SizedBox(height: 16),
             ],
-            // Summary statistics
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -136,7 +137,8 @@ class ScorecardScreen extends StatelessWidget {
                 _buildStatColumn('Par', '${round.totalPar}'),
                 _buildStatColumn('Score', _formatScore(scoreToPar)),
                 if (round.useWeighting)
-                  _buildStatColumn('Weighted', totalWeighted.toStringAsFixed(1)),
+                  _buildStatColumn(
+                      'Weighted', totalWeighted.toStringAsFixed(1)),
               ],
             ),
           ],
@@ -145,13 +147,14 @@ class ScorecardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHoleScoresGrid(List<HoleScore> scores, List<int> pars) {
+  Widget _buildHoleScoresGrid(
+      BuildContext context, List<HoleScore> scores, List<int> pars) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 9,
-        childAspectRatio: 1.0,
+        childAspectRatio: 0.8,
         crossAxisSpacing: 4,
         mainAxisSpacing: 4,
       ),
@@ -159,62 +162,121 @@ class ScorecardScreen extends StatelessWidget {
       itemBuilder: (context, index) {
         final score = scores[index];
         final scoreToPar = score.strokes - score.par;
-        
-        return Container(
-          decoration: BoxDecoration(
-            color: _getScoreColor(scoreToPar).withOpacity(0.2),
-            border: Border.all(color: _getScoreColor(scoreToPar)),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                '${score.holeNumber}',
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: Colors.grey,
+
+        return GestureDetector(
+          onTap: () => _showHoleDetail(context, score),
+          child: Container(
+            decoration: BoxDecoration(
+              color: _getScoreColor(scoreToPar).withValues(alpha: 0.2),
+              border: Border.all(color: _getScoreColor(scoreToPar)),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '${score.holeNumber}',
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
                 ),
-              ),
-              Text(
-                '${score.strokes}',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: _getScoreColor(scoreToPar),
+                Text(
+                  '${score.strokes}',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: _getScoreColor(scoreToPar),
+                  ),
                 ),
-              ),
-            ],
+                Text(
+                  '${score.averageMultiplier.toStringAsFixed(1)}x',
+                  style: const TextStyle(fontSize: 9, color: Colors.grey),
+                ),
+              ],
+            ),
           ),
         );
       },
     );
   }
 
+  void _showHoleDetail(BuildContext context, HoleScore score) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Hole ${score.holeNumber} — ${score.strokes} strokes (Par ${score.par})',
+              style: const TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const Divider(height: 24),
+            ...score.throws.map((t) {
+              final c = t.challenge;
+              final label = t.isPutt
+                  ? c.getPuttStyleDescription()
+                  : '${c.getShotTypeDescription().split(' - ').first} · '
+                      '${c.discName ?? "Any"} · '
+                      '${c.powerModifier.name} · '
+                      '${c.hindrance == Hindrance.none ? "No hindrance" : c.hindrance.name}';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: t.isPutt
+                            ? Colors.teal.shade100
+                            : Colors.purple.shade100,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text('${t.throwNumber}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(label)),
+                    Text('${t.multiplier.toStringAsFixed(1)}x',
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 12),
+            Text(
+              'Average multiplier: ${score.averageMultiplier.toStringAsFixed(2)}x',
+              style: const TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildStatColumn(String label, String value) {
     return Column(
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Colors.grey,
-          ),
-        ),
+        Text(label,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
         const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        Text(value,
+            style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black)),
       ],
     );
   }
 
   Widget _buildLeaderboard(BuildContext context, ScoredRound round) {
-    // Create a list of players with their scores
     final playerStats = round.playerNames.map((playerName) {
       return {
         'name': playerName,
@@ -223,10 +285,10 @@ class ScorecardScreen extends StatelessWidget {
       };
     }).toList();
 
-    // Sort by weighted score if weighting is enabled, otherwise by raw score
     playerStats.sort((a, b) {
       if (round.useWeighting) {
-        return (a['weightedScore'] as double).compareTo(b['weightedScore'] as double);
+        return (a['weightedScore'] as double)
+            .compareTo(b['weightedScore'] as double);
       } else {
         return (a['rawScore'] as int).compareTo(b['rawScore'] as int);
       }
@@ -241,13 +303,15 @@ class ScorecardScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.emoji_events, color: Colors.amber, size: 32),
+                const Icon(Icons.emoji_events,
+                    color: Colors.amber, size: 32),
                 const SizedBox(width: 12),
                 Text(
                   'Final Standings',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -264,7 +328,8 @@ class ScorecardScreen extends StatelessWidget {
                   color: isWinner ? Colors.amber.shade100 : Colors.white,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: isWinner ? Colors.amber : Colors.grey.shade300,
+                    color:
+                        isWinner ? Colors.amber : Colors.grey.shade300,
                     width: isWinner ? 2 : 1,
                   ),
                 ),
@@ -274,7 +339,9 @@ class ScorecardScreen extends StatelessWidget {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: isWinner ? Colors.amber : Colors.grey.shade300,
+                        color: isWinner
+                            ? Colors.amber
+                            : Colors.grey.shade300,
                         shape: BoxShape.circle,
                       ),
                       child: Center(
@@ -282,7 +349,8 @@ class ScorecardScreen extends StatelessWidget {
                           '${index + 1}',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            color: isWinner ? Colors.white : Colors.black,
+                            color:
+                                isWinner ? Colors.white : Colors.black,
                           ),
                         ),
                       ),
@@ -293,7 +361,9 @@ class ScorecardScreen extends StatelessWidget {
                         stats['name'] as String,
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: isWinner ? FontWeight.bold : FontWeight.normal,
+                          fontWeight: isWinner
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                         ),
                       ),
                     ),
@@ -320,7 +390,7 @@ class ScorecardScreen extends StatelessWidget {
                   ],
                 ),
               );
-            }).toList(),
+            }),
           ],
         ),
       ),
@@ -328,14 +398,15 @@ class ScorecardScreen extends StatelessWidget {
   }
 
   Color _getScoreColor(int scoreToPar) {
-    if (scoreToPar <= -2) return Colors.purple; // Eagle or better
-    if (scoreToPar == -1) return Colors.blue; // Birdie
-    if (scoreToPar == 0) return Colors.green; // Par
-    if (scoreToPar == 1) return Colors.orange; // Bogey
-    return Colors.red; // Double bogey or worse
+    if (scoreToPar <= -2) return Colors.purple;
+    if (scoreToPar == -1) return Colors.blue;
+    if (scoreToPar == 0) return Colors.green;
+    if (scoreToPar == 1) return Colors.orange;
+    return Colors.red;
   }
 
   String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.month}/${dateTime.day}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+    return '${dateTime.month}/${dateTime.day}/${dateTime.year} '
+        '${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }

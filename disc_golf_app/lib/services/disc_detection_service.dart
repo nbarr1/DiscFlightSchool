@@ -88,16 +88,25 @@ class DiscDetectionService extends ChangeNotifier {
   static const int _inputSize = 320;
   static const double _confidenceThreshold = 0.003;
 
-  /// Load the TFLite model from assets.
-  Future<void> loadModel() async {
+  /// Load the TFLite model. Uses a custom (retrained) model if available,
+  /// otherwise falls back to the bundled asset model.
+  Future<void> loadModel({String? customModelPath}) async {
     if (_isModelLoaded) return;
 
     try {
-      final modelData =
-          await rootBundle.load('assets/models/disc_detector.tflite');
-      final tempDir = await getTemporaryDirectory();
-      final modelFile = File('${tempDir.path}/disc_detector.tflite');
-      await modelFile.writeAsBytes(modelData.buffer.asUint8List());
+      File modelFile;
+
+      if (customModelPath != null && await File(customModelPath).exists()) {
+        modelFile = File(customModelPath);
+        debugPrint('Loading custom disc detection model: $customModelPath');
+      } else {
+        final modelData =
+            await rootBundle.load('assets/models/disc_detector.tflite');
+        final tempDir = await getTemporaryDirectory();
+        modelFile = File('${tempDir.path}/disc_detector.tflite');
+        await modelFile.writeAsBytes(modelData.buffer.asUint8List());
+        debugPrint('Loading bundled disc detection model');
+      }
 
       _interpreter = Interpreter.fromFile(modelFile);
       _isModelLoaded = true;

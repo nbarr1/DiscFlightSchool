@@ -3,6 +3,7 @@ import 'flight_tracker/flight_tracker_screen.dart';
 import 'form_coach/form_coach_screen.dart';
 import 'roulette/roulette_screen.dart';
 import 'roulette/start_round_screen.dart';
+import 'settings/training_settings_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -13,6 +14,18 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Disc Flight School'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const TrainingSettingsScreen(),
+              ),
+            ),
+            tooltip: 'Training Settings',
+          ),
+        ],
       ),
       body: Center(
         child: Padding(
@@ -119,7 +132,7 @@ class HomeScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.2),
+                  color: color.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(

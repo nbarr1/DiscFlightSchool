@@ -5,6 +5,7 @@ import 'services/video_service.dart';
 import 'services/posture_analysis_service.dart';
 import 'services/scoring_service.dart';
 import 'services/disc_detection_service.dart';
+import 'services/training_data_service.dart';
 import 'screens/home_screen.dart';
 
 void main() {
@@ -23,6 +24,7 @@ class DiscGolfApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PostureAnalysisService()),
         ChangeNotifierProvider(create: (_) => ScoringService()),
         ChangeNotifierProvider(create: (_) => DiscDetectionService()),
+        ChangeNotifierProvider(create: (_) => TrainingDataService()..init()),
       ],
       child: MaterialApp(
         title: 'Disc Flight School',

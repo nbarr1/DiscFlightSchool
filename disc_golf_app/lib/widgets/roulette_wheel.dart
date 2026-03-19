@@ -22,7 +22,7 @@ class RouletteWheel extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.purple.withOpacity(0.5),
+            color: Colors.purple.withValues(alpha: 0.5),
             blurRadius: 20,
             spreadRadius: 5,
           ),
@@ -39,7 +39,7 @@ class RouletteWheel extends StatelessWidget {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
+                  color: Colors.black.withValues(alpha: 0.3),
                   blurRadius: 10,
                 ),
               ],

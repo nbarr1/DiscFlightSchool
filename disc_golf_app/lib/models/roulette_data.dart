@@ -1,5 +1,15 @@
 import 'dart:math';
 
+/// Putting styles for when a player is in putting range.
+enum PuttStyle {
+  kneeling,
+  straddle,
+  turbo,
+  spin,
+  push,
+  spush,
+}
+
 enum ShotType {
   hyzer,
   anhyzer,
@@ -32,11 +42,26 @@ enum Hindrance {
   spinFirst,
 }
 
+/// Disc lists for different game modes.
+class DiscLists {
+  /// Full disc list for casual roulette.
+  static const all = [
+    'Putter', 'Approach', 'Utility', 'Midrange', 'Fairway Driver', 'Distance Driver',
+  ];
+
+  /// Speed 4 and under — used in scored rounds to encourage actual scoring.
+  static const scoringRound = ['Putter', 'Approach', 'Midrange'];
+
+  /// Putters only — used when in putting range.
+  static const putting = ['Putter'];
+}
+
 class RouletteResult {
   final ShotType shotType;
   final String? discName;
   final PowerModifier powerModifier;
   final Hindrance hindrance;
+  final PuttStyle? puttStyle; // Non-null when this is a putting challenge
   final DateTime timestamp;
   
   double getDifficultyMultiplier() {
@@ -111,6 +136,30 @@ class RouletteResult {
       break;
   }
   
+  // Putt style difficulty (when putting)
+  if (puttStyle != null) {
+    switch (puttStyle!) {
+      case PuttStyle.push:
+        multiplier += 0.0;
+        break;
+      case PuttStyle.spush:
+        multiplier += 0.1;
+        break;
+      case PuttStyle.spin:
+        multiplier += 0.2;
+        break;
+      case PuttStyle.straddle:
+        multiplier += 0.3;
+        break;
+      case PuttStyle.kneeling:
+        multiplier += 0.5;
+        break;
+      case PuttStyle.turbo:
+        multiplier += 0.7;
+        break;
+    }
+  }
+
   return multiplier;
 }
 
@@ -120,6 +169,9 @@ factory RouletteResult.fromJson(Map<String, dynamic> json) {
     discName: json['discName'],
     powerModifier: PowerModifier.values.firstWhere((e) => e.name == json['powerModifier']),
     hindrance: Hindrance.values.firstWhere((e) => e.name == json['hindrance']),
+    puttStyle: json['puttStyle'] != null
+        ? PuttStyle.values.firstWhere((e) => e.name == json['puttStyle'])
+        : null,
     timestamp: DateTime.parse(json['timestamp']),
   );
 }
@@ -129,21 +181,58 @@ factory RouletteResult.fromJson(Map<String, dynamic> json) {
     this.discName,
     required this.powerModifier,
     required this.hindrance,
+    this.puttStyle,
     required this.timestamp,
   });
 
   static RouletteResult generate(List<String> availableDiscs) {
     final random = Random();
-    
+
     return RouletteResult(
       shotType: ShotType.values[random.nextInt(ShotType.values.length)],
-      discName: availableDiscs.isNotEmpty 
+      discName: availableDiscs.isNotEmpty
           ? availableDiscs[random.nextInt(availableDiscs.length)]
           : null,
       powerModifier: PowerModifier.values[random.nextInt(PowerModifier.values.length)],
       hindrance: Hindrance.values[random.nextInt(Hindrance.values.length)],
       timestamp: DateTime.now(),
     );
+  }
+
+  /// Generate a putting-specific challenge.
+  static RouletteResult generatePutt(List<String> availableDiscs) {
+    final random = Random();
+
+    return RouletteResult(
+      shotType: ShotType.flat, // Putts are always flat
+      discName: availableDiscs.isNotEmpty
+          ? availableDiscs[random.nextInt(availableDiscs.length)]
+          : null,
+      powerModifier: PowerModifier.standstill, // Putts are standstill
+      hindrance: Hindrance.none, // Hindrance replaced by putt style
+      puttStyle: PuttStyle.values[random.nextInt(PuttStyle.values.length)],
+      timestamp: DateTime.now(),
+    );
+  }
+
+  bool get isPutt => puttStyle != null;
+
+  String getPuttStyleDescription() {
+    if (puttStyle == null) return '';
+    switch (puttStyle!) {
+      case PuttStyle.push:
+        return 'Push Putt - Wrist stays firm';
+      case PuttStyle.spush:
+        return 'Spush Putt - Spin + push hybrid';
+      case PuttStyle.spin:
+        return 'Spin Putt - Wrist flick';
+      case PuttStyle.straddle:
+        return 'Straddle Putt - Feet parallel to basket';
+      case PuttStyle.kneeling:
+        return 'Kneeling Putt - One knee down';
+      case PuttStyle.turbo:
+        return 'Turbo Putt - Overhead grip';
+    }
   }
 
   String getShotTypeDescription() {
@@ -173,6 +262,7 @@ factory RouletteResult.fromJson(Map<String, dynamic> json) {
       'discName': discName,
       'powerModifier': powerModifier.name,
       'hindrance': hindrance.name,
+      'puttStyle': puttStyle?.name,
       'timestamp': timestamp.toIso8601String(),
     };
   }

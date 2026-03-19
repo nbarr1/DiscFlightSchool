@@ -271,7 +271,7 @@ class TrackingOverlayPainter extends CustomPainter {
 
     // Draw path
     final pathPaint = Paint()
-      ..color = Colors.blue.withOpacity(0.5)
+      ..color = Colors.blue.withValues(alpha: 0.5)
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke;
 
