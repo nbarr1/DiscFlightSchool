@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../models/form_analysis.dart';
-import '../../widgets/skeleton_overlay.dart';
 
 class ComparisonScreen extends StatefulWidget {
   final FormAnalysis userAnalysis;
@@ -20,7 +19,6 @@ class ComparisonScreen extends StatefulWidget {
 
 class _ComparisonScreenState extends State<ComparisonScreen> {
   int _currentFrame = 0;
-  bool _showSkeleton = true;
 
   int get _maxFrames {
     final userLen = widget.userAnalysis.frames.length;
@@ -33,48 +31,16 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('vs ${widget.proName}'),
-        actions: [
-          IconButton(
-            icon: Icon(_showSkeleton ? Icons.visibility : Icons.visibility_off),
-            onPressed: () => setState(() => _showSkeleton = !_showSkeleton),
-            tooltip: 'Toggle Skeleton',
-          ),
-        ],
       ),
       body: _maxFrames == 0
           ? const Center(child: Text('No frame data to compare'))
           : Column(
               children: [
-                // Side-by-side skeleton views
-                Expanded(
-                  flex: 3,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _buildSkeletonView(
-                          'Your Form',
-                          widget.userAnalysis,
-                          Colors.blue,
-                        ),
-                      ),
-                      Container(width: 2, color: Colors.grey[700]),
-                      Expanded(
-                        child: _buildSkeletonView(
-                          widget.proName,
-                          widget.proAnalysis,
-                          Colors.green,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
                 // Frame slider
                 _buildFrameSlider(),
 
                 // Angle comparison table
                 Expanded(
-                  flex: 2,
                   child: _buildAngleComparison(),
                 ),
 
@@ -82,51 +48,6 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
                 _buildMatchScore(),
               ],
             ),
-    );
-  }
-
-  Widget _buildSkeletonView(String label, FormAnalysis analysis, Color accentColor) {
-    return Container(
-      color: Colors.grey[900],
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: accentColor,
-              ),
-            ),
-          ),
-          Expanded(
-            child: _showSkeleton && analysis.frames.isNotEmpty
-                ? CustomPaint(
-                    painter: SkeletonOverlay(
-                      analysis: analysis,
-                      currentFrame: _currentFrame,
-                    ),
-                    size: Size.infinite,
-                  )
-                : Center(
-                    child: Text(
-                      'No skeleton data',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  ),
-          ),
-          if (analysis.frames.isNotEmpty &&
-              _currentFrame < analysis.frames.length)
-            Padding(
-              padding: const EdgeInsets.all(4),
-              child: Text(
-                'Score: ${analysis.score.toStringAsFixed(1)}',
-                style: TextStyle(color: accentColor, fontSize: 12),
-              ),
-            ),
-        ],
-      ),
     );
   }
 

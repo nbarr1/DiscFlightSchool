@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/tracking_service.dart';
 import '../../services/video_service.dart';
+import '../form_coach/video_trim_screen.dart';
 import 'manual_tracking_screen.dart';
 import 'video_player_screen.dart';
 
@@ -13,6 +14,30 @@ class FlightTrackerScreen extends StatefulWidget {
 }
 
 class _FlightTrackerScreenState extends State<FlightTrackerScreen> {
+  void _navigateToTrim(String videoPath) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => VideoTrimScreen(
+          videoPath: videoPath,
+          onTrimComplete: (startMs, endMs, frameCount) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => VideoPlayerScreen(
+                  videoPath: videoPath,
+                  disc: null,
+                  trimStartMs: startMs,
+                  trimEndMs: endMs,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final trackingService = Provider.of<TrackingService>(context);
@@ -54,15 +79,7 @@ class _FlightTrackerScreenState extends State<FlightTrackerScreen> {
                 onTap: () async {
                   final videoPath = await videoService.captureVideo();
                   if (videoPath != null && mounted) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => VideoPlayerScreen(
-                          videoPath: videoPath,
-                          disc: null,
-                        ),
-                      ),
-                    );
+                    _navigateToTrim(videoPath);
                   }
                 },
               ),
@@ -77,15 +94,7 @@ class _FlightTrackerScreenState extends State<FlightTrackerScreen> {
                 onTap: () async {
                   final videoPath = await videoService.selectVideo();
                   if (videoPath != null && mounted) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => VideoPlayerScreen(
-                          videoPath: videoPath,
-                          disc: null,
-                        ),
-                      ),
-                    );
+                    _navigateToTrim(videoPath);
                   }
                 },
               ),

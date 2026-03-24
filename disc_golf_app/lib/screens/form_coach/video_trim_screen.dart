@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'dart:io';
+import '../../services/video_frame_extractor.dart';
 import 'posture_analysis_screen.dart';
 
 class VideoTrimScreen extends StatefulWidget {
   final String videoPath;
   final String? proPlayer;
+  /// Optional callback for generic trim usage (e.g., flight tracker).
+  /// When provided, this is called instead of navigating to PostureAnalysisScreen.
+  final void Function(int startMs, int endMs, int frameCount)? onTrimComplete;
 
   const VideoTrimScreen({
     Key? key,
     required this.videoPath,
     this.proPlayer,
+    this.onTrimComplete,
   }) : super(key: key);
 
   @override
@@ -84,20 +89,24 @@ class _VideoTrimScreenState extends State<VideoTrimScreen> {
     final endMs = _trimRange.end.round();
     final durationMs = endMs - startMs;
     // Calculate frame count: one frame every 200ms
-    final frameCount = (durationMs / 200).ceil().clamp(1, 300);
+    final frameCount = (durationMs / VideoFrameExtractor.defaultIntervalMs).ceil().clamp(1, 300);
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PostureAnalysisScreen(
-          videoPath: widget.videoPath,
-          proPlayer: widget.proPlayer,
-          analysisStartMs: startMs,
-          analysisEndMs: endMs,
-          analysisFrameCount: frameCount,
+    if (widget.onTrimComplete != null) {
+      widget.onTrimComplete!(startMs, endMs, frameCount);
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PostureAnalysisScreen(
+            videoPath: widget.videoPath,
+            proPlayer: widget.proPlayer,
+            analysisStartMs: startMs,
+            analysisEndMs: endMs,
+            analysisFrameCount: frameCount,
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   @override
@@ -196,7 +205,7 @@ class _VideoTrimScreenState extends State<VideoTrimScreen> {
 
                         // Frame count info
                         Text(
-                          '${((_trimRange.end - _trimRange.start) / 200).ceil()} frames will be analyzed',
+                          '${((_trimRange.end - _trimRange.start) / VideoFrameExtractor.defaultIntervalMs).ceil()} frames will be analyzed',
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 12,
@@ -221,8 +230,12 @@ class _VideoTrimScreenState extends State<VideoTrimScreen> {
                               flex: 2,
                               child: ElevatedButton.icon(
                                 onPressed: _analyzeSelection,
-                                icon: const Icon(Icons.analytics),
-                                label: const Text('Analyze Selection'),
+                                icon: Icon(widget.onTrimComplete != null
+                                    ? Icons.check
+                                    : Icons.analytics),
+                                label: Text(widget.onTrimComplete != null
+                                    ? 'Use Selection'
+                                    : 'Analyze Selection'),
                                 style: ElevatedButton.styleFrom(
                                   padding: const EdgeInsets.all(14),
                                 ),

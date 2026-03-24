@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:provider/provider.dart';
+import '../../services/feedback_service.dart';
 import '../../services/posture_analysis_service.dart';
+import '../../services/video_frame_extractor.dart';
 import '../../models/form_analysis.dart';
+import '../../utils/pro_data_parser.dart';
 import '../../widgets/skeleton_overlay.dart';
+import 'phase_comparison_screen.dart';
 import 'dart:io';
 
 class PostureAnalysisScreen extends StatefulWidget {
@@ -29,6 +33,8 @@ class PostureAnalysisScreen extends StatefulWidget {
 }
 
 class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
+  static const _frameIntervalMs = VideoFrameExtractor.defaultIntervalMs;
+
   VideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _isAnalyzing = false;
@@ -37,6 +43,8 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   bool _inAnalysisRange = false;
   bool _showSkeleton = true;
   bool _showThresholds = true;
+  bool _phaseSelectionMode = false;
+  final Map<String, int> _phaseFrames = {};
 
   @override
   void initState() {
@@ -58,10 +66,10 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
       if (_analysis != null) {
         final position = _controller!.value.position.inMilliseconds;
         final startMs = widget.analysisStartMs ?? 0;
-        final endMs = widget.analysisEndMs ?? (startMs + _analysis!.frames.length * 200);
+        final endMs = widget.analysisEndMs ?? (startMs + _analysis!.frames.length * _frameIntervalMs);
         final inRange = position >= startMs && position <= endMs;
-        // Frames extracted at 200ms intervals from the trim start
-        final frameNumber = ((position - startMs) / 200).floor().clamp(0, _analysis!.frames.length - 1);
+        // Frames extracted at _frameIntervalMs intervals from the trim start
+        final frameNumber = ((position - startMs) / _frameIntervalMs).floor().clamp(0, _analysis!.frames.length - 1);
         if (frameNumber != _currentFrame || inRange != _inAnalysisRange) {
           setState(() {
             _currentFrame = frameNumber;
@@ -88,6 +96,50 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
       _analysis = analysis;
       _isAnalyzing = false;
     });
+
+    // Show verification banner after delay so user can inspect the overlay
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!mounted || _analysis == null) return;
+      _showFormVerificationBanner();
+    });
+  }
+
+  void _showFormVerificationBanner() {
+    ScaffoldMessenger.of(context).showMaterialBanner(
+      MaterialBanner(
+        content: const Text('Does the pose overlay match your body?'),
+        leading: const Icon(Icons.help_outline),
+        actions: [
+          TextButton(
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+              FeedbackService.log({
+                'verified': false,
+                'type': 'form_analysis',
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      'Tip: Use a side-view camera angle with good lighting for best results.'),
+                  duration: Duration(seconds: 5),
+                ),
+              );
+            },
+            child: const Text("It's Off"),
+          ),
+          TextButton(
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+              FeedbackService.log({
+                'verified': true,
+                'type': 'form_analysis',
+              });
+            },
+            child: const Text('Looks Good'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -162,6 +214,10 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                       // Score card
                       _buildScoreCard(),
 
+                      // Phase selection / comparison
+                      if (widget.proPlayer != null && _analysis != null)
+                        _buildPhaseComparisonSection(),
+
                       // Angle charts
                       _buildAngleCharts(),
 
@@ -208,7 +264,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                 icon: const Icon(Icons.skip_previous, color: Colors.white),
                 onPressed: () {
                   final pos = _controller!.value.position -
-                      const Duration(milliseconds: 200);
+                      Duration(milliseconds: _frameIntervalMs);
                   _controller!.seekTo(pos.isNegative ? Duration.zero : pos);
                   setState(() {
                     _currentFrame = (_currentFrame - 1).clamp(0, (_analysis?.frames.length ?? 1) - 1);
@@ -233,7 +289,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                 icon: const Icon(Icons.skip_next, color: Colors.white),
                 onPressed: () {
                   final pos = _controller!.value.position +
-                      const Duration(milliseconds: 200);
+                      Duration(milliseconds: _frameIntervalMs);
                   _controller!.seekTo(pos);
                   setState(() {
                     _currentFrame = (_currentFrame + 1).clamp(0, (_analysis?.frames.length ?? 1) - 1);
@@ -251,7 +307,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                   onChanged: (value) {
                     _controller!.seekTo(Duration(milliseconds: value.toInt()));
                     if (_analysis != null) {
-                      final frame = (value / 200).floor().clamp(0, _analysis!.frames.length - 1);
+                      final frame = (value / _frameIntervalMs).floor().clamp(0, _analysis!.frames.length - 1);
                       setState(() {
                         _currentFrame = frame;
                       });
@@ -342,6 +398,123 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
     return 'Poor';
   }
 
+  Widget _buildPhaseComparisonSection() {
+    // Determine throw type — default to BH
+    final throwType = 'BH';
+    final phases = ProBaselineParser.getPhaseNames(throwType);
+
+    if (!_phaseSelectionMode) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: ElevatedButton.icon(
+          onPressed: () {
+            setState(() {
+              _phaseSelectionMode = true;
+              _phaseFrames.clear();
+            });
+          },
+          icon: const Icon(Icons.compare_arrows),
+          label: const Text('Compare Phases vs Pro'),
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.all(14),
+          ),
+        ),
+      );
+    }
+
+    final allPhasesSet = phases.every((p) => _phaseFrames.containsKey(p));
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.compare_arrows, size: 20),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Select Phase Frames',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  onPressed: () {
+                    setState(() {
+                      _phaseSelectionMode = false;
+                      _phaseFrames.clear();
+                    });
+                  },
+                ),
+              ],
+            ),
+            const Text(
+              'Navigate to the correct frame, then tap the phase button to assign it.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: phases.map((phase) {
+                final isSet = _phaseFrames.containsKey(phase);
+                final label = _formatPhaseName(phase);
+                return ChoiceChip(
+                  label: Text(
+                    isSet
+                        ? '$label (F${_phaseFrames[phase]! + 1})'
+                        : label,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  selected: isSet,
+                  selectedColor: Colors.green.withAlpha(60),
+                  onSelected: (_) {
+                    setState(() {
+                      _phaseFrames[phase] = _currentFrame;
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: allPhasesSet
+                  ? () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PhaseComparisonScreen(
+                            userAnalysis: _analysis!,
+                            phaseFrames: Map.from(_phaseFrames),
+                            proName: widget.proPlayer!,
+                            throwType: throwType,
+                          ),
+                        ),
+                      );
+                    }
+                  : null,
+              icon: const Icon(Icons.analytics),
+              label: Text(allPhasesSet
+                  ? 'Compare'
+                  : '${_phaseFrames.length}/${phases.length} phases set'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatPhaseName(String name) {
+    return name
+        .split('_')
+        .map((w) => w[0].toUpperCase() + w.substring(1))
+        .join(' ');
+  }
+
   Widget _buildAngleCharts() {
     if (_analysis == null || _analysis!.frames.isEmpty) {
       return const Padding(
@@ -391,13 +564,25 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
               height: 80,
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  return CustomPaint(
-                    size: Size(constraints.maxWidth, 80),
-                    painter: AngleWaveformPainter(
-                      angleData: angleData,
-                      currentFrame: _currentFrame,
-                      referenceData: referenceData,
-                      showThreshold: _showThresholds,
+                  return GestureDetector(
+                    onTapDown: (details) {
+                      final fraction = (details.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0);
+                      final frame = (fraction * (_analysis!.frames.length - 1)).round();
+                      _seekToFrame(frame);
+                    },
+                    onHorizontalDragUpdate: (details) {
+                      final fraction = (details.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0);
+                      final frame = (fraction * (_analysis!.frames.length - 1)).round();
+                      _seekToFrame(frame);
+                    },
+                    child: CustomPaint(
+                      size: Size(constraints.maxWidth, 80),
+                      painter: AngleWaveformPainter(
+                        angleData: angleData,
+                        currentFrame: _currentFrame,
+                        referenceData: referenceData,
+                        showThreshold: _showThresholds,
+                      ),
                     ),
                   );
                 },
@@ -412,6 +597,16 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
         ),
       ),
     );
+  }
+
+  void _seekToFrame(int frame) {
+    if (_controller == null || _analysis == null) return;
+    final clampedFrame = frame.clamp(0, _analysis!.frames.length - 1);
+    final startMs = widget.analysisStartMs ?? 0;
+    _controller!.seekTo(Duration(milliseconds: startMs + clampedFrame * _frameIntervalMs));
+    setState(() {
+      _currentFrame = clampedFrame;
+    });
   }
 
   String _formatAngleName(String name) {
@@ -499,9 +694,49 @@ class AngleWaveformPainter extends CustomPainter {
     });
   }
 
+  /// Multi-pass smoothing: median filter to remove spikes, then moving average.
+  List<double> _smooth(List<double> data) {
+    if (data.length < 3) return data;
+    // Pass 1: 3-point median filter to kill outlier spikes
+    var result = _medianFilter(data, 3);
+    // Pass 2-3: 9-point then 7-point moving average
+    result = _movingAvg(result, 9);
+    result = _movingAvg(result, 7);
+    return result;
+  }
+
+  List<double> _medianFilter(List<double> data, int window) {
+    final half = window ~/ 2;
+    return List.generate(data.length, (i) {
+      final start = (i - half).clamp(0, data.length - 1);
+      final end = (i + half).clamp(0, data.length - 1);
+      final seg = data.sublist(start, end + 1)..sort();
+      return seg[seg.length ~/ 2];
+    });
+  }
+
+  List<double> _movingAvg(List<double> data, int window) {
+    if (data.length < window) return data;
+    final half = window ~/ 2;
+    return List.generate(data.length, (i) {
+      final start = (i - half).clamp(0, data.length - 1);
+      final end = (i + half).clamp(0, data.length - 1);
+      double sum = 0;
+      int count = 0;
+      for (int j = start; j <= end; j++) {
+        sum += data[j];
+        count++;
+      }
+      return sum / count;
+    });
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     if (angleData.isEmpty) return;
+
+    // Apply smoothing to reduce pose estimation noise
+    final smoothed = _smooth(angleData);
 
     final paint = Paint()
       ..color = Colors.blue
@@ -518,12 +753,12 @@ class AngleWaveformPainter extends CustomPainter {
 
     // Resample reference to match user frame count
     final resampled = (showThreshold && referenceData != null && referenceData!.isNotEmpty)
-        ? _resampleReference(referenceData!, angleData.length)
+        ? _resampleReference(referenceData!, smoothed.length)
         : null;
 
     // Find min and max for scaling (expand to include reference if shown)
-    var minAngle = angleData.reduce((a, b) => a < b ? a : b);
-    var maxAngle = angleData.reduce((a, b) => a > b ? a : b);
+    var minAngle = smoothed.reduce((a, b) => a < b ? a : b);
+    var maxAngle = smoothed.reduce((a, b) => a > b ? a : b);
     if (resampled != null) {
       final refMin = resampled.reduce((a, b) => a < b ? a : b);
       final refMax = resampled.reduce((a, b) => a > b ? a : b);
@@ -538,9 +773,9 @@ class AngleWaveformPainter extends CustomPainter {
     final path = Path();
     final fillPath = Path();
 
-    for (int i = 0; i < angleData.length; i++) {
-      final x = (i / (angleData.length - 1)) * size.width;
-      final normalizedValue = (angleData[i] - minAngle) / range;
+    for (int i = 0; i < smoothed.length; i++) {
+      final x = (i / (smoothed.length - 1)) * size.width;
+      final normalizedValue = (smoothed[i] - minAngle) / range;
       final y = size.height - (normalizedValue * size.height);
 
       if (i == 0) {
@@ -560,8 +795,8 @@ class AngleWaveformPainter extends CustomPainter {
     canvas.drawPath(path, paint);
 
     // Draw current frame indicator
-    final clampedFrame = currentFrame.clamp(0, angleData.length - 1);
-    final x = (clampedFrame / (angleData.length - 1)) * size.width;
+    final clampedFrame = currentFrame.clamp(0, smoothed.length - 1);
+    final x = (clampedFrame / (smoothed.length - 1)) * size.width;
     canvas.drawLine(
       Offset(x, 0),
       Offset(x, size.height),

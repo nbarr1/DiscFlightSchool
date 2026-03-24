@@ -56,13 +56,20 @@ class FollowFlightPainter extends CustomPainter {
     }
   }
 
+  /// Returns a gradient color from green (start) through yellow to red (end).
+  Color _gradientColor(int index, int total) {
+    if (total <= 0) return Colors.green;
+    final hue = 120.0 * (1.0 - index / total); // green(120) → red(0)
+    return HSLColor.fromAHSL(1.0, hue, 0.9, 0.5).toColor();
+  }
+
   void _drawFadingTrail(
     Canvas canvas,
     Size size,
     List<Offset> scaledTrail,
     List<DiscDetection> detections,
   ) {
-    // Draw individual segments with per-segment fading
+    // Draw individual segments with per-segment fading and gradient color
     for (int i = 1; i < scaledTrail.length; i++) {
       final double fade;
       if (showFullTrail) {
@@ -78,9 +85,12 @@ class FollowFlightPainter extends CustomPainter {
         fade = (1.0 - (age / trailFadeFrames)).clamp(0.0, 1.0);
       }
 
+      // Determine this segment's position in the full trail for gradient
+      final segColor = _gradientColor(i, scaledTrail.length);
+
       // Glow layer
       final glowPaint = Paint()
-        ..color = Colors.red.withAlpha((fade * 40).round())
+        ..color = segColor.withAlpha((fade * 40).round())
         ..strokeWidth = 8.0
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round;
@@ -89,7 +99,7 @@ class FollowFlightPainter extends CustomPainter {
 
       // Main trail line
       final trailPaint = Paint()
-        ..color = const Color(0xFFFF3333).withAlpha((fade * 220).round())
+        ..color = segColor.withAlpha((fade * 220).round())
         ..strokeWidth = 3.0
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round;

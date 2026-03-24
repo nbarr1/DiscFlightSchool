@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Disc Golf App</string>
+	<string>Disc Flight School</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -45,5 +45,13 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Disc Flight School needs camera access to record your throws for form analysis and flight tracking.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Disc Flight School needs microphone access to record audio with your throw videos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Disc Flight School needs photo library access to save analyzed videos and select existing videos.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Disc Flight School needs permission to save analyzed videos to your photo library.</string>
 </dict>
 </plist>

@@ -5,7 +5,10 @@ import 'package:video_thumbnail/video_thumbnail.dart';
 
 class VideoFrameExtractor {
   /// Extract frames from video. [intervalMs] controls spacing between frames.
-  Future<List<String>> extractFrames(String videoPath, {int frameCount = 60, int intervalMs = 200, int startMs = 0}) async {
+  /// Frame interval used across the analysis pipeline.
+  static const int defaultIntervalMs = 100;
+
+  Future<List<String>> extractFrames(String videoPath, {int frameCount = 60, int intervalMs = defaultIntervalMs, int startMs = 0}) async {
     final tempDir = await getTemporaryDirectory();
     final outputDir = Directory('${tempDir.path}/frames_${DateTime.now().millisecondsSinceEpoch}');
     

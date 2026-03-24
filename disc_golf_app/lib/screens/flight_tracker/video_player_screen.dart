@@ -7,6 +7,7 @@ import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:gal/gal.dart';
 import 'package:provider/provider.dart';
 import '../../services/disc_detection_service.dart';
+import '../../services/feedback_service.dart';
 import '../../services/training_data_service.dart';
 import '../../widgets/follow_flight_overlay.dart';
 import 'dart:io';
@@ -17,22 +18,30 @@ class _FlightKeyframe {
   final int frameIndex;
   final double x; // Normalized 0-1
   final double y; // Normalized 0-1
+  final double? boxWidth; // Normalized 0-1 (from two-tap box mode)
+  final double? boxHeight; // Normalized 0-1 (from two-tap box mode)
 
   _FlightKeyframe({
     required this.frameIndex,
     required this.x,
     required this.y,
+    this.boxWidth,
+    this.boxHeight,
   });
 }
 
 class VideoPlayerScreen extends StatefulWidget {
   final String videoPath;
   final dynamic disc;
+  final int? trimStartMs;
+  final int? trimEndMs;
 
   const VideoPlayerScreen({
     super.key,
     required this.videoPath,
     this.disc,
+    this.trimStartMs,
+    this.trimEndMs,
   });
 
   @override
@@ -57,6 +66,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   final _videoBoundaryKey = GlobalKey();
   bool _wasPlayingBeforeZoom = false;
 
+  // Box mode state (two-tap bounding box for training)
+  bool _boxMode = false;
+  Offset? _firstBoxCorner; // Normalized 0-1, first corner of bounding box
+
   // Frame rate used for frame indexing (10fps = 1 frame per 100ms)
   static const double _frameFps = 10.0;
 
@@ -69,6 +82,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   Future<void> _initializeVideo() async {
     _controller = VideoPlayerController.file(File(widget.videoPath));
     await _controller.initialize();
+    if (widget.trimStartMs != null) {
+      await _controller.seekTo(Duration(milliseconds: widget.trimStartMs!));
+    }
     setState(() {
       _isInitialized = true;
     });
@@ -78,7 +94,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   void _onVideoProgress() {
     if (!mounted) return;
     final posMs = _controller.value.position.inMilliseconds;
-    final frame = (posMs * _frameFps / 1000).round();
+    // Pause at trim end if playing past it
+    if (widget.trimEndMs != null &&
+        posMs >= widget.trimEndMs! &&
+        _controller.value.isPlaying) {
+      _controller.pause();
+      _controller.seekTo(Duration(milliseconds: widget.trimEndMs!));
+    }
+    final effectiveMs = posMs - (widget.trimStartMs ?? 0);
+    final frame = (effectiveMs * _frameFps / 1000).round();
     if (frame != _currentFrame) {
       setState(() {
         _currentFrame = frame;
@@ -103,6 +127,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       _controller.pause();
     }
 
+    // Set zoom position immediately so it's available even if the user
+    // releases before the async frame capture completes.
+    setState(() {
+      _isZoomMode = true;
+      _zoomPosition = details.localPosition;
+    });
+
     // Capture current video frame for the magnifier
     final boundary = _videoBoundaryKey.currentContext?.findRenderObject()
         as RenderRepaintBoundary?;
@@ -112,18 +143,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         if (mounted) {
           setState(() {
             _capturedFrame = image;
-            _isZoomMode = true;
-            _zoomPosition = details.localPosition;
           });
         }
       } catch (_) {
-        // Fallback: just show crosshair without magnification
-        if (mounted) {
-          setState(() {
-            _isZoomMode = true;
-            _zoomPosition = details.localPosition;
-          });
-        }
+        // Fallback: crosshair without magnification (already showing)
       }
     }
   }
@@ -136,8 +159,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   void _onLongPressEnd(LongPressEndDetails details) {
-    if (_zoomPosition != null && _videoWidgetSize != Size.zero) {
-      _placeKeyframe(_zoomPosition!);
+    // Use the tracked zoom position, falling back to the release position
+    final position = _zoomPosition ?? details.localPosition;
+    if (_videoWidgetSize != Size.zero) {
+      _placeKeyframe(position);
     }
 
     setState(() {
@@ -158,6 +183,41 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     final normalizedY =
         (localPosition.dy / _videoWidgetSize.height).clamp(0.0, 1.0);
 
+    if (_boxMode && _firstBoxCorner == null) {
+      // First tap in box mode — store corner and wait for second
+      setState(() {
+        _firstBoxCorner = Offset(normalizedX, normalizedY);
+      });
+      return;
+    }
+
+    double? boxW;
+    double? boxH;
+
+    if (_boxMode && _firstBoxCorner != null) {
+      // Second tap in box mode — compute bounding box from two corners
+      final cx = (_firstBoxCorner!.dx + normalizedX) / 2;
+      final cy = (_firstBoxCorner!.dy + normalizedY) / 2;
+      boxW = (normalizedX - _firstBoxCorner!.dx).abs();
+      boxH = (normalizedY - _firstBoxCorner!.dy).abs();
+
+      setState(() {
+        _keyframes.removeWhere((kf) => kf.frameIndex == _currentFrame);
+        _keyframes.add(_FlightKeyframe(
+          frameIndex: _currentFrame,
+          x: cx,
+          y: cy,
+          boxWidth: boxW,
+          boxHeight: boxH,
+        ));
+        _keyframes.sort((a, b) => a.frameIndex.compareTo(b.frameIndex));
+        _trackingResult = null;
+        _firstBoxCorner = null;
+      });
+      return;
+    }
+
+    // Normal mode — single point keyframe
     setState(() {
       _keyframes.removeWhere((kf) => kf.frameIndex == _currentFrame);
       _keyframes.add(_FlightKeyframe(
@@ -170,7 +230,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     });
   }
 
-  void _addKeyframeFromTap(TapDownDetails details) {
+  void _addKeyframeFromTap(TapUpDetails details) {
     _placeKeyframe(details.localPosition);
   }
 
@@ -186,6 +246,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     setState(() {
       _keyframes.clear();
       _trackingResult = null;
+      _firstBoxCorner = null;
     });
   }
 
@@ -245,6 +306,51 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
     // Collect training data if opted in
     _collectTrainingData();
+
+    // Show verification banner after delay so user can inspect the overlay
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!mounted || _trackingResult == null) return;
+      _showFlightVerificationBanner();
+    });
+  }
+
+  void _showFlightVerificationBanner() {
+    ScaffoldMessenger.of(context).showMaterialBanner(
+      MaterialBanner(
+        content: const Text('Does this flight path look correct?'),
+        leading: const Icon(Icons.help_outline),
+        actions: [
+          TextButton(
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+              FeedbackService.log({
+                'verified': false,
+                'type': 'flight_path',
+                'keyframes': _keyframes.length,
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      'Adjust keyframes and tap Process again to refine.'),
+                ),
+              );
+            },
+            child: const Text('Needs Adjustment'),
+          ),
+          TextButton(
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+              FeedbackService.log({
+                'verified': true,
+                'type': 'flight_path',
+                'keyframes': _keyframes.length,
+              });
+            },
+            child: const Text('Looks Good'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _collectTrainingData() async {
@@ -257,6 +363,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               frameIndex: kf.frameIndex,
               x: kf.x,
               y: kf.y,
+              boxWidth: kf.boxWidth,
+              boxHeight: kf.boxHeight,
             ))
         .toList();
 
@@ -270,6 +378,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Saved $saved training samples')),
       );
+
+      // Auto-upload if server is configured
+      if (trainingService.serverUrl.isNotEmpty) {
+        trainingService.uploadPending();
+      }
     }
   }
 
@@ -286,8 +399,30 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   // --- Save video with overlay ---
 
+  Future<ui.Image> _renderOverlayImage(
+    double width,
+    double height,
+    int currentFrame, {
+    bool showDisc = false,
+  }) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(
+      recorder,
+      Rect.fromLTWH(0, 0, width, height),
+    );
+    final painter = FollowFlightPainter(
+      trackingResult: _trackingResult!,
+      currentFrame: currentFrame,
+      showFullTrail: false,
+      showCurrentDisc: showDisc,
+    );
+    painter.paint(canvas, Size(width, height));
+    final picture = recorder.endRecording();
+    return picture.toImage(width.toInt(), height.toInt());
+  }
+
   Future<void> _saveVideoWithOverlay() async {
-    if (_trackingResult == null) return;
+    if (_trackingResult == null || _trackingResult!.detections.isEmpty) return;
 
     // Show loading dialog
     if (mounted) {
@@ -299,7 +434,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             children: [
               CircularProgressIndicator(),
               SizedBox(width: 16),
-              Text('Saving video...'),
+              Text('Rendering flight path...'),
             ],
           ),
         ),
@@ -307,51 +442,85 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
 
     try {
-      // Request gallery access
-      await Gal.requestAccess(toAlbum: true);
+      final hasAccess = await Gal.requestAccess(toAlbum: true);
+      if (!hasAccess) throw Exception('Gallery permission denied');
 
-      // 1. Render full flight path overlay as transparent PNG at video resolution
       final videoWidth = _controller.value.size.width;
       final videoHeight = _controller.value.size.height;
+      final trackingFps = _trackingResult!.fps;
 
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(
-        recorder,
-        Rect.fromLTWH(0, 0, videoWidth, videoHeight),
-      );
-
-      final painter = FollowFlightPainter(
-        trackingResult: _trackingResult!,
-        currentFrame: _trackingResult!.totalFrames,
-        showFullTrail: true,
-        showCurrentDisc: false,
-      );
-      painter.paint(canvas, Size(videoWidth, videoHeight));
-
-      final picture = recorder.endRecording();
-      final overlayImage = await picture.toImage(
-        videoWidth.toInt(),
-        videoHeight.toInt(),
-      );
-      final byteData = await overlayImage.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      overlayImage.dispose();
-
-      if (byteData == null) throw Exception('Failed to render overlay');
-
-      // 2. Save overlay PNG to temp file
       final tempDir = await getTemporaryDirectory();
-      final overlayPath = '${tempDir.path}/flight_overlay.png';
-      await File(overlayPath).writeAsBytes(byteData.buffer.asUint8List());
+      final overlayDir = Directory('${tempDir.path}/flight_overlays');
+      if (overlayDir.existsSync()) overlayDir.deleteSync(recursive: true);
+      overlayDir.createSync();
 
-      // 3. Use ffmpeg to composite overlay onto video
+      // Calculate flight time window
+      final detections = _trackingResult!.detections;
+      final firstSec = detections.first.timestamp.inMilliseconds / 1000.0;
+      final lastSec = detections.last.timestamp.inMilliseconds / 1000.0;
+      final flightDuration = lastSec - firstSec;
+
+      // Render chunked overlays (~8 segments)
+      const segmentCount = 8;
+      final segmentDur = flightDuration / segmentCount;
+      final overlayPaths = <String>[];
+      final segmentTimes = <double>[];
+
+      for (int i = 0; i < segmentCount; i++) {
+        final checkpointSec = firstSec + (i + 1) * segmentDur;
+        final checkpointFrame = (checkpointSec * trackingFps).round();
+
+        final image = await _renderOverlayImage(
+          videoWidth,
+          videoHeight,
+          checkpointFrame,
+          showDisc: i == segmentCount - 1,
+        );
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        image.dispose();
+        if (byteData == null) continue;
+
+        final path = '${overlayDir.path}/seg_$i.png';
+        await File(path).writeAsBytes(byteData.buffer.asUint8List());
+        overlayPaths.add(path);
+        segmentTimes.add(firstSec + i * segmentDur);
+      }
+
+      if (overlayPaths.isEmpty) throw Exception('No overlay segments rendered');
+
+      // Build FFmpeg command with chained overlay filters
+      final inputs = StringBuffer('-y -i "${widget.videoPath}" ');
+      for (final path in overlayPaths) {
+        inputs.write('-i "$path" ');
+      }
+
+      final filters = StringBuffer();
+      final n = overlayPaths.length;
+      for (int i = 0; i < n; i++) {
+        final inputLabel = i == 0 ? '0:v' : 'v$i';
+        final outputLabel = i == n - 1 ? '' : '[v${i + 1}]';
+        final tStart = segmentTimes[i].toStringAsFixed(3);
+        final tEnd = i < n - 1
+            ? segmentTimes[i + 1].toStringAsFixed(3)
+            : '9999';
+        final enable = "enable='between(t\\,$tStart\\,$tEnd)'";
+
+        if (i == 0) {
+          filters.write('[$inputLabel][${i + 1}:v]overlay=$enable:format=auto');
+        } else {
+          filters.write('[$inputLabel][${i + 1}:v]overlay=$enable:format=auto');
+        }
+        if (i < n - 1) {
+          filters.write('$outputLabel;');
+        }
+      }
+
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final outputPath = '${tempDir.path}/flight_path_$timestamp.mp4';
 
       final session = await FFmpegKit.execute(
-        '-y -i "${widget.videoPath}" -i "$overlayPath" '
-        '-filter_complex "[0:v][1:v]overlay=0:0:format=auto" '
+        '${inputs.toString()}'
+        '-filter_complex "${filters.toString()}" '
         '-codec:a copy "$outputPath"',
       );
 
@@ -361,24 +530,25 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         throw Exception('FFmpeg failed: $logs');
       }
 
-      // 4. Save to gallery
-      await Gal.putVideo(outputPath);
+      await Gal.putVideo(outputPath, album: 'Disc Flight School');
 
-      // 5. Cleanup temp files
-      try {
-        await File(overlayPath).delete();
-        await File(outputPath).delete();
-      } catch (_) {}
+      // Cleanup temp files
+      Future.delayed(const Duration(seconds: 120), () {
+        try { overlayDir.deleteSync(recursive: true); } catch (_) {}
+        try { File(outputPath).delete(); } catch (_) {}
+      });
 
       if (mounted) {
-        Navigator.of(context).pop(); // dismiss loading dialog
+        Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Video saved to gallery!')),
+          const SnackBar(
+            content: Text('Video saved to "Disc Flight School" album in gallery!'),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        Navigator.of(context).pop(); // dismiss loading dialog
+        Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to save: $e')),
         );
@@ -438,8 +608,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         horizontal: 16, vertical: 8),
                     color: Colors.blue.withAlpha(40),
                     child: const Text(
-                      'Tap to mark disc, or hold to zoom in for precision. '
-                      'Mark 2+ keyframes, then tap Process.',
+                      'Tap to mark disc, or hold for zoom precision. '
+                      'Enable Box mode for bounding box annotation '
+                      '(2 taps = box corners). Mark 2+ keyframes, then tap Process.',
                       style:
                           TextStyle(color: Colors.white70, fontSize: 12),
                       textAlign: TextAlign.center,
@@ -456,7 +627,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           _videoWidgetSize = constraints.biggest;
 
                           return GestureDetector(
-                            onTapDown: _addKeyframeFromTap,
+                            onTapUp: _addKeyframeFromTap,
                             onLongPressStart: _onLongPressStart,
                             onLongPressMoveUpdate:
                                 _onLongPressMoveUpdate,
@@ -497,6 +668,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                             entry.value,
                                             constraints.biggest,
                                           )),
+
+                                // Bounding box overlays for keyframes with box data
+                                if (_showOverlay && _trackingResult == null)
+                                  ..._keyframes
+                                      .where((kf) => kf.boxWidth != null)
+                                      .map((kf) => _buildBoxOverlay(
+                                            kf,
+                                            constraints.biggest,
+                                          )),
+
+                                // First corner marker in box mode
+                                if (_boxMode && _firstBoxCorner != null)
+                                  _buildFirstCornerMarker(
+                                      constraints.biggest),
 
                                 // Zoom magnifier overlay
                                 if (_isZoomMode &&
@@ -549,44 +734,74 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     final left =
         (touchX - magnifierRadius).clamp(-magnifierRadius, videoSize.width - magnifierRadius);
 
+    final isBoxActive = _boxMode;
+    final cornerLabel = isBoxActive
+        ? (_firstBoxCorner == null ? 'Corner 1' : 'Corner 2')
+        : null;
+
     return Positioned(
       left: left,
       top: top,
       child: IgnorePointer(
-        child: Container(
-          width: magnifierDiameter,
-          height: magnifierDiameter,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2.5),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(150),
-                blurRadius: 12,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: ClipOval(
-            child: _capturedFrame != null
-                ? CustomPaint(
-                    size: const Size(magnifierDiameter, magnifierDiameter),
-                    painter: _MagnifierPainter(
-                      image: _capturedFrame!,
-                      focusPoint: _zoomPosition!,
-                      sourceSize: videoSize,
-                      magnifierRadius: magnifierRadius,
-                      zoomFactor: 3.0,
-                    ),
-                  )
-                : Container(
-                    color: Colors.black87,
-                    child: const Center(
-                      child: Icon(Icons.zoom_in,
-                          color: Colors.white54, size: 32),
-                    ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: magnifierDiameter,
+              height: magnifierDiameter,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isBoxActive ? Colors.orange : Colors.white,
+                  width: 2.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(150),
+                    blurRadius: 12,
+                    spreadRadius: 2,
                   ),
-          ),
+                ],
+              ),
+              child: ClipOval(
+                child: _capturedFrame != null
+                    ? CustomPaint(
+                        size: const Size(magnifierDiameter, magnifierDiameter),
+                        painter: _MagnifierPainter(
+                          image: _capturedFrame!,
+                          focusPoint: _zoomPosition!,
+                          sourceSize: videoSize,
+                          magnifierRadius: magnifierRadius,
+                          zoomFactor: 3.0,
+                        ),
+                      )
+                    : Container(
+                        color: Colors.black87,
+                        child: const Center(
+                          child: Icon(Icons.zoom_in,
+                              color: Colors.white54, size: 32),
+                        ),
+                      ),
+              ),
+            ),
+            if (cornerLabel != null)
+              Container(
+                margin: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.orange,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  cornerLabel,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -651,6 +866,52 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
+  Widget _buildBoxOverlay(_FlightKeyframe kf, Size videoSize) {
+    final w = (kf.boxWidth ?? 0) * videoSize.width;
+    final h = (kf.boxHeight ?? 0) * videoSize.height;
+    final left = kf.x * videoSize.width - w / 2;
+    final top = kf.y * videoSize.height - h / 2;
+
+    return Positioned(
+      left: left,
+      top: top,
+      child: IgnorePointer(
+        child: Container(
+          width: w,
+          height: h,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.orange, width: 2),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFirstCornerMarker(Size videoSize) {
+    final x = _firstBoxCorner!.dx * videoSize.width;
+    final y = _firstBoxCorner!.dy * videoSize.height;
+
+    return Positioned(
+      left: x - 10,
+      top: y - 10,
+      child: IgnorePointer(
+        child: Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            color: Colors.orange.withAlpha(150),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.orange, width: 2),
+          ),
+          child: const Center(
+            child: Icon(Icons.add, color: Colors.white, size: 12),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFrameControls() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -705,11 +966,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                   value: _controller.value.position.inMilliseconds
                       .toDouble()
                       .clamp(
-                          0,
-                          _controller.value.duration.inMilliseconds
+                          (widget.trimStartMs ?? 0).toDouble(),
+                          (widget.trimEndMs ??
+                                  _controller.value.duration.inMilliseconds)
                               .toDouble()),
-                  min: 0,
-                  max: _controller.value.duration.inMilliseconds
+                  min: (widget.trimStartMs ?? 0).toDouble(),
+                  max: (widget.trimEndMs ??
+                          _controller.value.duration.inMilliseconds)
                       .toDouble(),
                   onChanged: (value) {
                     _controller.seekTo(
@@ -718,7 +981,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 ),
               ),
               Text(
-                _formatDuration(_controller.value.duration),
+                _formatDuration(Duration(
+                    milliseconds: widget.trimEndMs ??
+                        _controller.value.duration.inMilliseconds)),
                 style: const TextStyle(
                     color: Colors.white, fontSize: 12),
               ),
@@ -731,12 +996,16 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   Widget _buildActionButtons() {
     final hasEnoughKeyframes = _keyframes.length >= 2;
+    final trainingService =
+        Provider.of<TrainingDataService>(context, listen: false);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
+          if (trainingService.isOptedIn)
+            _buildBoxModeToggle(),
           ElevatedButton.icon(
             onPressed:
                 _keyframes.isEmpty ? null : _undoLastKeyframe,
@@ -768,6 +1037,46 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBoxModeToggle() {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _boxMode = !_boxMode;
+          _firstBoxCorner = null; // Reset pending corner on toggle
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: _boxMode ? Colors.orange : Colors.grey.shade800,
+          borderRadius: BorderRadius.circular(8),
+          border: _boxMode
+              ? Border.all(color: Colors.orangeAccent, width: 1.5)
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.crop_square,
+              size: 18,
+              color: _boxMode ? Colors.white : Colors.grey,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Box',
+              style: TextStyle(
+                fontSize: 13,
+                color: _boxMode ? Colors.white : Colors.grey,
+                fontWeight: _boxMode ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

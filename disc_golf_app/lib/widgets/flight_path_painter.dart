@@ -7,6 +7,13 @@ class FlightPathPainter extends CustomPainter {
 
   FlightPathPainter(this.pathPoints, {this.animationValue = 1.0});
 
+  /// Returns a gradient color from green (start) through yellow to red (end).
+  Color _gradientColor(int index, int total) {
+    if (total <= 0) return Colors.green;
+    final hue = 120.0 * (1.0 - index / total); // green(120) → red(0)
+    return HSLColor.fromAHSL(1.0, hue, 0.9, 0.5).toColor();
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     if (pathPoints.isEmpty) return;
@@ -16,27 +23,21 @@ class FlightPathPainter extends CustomPainter {
     final scaleY = size.height / _getMaxY();
     final scale = scaleX < scaleY ? scaleX : scaleY;
 
-    final paint = Paint()
-      ..color = Colors.blue
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 4.0
-      ..style = PaintingStyle.stroke;
-
-    final path = Path();
-    
     // Scale and draw path
     final scaledPoints = pathPoints.map((p) => Offset(p.dx * scale, p.dy * scale)).toList();
-    
-    if (scaledPoints.isNotEmpty) {
-      path.moveTo(scaledPoints[0].dx, scaledPoints[0].dy);
-    }
 
-    int endIndex = (scaledPoints.length * animationValue).round();
+    final endIndex = (scaledPoints.length * animationValue).round();
+    final totalSegments = scaledPoints.length - 1;
+
+    // Draw per-segment gradient
     for (int i = 1; i < endIndex && i < scaledPoints.length; i++) {
-      path.lineTo(scaledPoints[i].dx, scaledPoints[i].dy);
+      final segPaint = Paint()
+        ..color = _gradientColor(i - 1, totalSegments)
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = 4.0
+        ..style = PaintingStyle.stroke;
+      canvas.drawLine(scaledPoints[i - 1], scaledPoints[i], segPaint);
     }
-
-    canvas.drawPath(path, paint);
 
     // Draw disc at current position
     if (endIndex > 0 && endIndex <= scaledPoints.length) {

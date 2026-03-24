@@ -5,34 +5,27 @@ class FlightPathPainter extends CustomPainter {
 
   FlightPathPainter({required this.points});
 
+  /// Returns a gradient color from green (start) through yellow to red (end).
+  Color _gradientColor(int index, int total) {
+    if (total <= 0) return Colors.green;
+    final hue = 120.0 * (1.0 - index / total); // green(120) → red(0)
+    return HSLColor.fromAHSL(1.0, hue, 0.9, 0.5).toColor();
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     if (points.isEmpty) return;
 
-    // Draw path line
-    final pathPaint = Paint()
-      ..color = Colors.red
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
+    final totalSegments = points.length - 1;
 
-    final path = Path();
-    
-    if (points.isNotEmpty) {
-      path.moveTo(points.first.dx, points.first.dy);
-      for (var i = 1; i < points.length; i++) {
-        path.lineTo(points[i].dx, points[i].dy);
-      }
-    }
-
-    canvas.drawPath(path, pathPaint);
-
-    // Draw points
-    final pointPaint = Paint()
-      ..color = Colors.yellow
-      ..style = PaintingStyle.fill;
-
-    for (var point in points) {
-      canvas.drawCircle(point, 5, pointPaint);
+    // Draw per-segment gradient path
+    for (int i = 1; i < points.length; i++) {
+      final segPaint = Paint()
+        ..color = _gradientColor(i - 1, totalSegments)
+        ..strokeWidth = 3
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(points[i - 1], points[i], segPaint);
     }
 
     // Draw start point (green)

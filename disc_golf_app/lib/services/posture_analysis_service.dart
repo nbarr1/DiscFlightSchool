@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/form_analysis.dart';
+import '../utils/pro_data_parser.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'video_frame_extractor.dart';
 import 'dart:io';
@@ -47,7 +48,7 @@ class PostureAnalysisService extends ChangeNotifier {
 
       // Analyze each frame
       final frames = <FormFrame>[];
-      const intervalMs = 200; // Must match VideoFrameExtractor.intervalMs
+      const intervalMs = VideoFrameExtractor.defaultIntervalMs;
 
       for (int i = 0; i < framePaths.length; i++) {
         final framePath = framePaths[i];
@@ -86,7 +87,13 @@ class PostureAnalysisService extends ChangeNotifier {
         debugPrint('No poses detected in any frame, using mock data');
         return _generateMockAnalysis(videoPath);
       }
-      
+
+      // Smooth angles across frames to reduce pose estimation noise
+      _smoothFrameAngles(frames);
+
+      // Smooth keypoint positions to reduce skeleton overlay jitter
+      _smoothKeyPoints(frames);
+
       final analysis = FormAnalysis(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         date: DateTime.now(),
@@ -174,7 +181,7 @@ class PostureAnalysisService extends ChangeNotifier {
       // Spine angle relative to vertical
       final spineAngle = atan2(
         shoulderMid.x - hipMid.x,
-        shoulderMid.y - hipMid.y,
+        hipMid.y - shoulderMid.y, // Flip y: image coords are y-down
       ) * (180 / pi);
       angles['spineAngle'] = 90 - spineAngle.abs();
     }
@@ -193,6 +200,88 @@ class PostureAnalysisService extends ChangeNotifier {
     }
     
     return keyPoints;
+  }
+
+  /// Apply multi-pass smoothing to reduce pose estimation noise and spikes.
+  /// Pass 1: 3-point median filter to remove outlier spikes.
+  /// Pass 2-3: 9-point moving average for overall smoothness.
+  void _smoothFrameAngles(List<FormFrame> frames) {
+    if (frames.length < 3) return;
+
+    // Collect all angle names present
+    final angleNames = <String>{};
+    for (final f in frames) {
+      angleNames.addAll(f.angles.keys);
+    }
+
+    // Smooth each angle channel independently
+    for (final name in angleNames) {
+      var data = frames.map((f) => f.angles[name] ?? 0.0).toList();
+
+      // Pass 1: Median filter (window 3) to remove spike outliers
+      data = _medianFilter(data, 3);
+
+      // Pass 2-3: Moving average (window 9) for smoothness
+      data = _movingAverage(data, 9);
+      data = _movingAverage(data, 7);
+
+      for (int i = 0; i < frames.length; i++) {
+        frames[i].angles[name] = data[i];
+      }
+    }
+  }
+
+  /// Smooth keypoint positions (x, y) across frames to reduce skeleton jitter.
+  /// Uses a 5-point moving average on each coordinate independently.
+  void _smoothKeyPoints(List<FormFrame> frames) {
+    if (frames.length < 3) return;
+
+    // Collect all keypoint names present
+    final pointNames = <String>{};
+    for (final f in frames) {
+      pointNames.addAll(f.keyPoints.keys);
+    }
+
+    for (final name in pointNames) {
+      var xData = frames.map((f) => f.keyPoints[name]?.dx ?? 0.0).toList();
+      var yData = frames.map((f) => f.keyPoints[name]?.dy ?? 0.0).toList();
+
+      xData = _movingAverage(xData, 5);
+      yData = _movingAverage(yData, 5);
+
+      for (int i = 0; i < frames.length; i++) {
+        if (frames[i].keyPoints.containsKey(name)) {
+          frames[i].keyPoints[name] = Offset(xData[i], yData[i]);
+        }
+      }
+    }
+  }
+
+  List<double> _medianFilter(List<double> data, int window) {
+    if (data.length < window) return data;
+    final half = window ~/ 2;
+    return List.generate(data.length, (i) {
+      final start = (i - half).clamp(0, data.length - 1);
+      final end = (i + half).clamp(0, data.length - 1);
+      final segment = data.sublist(start, end + 1)..sort();
+      return segment[segment.length ~/ 2];
+    });
+  }
+
+  List<double> _movingAverage(List<double> data, int window) {
+    if (data.length < window) return data;
+    final half = window ~/ 2;
+    return List.generate(data.length, (i) {
+      final start = (i - half).clamp(0, data.length - 1);
+      final end = (i + half).clamp(0, data.length - 1);
+      double sum = 0;
+      int count = 0;
+      for (int j = start; j <= end; j++) {
+        sum += data[j];
+        count++;
+      }
+      return sum / count;
+    });
   }
 
   double _calculateScore(List<FormFrame> frames) {
@@ -263,35 +352,14 @@ class PostureAnalysisService extends ChangeNotifier {
     };
   }
 
-  Future<void> loadProFormData(String proName) async {
-    // Mock pro data - in a real app, this would load from a database
-    final mockFrames = List.generate(30, (index) {
-      final progress = index / 30;
-      return FormFrame(
-        timestamp: Duration(milliseconds: index * 100),
-        angles: {
-          'rightElbowAngle': 120.0 + (sin(progress * pi) * 10),
-          'leftElbowAngle': 140.0,
-          'rightShoulderAngle': 100.0 + (cos(progress * pi * 2) * 20),
-          'leftShoulderAngle': 100.0,
-          'rightKneeAngle': 160.0,
-          'leftKneeAngle': 160.0,
-          'spineAngle': 85.0,
-        },
-        keyPoints: {},
-      );
-    });
-
-    final proFormAnalysis = FormAnalysis(
-      id: 'pro_$proName',
-      date: DateTime.now(),
-      videoPath: '',
-      frames: mockFrames,
-      score: 95.0,
+  Future<void> loadProFormData(String proName, {String throwType = 'BH'}) async {
+    final proFormAnalysis = await ProBaselineParser.generateProAnalysis(
+      proName,
+      throwType,
+      frameCount: 30,
     );
 
     _proAnalysis = proFormAnalysis;
-    _currentAnalysis = proFormAnalysis;
     notifyListeners();
   }
 

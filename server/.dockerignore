@@ -1,0 +1,8 @@
+__pycache__
+*.pyc
+.git
+runs/
+dataset/images/train/*
+dataset/labels/train/*
+training_export.zip
+stats.json

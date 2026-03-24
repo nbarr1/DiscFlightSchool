@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+runs/
+dataset/images/train/*
+dataset/labels/train/*
+!dataset/images/train/.gitkeep
+!dataset/labels/train/.gitkeep
+stats.json
+training_export.zip
+venv/
+.env

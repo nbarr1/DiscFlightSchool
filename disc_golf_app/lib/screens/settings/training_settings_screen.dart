@@ -1,9 +1,55 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/training_data_service.dart';
 
-class TrainingSettingsScreen extends StatelessWidget {
+class TrainingSettingsScreen extends StatefulWidget {
   const TrainingSettingsScreen({super.key});
+
+  @override
+  State<TrainingSettingsScreen> createState() => _TrainingSettingsScreenState();
+}
+
+class _TrainingSettingsScreenState extends State<TrainingSettingsScreen> {
+  bool? _serverOnline;
+  bool _checkingServer = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkServerHealth();
+  }
+
+  Future<void> _checkServerHealth() async {
+    final service = context.read<TrainingDataService>();
+    if (service.serverUrl.isEmpty) {
+      setState(() => _serverOnline = null);
+      return;
+    }
+    setState(() => _checkingServer = true);
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 5);
+      final request = await client.getUrl(
+        Uri.parse('${service.serverUrl}/health'),
+      );
+      final response = await request.close();
+      if (mounted) {
+        setState(() {
+          _serverOnline = response.statusCode == 200;
+          _checkingServer = false;
+        });
+      }
+      client.close();
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _serverOnline = false;
+          _checkingServer = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +72,59 @@ class TrainingSettingsScreen extends StatelessWidget {
                   ),
                   value: service.isOptedIn,
                   onChanged: (value) => service.setOptIn(value),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Server status
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _checkingServer
+                            ? Icons.sync
+                            : _serverOnline == true
+                                ? Icons.cloud_done
+                                : _serverOnline == false
+                                    ? Icons.cloud_off
+                                    : Icons.cloud_queue,
+                        color: _checkingServer
+                            ? Colors.grey
+                            : _serverOnline == true
+                                ? Colors.green
+                                : _serverOnline == false
+                                    ? Colors.red
+                                    : Colors.grey,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _checkingServer
+                              ? 'Checking server...'
+                              : _serverOnline == true
+                                  ? 'Training server connected'
+                                  : _serverOnline == false
+                                      ? 'Training server unreachable'
+                                      : 'No server configured',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: _serverOnline == true
+                                ? Colors.green
+                                : _serverOnline == false
+                                    ? Colors.red
+                                    : null,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh, size: 20),
+                        onPressed: _checkingServer ? null : _checkServerHealth,
+                        tooltip: 'Refresh',
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -68,9 +167,24 @@ class TrainingSettingsScreen extends StatelessWidget {
                     : null,
                 icon: const Icon(Icons.cloud_upload),
                 label: Text(
-                  service.serverUrl.isEmpty
-                      ? 'Upload (no server configured)'
-                      : 'Upload ${service.pendingSamples} samples',
+                  service.pendingSamples > 0
+                      ? 'Upload ${service.pendingSamples} samples'
+                      : 'No samples to upload',
+                ),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.all(14),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Export training data
+              ElevatedButton.icon(
+                onPressed: service.totalSamples > 0
+                    ? () => _exportData(context, service)
+                    : null,
+                icon: const Icon(Icons.folder_zip),
+                label: Text(
+                  'Export ${service.totalSamples} samples',
                 ),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.all(14),
@@ -91,44 +205,45 @@ class TrainingSettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
 
-              // Server URL config
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Server Configuration',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        initialValue: service.serverUrl,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          labelText: 'Server URL',
-                          hintText: 'https://your-server.com',
+              // Advanced: Custom server URL
+              ExpansionTile(
+                title: const Text('Advanced'),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextFormField(
+                          initialValue: service.serverUrl,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            labelText: 'Custom Server (optional)',
+                            hintText: 'https://disc-flight-school.onrender.com',
+                            helperText: 'Leave blank to use the default server',
+                          ),
+                          onFieldSubmitted: (value) {
+                            service.setServerUrl(value.trim());
+                            _checkServerHealth();
+                          },
                         ),
-                        onFieldSubmitted: (value) =>
-                            service.setServerUrl(value.trim()),
-                      ),
-                      const SizedBox(height: 8),
-                      FutureBuilder<String>(
-                        future: service.getModelVersion(),
-                        builder: (context, snapshot) {
-                          return Text(
-                            'Model version: ${snapshot.data ?? '...'}',
-                            style: TextStyle(
-                              color: Colors.grey[500],
-                              fontSize: 12,
-                            ),
-                          );
-                        },
-                      ),
-                    ],
+                        const SizedBox(height: 8),
+                        FutureBuilder<String>(
+                          future: service.getModelVersion(),
+                          builder: (context, snapshot) {
+                            return Text(
+                              'Model version: ${snapshot.data ?? '...'}',
+                              style: TextStyle(
+                                color: Colors.grey[500],
+                                fontSize: 12,
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ),
               const SizedBox(height: 24),
 
@@ -148,6 +263,42 @@ class TrainingSettingsScreen extends StatelessWidget {
         },
       ),
     );
+  }
+
+  Future<void> _exportData(
+      BuildContext context, TrainingDataService service) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Exporting...'),
+          ],
+        ),
+      ),
+    );
+
+    final exportPath = await service.exportTrainingData();
+
+    if (context.mounted) {
+      Navigator.of(context).pop();
+
+      if (exportPath != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Exported to:\n$exportPath'),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Export failed')),
+        );
+      }
+    }
   }
 
   Future<void> _uploadData(

@@ -13,11 +13,15 @@ class KeyframeData {
   final int frameIndex;
   final double x; // Normalized 0-1
   final double y; // Normalized 0-1
+  final double? boxWidth; // Normalized 0-1, null = use default
+  final double? boxHeight; // Normalized 0-1, null = use default
 
   KeyframeData({
     required this.frameIndex,
     required this.x,
     required this.y,
+    this.boxWidth,
+    this.boxHeight,
   });
 }
 
@@ -28,7 +32,7 @@ class TrainingDataService extends ChangeNotifier {
   static const String _serverUrlKey = 'training_server_url';
   static const String _modelVersionKey = 'disc_model_version';
   static const String _manifestFile = 'manifest.json';
-  static const String _defaultServerUrl = '';
+  static const String _defaultServerUrl = 'https://disc-flight-school.onrender.com';
   static const double _defaultBoxSize = 0.03; // Normalized bounding box size
   static const int _cropPixels = 64; // Crop region size in pixels
 
@@ -49,7 +53,8 @@ class TrainingDataService extends ChangeNotifier {
     if (_loaded) return;
     final prefs = await SharedPreferences.getInstance();
     _isOptedIn = prefs.getBool(_optInKey) ?? false;
-    _serverUrl = prefs.getString(_serverUrlKey) ?? _defaultServerUrl;
+    final storedUrl = prefs.getString(_serverUrlKey) ?? '';
+    _serverUrl = storedUrl.isEmpty ? _defaultServerUrl : storedUrl;
     await _loadManifest();
     _loaded = true;
     notifyListeners();
@@ -147,8 +152,8 @@ class TrainingDataService extends ChangeNotifier {
           cropPath: cropDest,
           centerX: kf.x,
           centerY: kf.y,
-          boxWidth: _defaultBoxSize,
-          boxHeight: _defaultBoxSize,
+          boxWidth: kf.boxWidth ?? _defaultBoxSize,
+          boxHeight: kf.boxHeight ?? _defaultBoxSize,
           frameIndex: kf.frameIndex,
           imageWidth: imgW,
           imageHeight: imgH,
@@ -195,34 +200,78 @@ class TrainingDataService extends ChangeNotifier {
     try {
       for (final sample in pending) {
         try {
+          final fullFile = File(sample.imagePath);
+          final cropFile = File(sample.cropPath);
+          if (!await fullFile.exists() || !await cropFile.exists()) {
+            debugPrint('Skipping ${sample.id}: image files missing');
+            continue;
+          }
+
           final uri = Uri.parse('$_serverUrl/api/training/upload');
           final request = await client.postUrl(uri);
 
-          // Build multipart form data
           final boundary = '----FormBoundary${_generateId()}';
-          request.headers.set('Content-Type', 'multipart/form-data; boundary=$boundary');
+          request.headers.set(
+            'Content-Type',
+            'multipart/form-data; boundary=$boundary',
+          );
+          request.headers.set('X-App-Key', 'disc-flight-school-v1');
 
-          final body = StringBuffer();
-
-          // Text fields
-          void addField(String name, String value) {
-            body.writeln('--$boundary');
-            body.writeln('Content-Disposition: form-data; name="$name"');
-            body.writeln();
-            body.writeln(value);
+          // Helper to write a text field part
+          void writeField(StringBuffer buf, String name, String value) {
+            buf.write('--$boundary\r\n');
+            buf.write('Content-Disposition: form-data; name="$name"\r\n\r\n');
+            buf.write('$value\r\n');
           }
 
-          addField('sample_id', sample.id);
-          addField('label', sample.toYoloLabel());
-          addField('image_width', sample.imageWidth.toString());
-          addField('image_height', sample.imageHeight.toString());
-          addField('app_version', '1.0.0');
+          // Build preamble with text fields
+          final preamble = StringBuffer();
+          writeField(preamble, 'sample_id', sample.id);
+          writeField(preamble, 'label', sample.toYoloLabel());
+          writeField(preamble, 'image_width', sample.imageWidth.toString());
+          writeField(preamble, 'image_height', sample.imageHeight.toString());
+          writeField(preamble, 'app_version', '1.0.0');
 
-          // For file uploads, we'd normally use a multipart package.
-          // Simplified: send metadata as JSON for now, files via separate endpoint later.
-          body.writeln('--$boundary--');
+          // Full image file part header
+          preamble.write('--$boundary\r\n');
+          preamble.write(
+            'Content-Disposition: form-data; name="full_image"; '
+            'filename="${sample.id}_full.jpg"\r\n',
+          );
+          preamble.write('Content-Type: image/jpeg\r\n\r\n');
 
-          request.write(body.toString());
+          // Middle part between files
+          final middle = StringBuffer();
+          middle.write('\r\n--$boundary\r\n');
+          middle.write(
+            'Content-Disposition: form-data; name="crop_image"; '
+            'filename="${sample.id}_crop.jpg"\r\n',
+          );
+          middle.write('Content-Type: image/jpeg\r\n\r\n');
+
+          // Closing boundary
+          final closing = '\r\n--$boundary--\r\n';
+
+          // Calculate content length
+          final fullBytes = await fullFile.readAsBytes();
+          final cropBytes = await cropFile.readAsBytes();
+          final preambleBytes = utf8.encode(preamble.toString());
+          final middleBytes = utf8.encode(middle.toString());
+          final closingBytes = utf8.encode(closing);
+
+          request.contentLength = preambleBytes.length +
+              fullBytes.length +
+              middleBytes.length +
+              cropBytes.length +
+              closingBytes.length;
+
+          // Write all parts
+          request.add(preambleBytes);
+          request.add(fullBytes);
+          request.add(middleBytes);
+          request.add(cropBytes);
+          request.add(closingBytes);
+
           final response = await request.close();
 
           if (response.statusCode == 200) {
@@ -248,6 +297,71 @@ class TrainingDataService extends ChangeNotifier {
     }
 
     return uploaded;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Export
+  // ---------------------------------------------------------------------------
+
+  /// Export all training data as a ZIP file to the given directory.
+  /// Returns the path to the created ZIP file, or null on failure.
+  Future<String?> exportTrainingData() async {
+    if (_samples.isEmpty) return null;
+
+    try {
+      final dataDir = await _getDataDir();
+      final exportDir = await getApplicationDocumentsDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+
+      // Build a manifest JSON
+      final manifest = {
+        'exported_at': DateTime.now().toIso8601String(),
+        'sample_count': _samples.length,
+        'samples': _samples.map((s) => s.toJson()).toList(),
+      };
+
+      // Use dart:io ZipEncoder via the archive package
+      // Since we want to avoid adding heavy dependencies, we'll create
+      // a directory structure and use gzip + tar approach
+      // Actually, let's create a simple directory export that can be zipped externally
+      // or shared as-is
+
+      final exportSubDir = Directory('${exportDir.path}/training_export_$timestamp');
+      await exportSubDir.create(recursive: true);
+
+      final exportImages = Directory('${exportSubDir.path}/images');
+      final exportLabels = Directory('${exportSubDir.path}/labels');
+      await exportImages.create();
+      await exportLabels.create();
+
+      // Copy images and labels
+      for (final sample in _samples) {
+        final fullFile = File(sample.imagePath);
+        final cropFile = File(sample.cropPath);
+        final labelFile = File('${dataDir.path}/labels/${sample.id}.txt');
+
+        if (await fullFile.exists()) {
+          await fullFile.copy('${exportImages.path}/${sample.id}_full.jpg');
+        }
+        if (await cropFile.exists()) {
+          await cropFile.copy('${exportImages.path}/${sample.id}_crop.jpg');
+        }
+        if (await labelFile.exists()) {
+          await labelFile.copy('${exportLabels.path}/${sample.id}.txt');
+        }
+      }
+
+      // Write manifest
+      final manifestFile = File('${exportSubDir.path}/manifest.json');
+      await manifestFile.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(manifest),
+      );
+
+      return exportSubDir.path;
+    } catch (e) {
+      debugPrint('Failed to export training data: $e');
+      return null;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -318,8 +432,9 @@ class TrainingDataService extends ChangeNotifier {
       final modelUrl = versionData['url'] as String;
       final version = versionData['version'] as String;
 
-      // Download model file
-      final modelUri = Uri.parse(modelUrl);
+      // Download model file — server returns relative path, prepend base URL
+      final fullUrl = modelUrl.startsWith('http') ? modelUrl : '$_serverUrl$modelUrl';
+      final modelUri = Uri.parse(fullUrl);
       final modelReq = await client.getUrl(modelUri);
       final modelResp = await modelReq.close();
 

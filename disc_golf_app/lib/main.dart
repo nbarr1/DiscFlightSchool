@@ -40,6 +40,12 @@ class DiscGolfApp extends StatelessWidget {
             elevation: 4,
           ),
         ),
+        builder: (context, child) {
+          return SafeArea(
+            top: false, // AppBar handles top inset
+            child: child!,
+          );
+        },
         home: const HomeScreen(),
       ),
     );

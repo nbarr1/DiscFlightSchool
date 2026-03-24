@@ -3,6 +3,7 @@ import 'flight_tracker/flight_tracker_screen.dart';
 import 'form_coach/form_coach_screen.dart';
 import 'roulette/roulette_screen.dart';
 import 'roulette/start_round_screen.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'settings/training_settings_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -34,10 +35,10 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(
-                  Icons.sports_golf,
-                  size: 80,
-                  color: Colors.green,
+                SvgPicture.asset(
+                  'assets/images/disc_golf_basket.svg',
+                  width: 80,
+                  height: 80,
                 ),
                 const SizedBox(height: 40),
                 const Text(

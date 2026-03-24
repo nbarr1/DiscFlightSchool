@@ -1,0 +1,2169 @@
+{
+  "metadata": {
+    "version": "3.0",
+    "generated": "2026-03-21",
+    "source": "landmark_annotations.json geometric recalculation",
+    "players": 5,
+    "total_frames": 40,
+    "angles_recalculated": true,
+    "angle_method": "geometric (atan2/dot-product from normalized 2D landmarks)",
+    "landmark_count": 10,
+    "landmarks": [
+      "r_shoulder",
+      "l_shoulder",
+      "r_elbow",
+      "r_wrist",
+      "r_hip",
+      "l_hip",
+      "r_knee",
+      "l_knee",
+      "r_ankle",
+      "l_ankle"
+    ],
+    "angles": [
+      "elbow_flexion_deg",
+      "shoulder_abduction_deg",
+      "x_factor_deg",
+      "lead_knee_flexion_deg",
+      "trail_knee_flexion_deg",
+      "trunk_lateral_tilt_deg",
+      "hip_rotation_deg"
+    ],
+    "notes": [
+      "Ricky Wysocki FH power_pocket & release: l_hip, l_knee, l_ankle occluded - some angles null",
+      "x_factor and hip_rotation identical in 2D side view (both measure shoulder-hip angular separation)",
+      "Calvin Heimburg FH: posterior camera view - trunk_tilt may differ from side-view measurements",
+      "BH lead/trail knee corrected: RHBH lead=R side, trail=L side"
+    ],
+    "data_quality_flags": [
+      {
+        "player": "Eagle McMahon",
+        "throw_type": "FH",
+        "phase": "power_pocket",
+        "issue": "x_factor_deg=163 is extreme outlier (>3 SD from other players)",
+        "cause": "Likely annotation artifact or unusual camera angle - FH throw_dir=right (others are left)",
+        "recommendation": "Review landmark placement on Eagle FH power pocket_2.jpg"
+      },
+      {
+        "player": "Ricky Wysocki",
+        "throw_type": "FH",
+        "phases": [
+          "power_pocket",
+          "release"
+        ],
+        "issue": "l_hip, l_knee, l_ankle occluded - 4 angles null",
+        "cause": "Body occlusion in side-view FH footage",
+        "recommendation": "Source alternative clip with visible lead leg, or mark as partial data"
+      },
+      {
+        "player": "Calvin Heimburg",
+        "throw_type": "FH",
+        "phases": [
+          "wind_up",
+          "power_pocket",
+          "release",
+          "follow_through"
+        ],
+        "issue": "Posterior camera view (all other FH clips are side view)",
+        "cause": "Only available clip was posterior angle",
+        "recommendation": "trunk_tilt values not directly comparable to side-view measurements"
+      },
+      {
+        "player": "Eagle McMahon",
+        "throw_type": "FH",
+        "phases": [
+          "wind_up",
+          "power_pocket",
+          "release",
+          "follow_through"
+        ],
+        "issue": "throw_dir=right while Paul/Ricky/Gannon FH throw_dir=left",
+        "cause": "Mirror-image camera angle",
+        "recommendation": "Angles are geometrically valid but landmark R/L mapping may differ"
+      },
+      {
+        "general": true,
+        "issue": "FH baselines have high SD across most angles",
+        "cause": "Mixed camera angles (side/posterior) and throw directions, plus smaller effective n for some angles",
+        "recommendation": "Treat FH baselines as rough guides; BH baselines are more reliable"
+      },
+      {
+        "general": true,
+        "issue": "hip_rotation_deg = x_factor_deg for all entries",
+        "cause": "2D side-view cannot disambiguate hip rotation from shoulder-hip separation",
+        "recommendation": "Consider removing hip_rotation from baseline or noting it as redundant with x_factor in 2D"
+      }
+    ],
+    "ansur_ii_depth_estimation": {
+      "method": "Foreshortening-based depth estimation using ANSUR II anthropometric ratios",
+      "principle": "Known real-world segment lengths (from stature) compared to observed 2D lengths \u2192 rotation angle via acos(observed/known)",
+      "proportionality_source": "Drillis & Contini (1966), validated on ANSUR II male dataset (n=4082)",
+      "limitations": [
+        "Player heights are approximate (not directly measured)",
+        "Proportionality constants have low R\u00b2 for breadths (shoulder R\u00b2=0.15, hip R\u00b2=0.20) \u2014 individual variation is high",
+        "Assumes side-view camera is perpendicular to sagittal plane",
+        "Does not account for body composition differences (athletes vs military sample)",
+        "Segment length ratios assume average proportions \u2014 disc golfers may differ",
+        "Depth angle estimates compound errors from stature estimate + ratio uncertainty + landmark placement",
+        "2D perspective distortion (lens) not accounted for"
+      ],
+      "best_use": "Relative comparison between phases/players, not absolute 3D reconstruction"
+    }
+  },
+  "players": {
+    "Paul McBeth": {
+      "pdga_rating": 1058,
+      "throws": {
+        "BH": {
+          "clips": [
+            {
+              "source": "AnthemDiscGolf TikTok",
+              "camera": "side",
+              "fps": 120,
+              "notes": "Standstill vs brick wall - cleanest clip"
+            },
+            {
+              "source": "Disc Golf Crew",
+              "camera": "side",
+              "fps": 120,
+              "notes": "Outdoor tourney side view"
+            },
+            {
+              "source": "Discgolfpodcasts TikTok 2023",
+              "camera": "posterior",
+              "fps": 120,
+              "notes": "Red jacket, adds hip rotation data"
+            },
+            {
+              "source": "European event clip 1",
+              "camera": "side",
+              "fps": 120,
+              "notes": "Discmania-branded outdoor event"
+            }
+          ],
+          "phases": {
+            "reach_back": {
+              "elbow_flexion_deg": 126,
+              "shoulder_abduction_deg": 55,
+              "x_factor_deg": 34,
+              "lead_knee_flexion_deg": 158,
+              "trail_knee_flexion_deg": 165,
+              "trunk_lateral_tilt_deg": 7,
+              "hip_rotation_deg": 34,
+              "confidence": 1.0,
+              "visibility_notes": "Wrist partially behind body at full reach-back",
+              "reference_frame": "Paul BH reach back 4.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 53.5,
+                "hip_rotation_deg": 11.5,
+                "x_factor_3d_est_deg": 42,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 31.7,
+                "trail_shank_depth_deg": 0.0,
+                "px_per_mm": 0.1713
+              }
+            },
+            "power_pocket": {
+              "elbow_flexion_deg": 48,
+              "shoulder_abduction_deg": 9,
+              "x_factor_deg": 2,
+              "lead_knee_flexion_deg": 178,
+              "trail_knee_flexion_deg": 112,
+              "trunk_lateral_tilt_deg": 5,
+              "hip_rotation_deg": 2,
+              "confidence": 1.0,
+              "visibility_notes": "Disc pulled tight to chest, hips clearly leading shoulders",
+              "reference_frame": "Paul BH power pocket 4.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 33.9,
+                "hip_rotation_deg": 37.5,
+                "x_factor_3d_est_deg": 4,
+                "upper_arm_depth_angle_deg": 50.5,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 26.9,
+                "lead_shank_depth_deg": 43.2,
+                "trail_shank_depth_deg": 31.5,
+                "px_per_mm": 0.2129
+              }
+            },
+            "release": {
+              "elbow_flexion_deg": 178,
+              "shoulder_abduction_deg": 73,
+              "x_factor_deg": 30,
+              "lead_knee_flexion_deg": 163,
+              "trail_knee_flexion_deg": 127,
+              "trunk_lateral_tilt_deg": 11,
+              "hip_rotation_deg": 30,
+              "confidence": 1.0,
+              "visibility_notes": "Arm near full extension, wide low base, disc visible exiting",
+              "reference_frame": "Paul BH release 4.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 46.8,
+                "hip_rotation_deg": 49.9,
+                "x_factor_3d_est_deg": 3,
+                "upper_arm_depth_angle_deg": 25.4,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 15.6,
+                "trail_thigh_depth_deg": 17.8,
+                "lead_shank_depth_deg": 47.6,
+                "trail_shank_depth_deg": 26.7,
+                "px_per_mm": 0.2207
+              }
+            },
+            "follow_through": {
+              "elbow_flexion_deg": 168,
+              "shoulder_abduction_deg": 43,
+              "x_factor_deg": 35,
+              "lead_knee_flexion_deg": 158,
+              "trail_knee_flexion_deg": 94,
+              "trunk_lateral_tilt_deg": 10,
+              "hip_rotation_deg": 35,
+              "confidence": 1.0,
+              "visibility_notes": "Arm crossing body, hips fully open, trunk forward lean",
+              "reference_frame": "Paul BH follow through 4.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 38.5,
+                "hip_rotation_deg": 82.3,
+                "x_factor_3d_est_deg": 44,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 39.6,
+                "lead_thigh_depth_deg": 25.4,
+                "trail_thigh_depth_deg": 24.4,
+                "lead_shank_depth_deg": 35.9,
+                "trail_shank_depth_deg": 34.4,
+                "px_per_mm": 0.2471
+              }
+            }
+          }
+        },
+        "FH": {
+          "clips": [
+            {
+              "source": "AnthemDiscGolf TikTok Super Slow Motion",
+              "camera": "side",
+              "fps": 120,
+              "notes": "Excellent elbow mechanics visible"
+            },
+            {
+              "source": "AnthemDiscGolf TikTok anhyzer FH",
+              "camera": "posterior",
+              "fps": 120,
+              "notes": "Adds hip rotation and trunk tilt data"
+            }
+          ],
+          "phases": {
+            "wind_up": {
+              "elbow_flexion_deg": 164,
+              "shoulder_abduction_deg": 132,
+              "x_factor_deg": 8,
+              "lead_knee_flexion_deg": 151,
+              "trail_knee_flexion_deg": 132,
+              "trunk_lateral_tilt_deg": 58,
+              "hip_rotation_deg": 8,
+              "confidence": 1.0,
+              "visibility_notes": "Disc held high, elbow externally loaded",
+              "reference_frame": "Paul FH wind up 2.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 50.2,
+                "hip_rotation_deg": 0.0,
+                "x_factor_3d_est_deg": 50,
+                "upper_arm_depth_angle_deg": 69.4,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 28.2,
+                "trail_shank_depth_deg": 65.3,
+                "px_per_mm": 0.4465
+              }
+            },
+            "power_pocket": {
+              "elbow_flexion_deg": 101,
+              "shoulder_abduction_deg": 48,
+              "x_factor_deg": 4,
+              "lead_knee_flexion_deg": 167,
+              "trail_knee_flexion_deg": 125,
+              "trunk_lateral_tilt_deg": 25,
+              "hip_rotation_deg": 4,
+              "confidence": 1.0,
+              "visibility_notes": "Elbow leading at ~90deg, forearm parallel to ground",
+              "reference_frame": "Paul FH power pocket 2 .jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 0.0,
+                "hip_rotation_deg": 0.0,
+                "x_factor_3d_est_deg": 0,
+                "upper_arm_depth_angle_deg": 27.8,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 44.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 42.0,
+                "trail_shank_depth_deg": 71.4,
+                "px_per_mm": 0.5098
+              }
+            },
+            "release": {
+              "elbow_flexion_deg": 70,
+              "shoulder_abduction_deg": 10,
+              "x_factor_deg": 2,
+              "lead_knee_flexion_deg": 175,
+              "trail_knee_flexion_deg": 123,
+              "trunk_lateral_tilt_deg": 21,
+              "hip_rotation_deg": 2,
+              "confidence": 1.0,
+              "visibility_notes": "Strong wrist snap visible, disc exiting frame",
+              "reference_frame": "Paul FH release 2.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 6.0,
+                "hip_rotation_deg": 8.6,
+                "x_factor_3d_est_deg": 3,
+                "upper_arm_depth_angle_deg": 29.8,
+                "forearm_depth_angle_deg": 41.3,
+                "lead_thigh_depth_deg": 45.8,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 35.0,
+                "trail_shank_depth_deg": 69.1,
+                "px_per_mm": 0.4876
+              }
+            },
+            "follow_through": {
+              "elbow_flexion_deg": 152,
+              "shoulder_abduction_deg": 122,
+              "x_factor_deg": 5,
+              "lead_knee_flexion_deg": 151,
+              "trail_knee_flexion_deg": 138,
+              "trunk_lateral_tilt_deg": 13,
+              "hip_rotation_deg": 5,
+              "confidence": 1.0,
+              "visibility_notes": "Arm crossing upward and across chest",
+              "reference_frame": "Paul FH follow through 2 .jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": null,
+                "hip_rotation_deg": 34.8,
+                "x_factor_3d_est_deg": null,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 16.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 18.9,
+                "trail_shank_depth_deg": 33.2,
+                "px_per_mm": 0.4718
+              }
+            }
+          }
+        }
+      },
+      "anthropometry": {
+        "source": "ANSUR II proportionality constants (Drillis & Contini 1966, validated on ANSUR II male)",
+        "stature_in": 68,
+        "stature_mm": 1727,
+        "height_confidence": "approximate (public sources, not directly measured)",
+        "segments": {
+          "biacromial_breadth": {
+            "estimated_mm": 394,
+            "ci95_mm": 29,
+            "ratio_to_stature": 0.228,
+            "r2": 0.3
+          },
+          "bideltoid_breadth": {
+            "estimated_mm": 447,
+            "ci95_mm": 47,
+            "ratio_to_stature": 0.259,
+            "r2": 0.15
+          },
+          "hip_breadth": {
+            "estimated_mm": 330,
+            "ci95_mm": 35,
+            "ratio_to_stature": 0.191,
+            "r2": 0.2
+          },
+          "upper_arm_length": {
+            "estimated_mm": 321,
+            "ci95_mm": 20,
+            "ratio_to_stature": 0.186,
+            "r2": 0.64
+          },
+          "forearm_length": {
+            "estimated_mm": 252,
+            "ci95_mm": 22,
+            "ratio_to_stature": 0.146,
+            "r2": 0.48
+          },
+          "thigh_length": {
+            "estimated_mm": 423,
+            "ci95_mm": 29,
+            "ratio_to_stature": 0.245,
+            "r2": 0.55
+          },
+          "shank_length": {
+            "estimated_mm": 492,
+            "ci95_mm": 25,
+            "ratio_to_stature": 0.285,
+            "r2": 0.76
+          },
+          "shoulder_height": {
+            "estimated_mm": 1413,
+            "ci95_mm": 31,
+            "ratio_to_stature": 0.818,
+            "r2": 0.93
+          },
+          "leg_length": {
+            "estimated_mm": 915,
+            "ci95_mm": 47,
+            "ratio_to_stature": 0.53,
+            "r2": 0.75
+          }
+        }
+      }
+    },
+    "Ricky Wysocki": {
+      "pdga_rating": 1051,
+      "throws": {
+        "BH": {
+          "clips": [
+            {
+              "source": "Australian Open",
+              "camera": "side",
+              "fps": 120,
+              "notes": "Excellent clean side view, full throw cycle"
+            },
+            {
+              "source": "Older tourney clip 11 (225926)",
+              "camera": "side",
+              "fps": 120,
+              "notes": "Confirmed by Nicholas as BH \u2014 separate from Canadian park FH clip"
+            }
+          ],
+          "phases": {
+            "reach_back": {
+              "elbow_flexion_deg": 114,
+              "shoulder_abduction_deg": 50,
+              "x_factor_deg": 54,
+              "lead_knee_flexion_deg": 170,
+              "trail_knee_flexion_deg": 155,
+              "trunk_lateral_tilt_deg": 9,
+              "hip_rotation_deg": 54,
+              "confidence": 1.0,
+              "visibility_notes": "Notably upright trunk vs McBeth, full reach visible",
+              "reference_frame": "Ricky BH reach back.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 64.4,
+                "hip_rotation_deg": 32.8,
+                "x_factor_3d_est_deg": 32,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 0.0,
+                "trail_shank_depth_deg": 0.0,
+                "px_per_mm": 0.1085
+              }
+            },
+            "power_pocket": {
+              "elbow_flexion_deg": 87,
+              "shoulder_abduction_deg": 15,
+              "x_factor_deg": 12,
+              "lead_knee_flexion_deg": 174,
+              "trail_knee_flexion_deg": 139,
+              "trunk_lateral_tilt_deg": 7,
+              "hip_rotation_deg": 12,
+              "confidence": 1.0,
+              "visibility_notes": "Highest X-factor of BH group",
+              "reference_frame": "Ricky BH power pocket .jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 31.6,
+                "hip_rotation_deg": 29.5,
+                "x_factor_3d_est_deg": 2,
+                "upper_arm_depth_angle_deg": 27.9,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 38.5,
+                "trail_shank_depth_deg": 9.7,
+                "px_per_mm": 0.1214
+              }
+            },
+            "release": {
+              "elbow_flexion_deg": 176,
+              "shoulder_abduction_deg": 71,
+              "x_factor_deg": 24,
+              "lead_knee_flexion_deg": 178,
+              "trail_knee_flexion_deg": 148,
+              "trunk_lateral_tilt_deg": 9,
+              "hip_rotation_deg": 24,
+              "confidence": 1.0,
+              "visibility_notes": "Greatest arm extension at release of BH group",
+              "reference_frame": "Ricky BH release.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 47.6,
+                "hip_rotation_deg": 59.3,
+                "x_factor_3d_est_deg": 12,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 36.0,
+                "trail_shank_depth_deg": 15.3,
+                "px_per_mm": 0.1285
+              }
+            },
+            "follow_through": {
+              "elbow_flexion_deg": 132,
+              "shoulder_abduction_deg": 68,
+              "x_factor_deg": 2,
+              "lead_knee_flexion_deg": 173,
+              "trail_knee_flexion_deg": 150,
+              "trunk_lateral_tilt_deg": 8,
+              "hip_rotation_deg": 2,
+              "confidence": 1.0,
+              "visibility_notes": "Full hip rotation, lead leg nearly straight",
+              "reference_frame": "Ricky BH follow through .jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 27.8,
+                "hip_rotation_deg": 69.6,
+                "x_factor_3d_est_deg": 42,
+                "upper_arm_depth_angle_deg": 41.5,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 6.6,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 25.0,
+                "trail_shank_depth_deg": 28.7,
+                "px_per_mm": 0.1471
+              }
+            }
+          },
+          "clip_count": 2,
+          "notes": "Two BH clips. Aussie Open is primary reference."
+        },
+        "FH": {
+          "clips": [
+            {
+              "source": "Canadian park clip (225926)",
+              "camera": "side",
+              "fps": 120,
+              "notes": "Confirmed FH by Nicholas. Aggressive jump-through style, younger Wysocki. Good side view."
+            },
+            {
+              "source": "AnthemDiscGolf Forehand Slow Motion (191158)",
+              "camera": "side",
+              "fps": 120,
+              "notes": "Dedicated slow-motion FH, close-up side view. Much higher quality than Canadian park clip. Deep knee bend and trunk lean signature."
+            }
+          ],
+          "clip_count": 2,
+          "notes": "2 clips. Slow-motion clip is primary reference. Wysocki FH distinguished by deep trunk lean, tucked elbow, highest X-factor in FH group.",
+          "phases": {
+            "wind_up": {
+              "elbow_flexion_deg": 90,
+              "shoulder_abduction_deg": 75,
+              "x_factor_deg": 5,
+              "lead_knee_flexion_deg": 107,
+              "trail_knee_flexion_deg": 103,
+              "trunk_lateral_tilt_deg": 57,
+              "hip_rotation_deg": 5,
+              "confidence": 1.0,
+              "visibility_notes": "Excellent close-up side view. Deep knee bend setup, disc held low.",
+              "reference_frame": "Ricky FH Wind up .jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 55.5,
+                "hip_rotation_deg": 44.2,
+                "x_factor_3d_est_deg": 11,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 70.7,
+                "trail_shank_depth_deg": 0.0,
+                "px_per_mm": 0.4539
+              }
+            },
+            "power_pocket": {
+              "elbow_flexion_deg": 117,
+              "shoulder_abduction_deg": 74,
+              "x_factor_deg": null,
+              "lead_knee_flexion_deg": null,
+              "trail_knee_flexion_deg": 171,
+              "trunk_lateral_tilt_deg": null,
+              "hip_rotation_deg": null,
+              "confidence": 0.7,
+              "visibility_notes": "Deepest trunk lean of any FH player. Elbow extremely low and tucked. Highest X-factor of FH group. [l_hip, l_knee, l_ankle occluded - some angles null, old estimated values removed]",
+              "reference_frame": "Ricky FH power pocket.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 0.0,
+                "hip_rotation_deg": null,
+                "x_factor_3d_est_deg": null,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": null,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": null,
+                "trail_shank_depth_deg": 75.2,
+                "px_per_mm": 0.4364
+              }
+            },
+            "release": {
+              "elbow_flexion_deg": 118,
+              "shoulder_abduction_deg": 57,
+              "x_factor_deg": null,
+              "lead_knee_flexion_deg": null,
+              "trail_knee_flexion_deg": 157,
+              "trunk_lateral_tilt_deg": null,
+              "hip_rotation_deg": null,
+              "confidence": 0.7,
+              "visibility_notes": "Full arm extension, disc clearly exiting. Very upright snap at release vs deep lean at power pocket. [l_hip, l_knee, l_ankle occluded - some angles null, old estimated values removed]",
+              "reference_frame": "Ricky FH Release.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 0.0,
+                "hip_rotation_deg": null,
+                "x_factor_3d_est_deg": null,
+                "upper_arm_depth_angle_deg": 26.4,
+                "forearm_depth_angle_deg": 42.9,
+                "lead_thigh_depth_deg": null,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": null,
+                "trail_shank_depth_deg": 82.4,
+                "px_per_mm": 0.448
+              }
+            },
+            "follow_through": {
+              "elbow_flexion_deg": 160,
+              "shoulder_abduction_deg": 80,
+              "x_factor_deg": 11,
+              "lead_knee_flexion_deg": 161,
+              "trail_knee_flexion_deg": 158,
+              "trunk_lateral_tilt_deg": 4,
+              "hip_rotation_deg": 11,
+              "confidence": 1.0,
+              "visibility_notes": "High knee lift on lead leg, full hip rotation, arm wraps upward.",
+              "reference_frame": "Ricky FH follow-through.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 36.2,
+                "hip_rotation_deg": 0.0,
+                "x_factor_3d_est_deg": 36,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 23.1,
+                "lead_shank_depth_deg": 0.0,
+                "trail_shank_depth_deg": 0.0,
+                "px_per_mm": 0.4364
+              }
+            }
+          }
+        }
+      },
+      "anthropometry": {
+        "source": "ANSUR II proportionality constants (Drillis & Contini 1966, validated on ANSUR II male)",
+        "stature_in": 74,
+        "stature_mm": 1880,
+        "height_confidence": "approximate (public sources, not directly measured)",
+        "segments": {
+          "biacromial_breadth": {
+            "estimated_mm": 429,
+            "ci95_mm": 29,
+            "ratio_to_stature": 0.228,
+            "r2": 0.3
+          },
+          "bideltoid_breadth": {
+            "estimated_mm": 487,
+            "ci95_mm": 47,
+            "ratio_to_stature": 0.259,
+            "r2": 0.15
+          },
+          "hip_breadth": {
+            "estimated_mm": 359,
+            "ci95_mm": 35,
+            "ratio_to_stature": 0.191,
+            "r2": 0.2
+          },
+          "upper_arm_length": {
+            "estimated_mm": 350,
+            "ci95_mm": 20,
+            "ratio_to_stature": 0.186,
+            "r2": 0.64
+          },
+          "forearm_length": {
+            "estimated_mm": 274,
+            "ci95_mm": 22,
+            "ratio_to_stature": 0.146,
+            "r2": 0.48
+          },
+          "thigh_length": {
+            "estimated_mm": 461,
+            "ci95_mm": 29,
+            "ratio_to_stature": 0.245,
+            "r2": 0.55
+          },
+          "shank_length": {
+            "estimated_mm": 536,
+            "ci95_mm": 25,
+            "ratio_to_stature": 0.285,
+            "r2": 0.76
+          },
+          "shoulder_height": {
+            "estimated_mm": 1538,
+            "ci95_mm": 31,
+            "ratio_to_stature": 0.818,
+            "r2": 0.93
+          },
+          "leg_length": {
+            "estimated_mm": 996,
+            "ci95_mm": 47,
+            "ratio_to_stature": 0.53,
+            "r2": 0.75
+          }
+        }
+      }
+    },
+    "Eagle McMahon": {
+      "pdga_rating": 1040,
+      "throws": {
+        "BH": {
+          "clips": [
+            {
+              "source": "Outdoor tourney Canada clip 13",
+              "camera": "side",
+              "fps": 120,
+              "notes": "Good side view, white shirt, full body"
+            },
+            {
+              "source": "Discmania European event clip 14",
+              "camera": "side",
+              "fps": 240,
+              "notes": "Highest FPS clip in dataset - excellent phase detection"
+            }
+          ],
+          "phases": {
+            "reach_back": {
+              "elbow_flexion_deg": 162,
+              "shoulder_abduction_deg": 65,
+              "x_factor_deg": 99,
+              "lead_knee_flexion_deg": 158,
+              "trail_knee_flexion_deg": 174,
+              "trunk_lateral_tilt_deg": 8,
+              "hip_rotation_deg": 99,
+              "confidence": 1.0,
+              "visibility_notes": "Most elbow flex at reach-back of BH group \u2014 longer arm path",
+              "reference_frame": "Eagle BH Reach back.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 0.0,
+                "hip_rotation_deg": 0.0,
+                "x_factor_3d_est_deg": 0,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 0.0,
+                "trail_shank_depth_deg": 0.0,
+                "px_per_mm": 0.058
+              }
+            },
+            "power_pocket": {
+              "elbow_flexion_deg": 95,
+              "shoulder_abduction_deg": 28,
+              "x_factor_deg": 16,
+              "lead_knee_flexion_deg": 180,
+              "trail_knee_flexion_deg": 112,
+              "trunk_lateral_tilt_deg": 10,
+              "hip_rotation_deg": 16,
+              "confidence": 1.0,
+              "visibility_notes": "More relaxed elbow than McBeth, wider arc",
+              "reference_frame": "Eagle BH Power pocket .jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 0.0,
+                "hip_rotation_deg": 4.3,
+                "x_factor_3d_est_deg": 4,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 0.0,
+                "trail_shank_depth_deg": 0.0,
+                "px_per_mm": 0.0855
+              }
+            },
+            "release": {
+              "elbow_flexion_deg": 156,
+              "shoulder_abduction_deg": 89,
+              "x_factor_deg": 4,
+              "lead_knee_flexion_deg": 176,
+              "trail_knee_flexion_deg": 124,
+              "trunk_lateral_tilt_deg": 13,
+              "hip_rotation_deg": 4,
+              "confidence": 1.0,
+              "visibility_notes": "240fps clip very useful \u2014 slightly less extension than Wysocki",
+              "reference_frame": "Eagle BH Release.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 43.5,
+                "hip_rotation_deg": 65.5,
+                "x_factor_3d_est_deg": 22,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 29.0,
+                "trail_shank_depth_deg": 0.0,
+                "px_per_mm": 0.0986
+              }
+            },
+            "follow_through": {
+              "elbow_flexion_deg": 169,
+              "shoulder_abduction_deg": 105,
+              "x_factor_deg": 14,
+              "lead_knee_flexion_deg": 162,
+              "trail_knee_flexion_deg": 130,
+              "trunk_lateral_tilt_deg": 19,
+              "hip_rotation_deg": 14,
+              "confidence": 1.0,
+              "visibility_notes": "Wide sweeping follow-through, signature Eagle style",
+              "reference_frame": "Eagle BH Follow through .jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 31.9,
+                "hip_rotation_deg": 80.5,
+                "x_factor_3d_est_deg": 49,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 35.6,
+                "lead_thigh_depth_deg": 24.3,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 34.0,
+                "trail_shank_depth_deg": 21.5,
+                "px_per_mm": 0.1189
+              }
+            }
+          },
+          "clip_count": 2
+        },
+        "FH": {
+          "clips": [
+            {
+              "source": "AnthemDiscGolf Slow Motion Forehand (191256)",
+              "camera": "side",
+              "fps": 120,
+              "notes": "First Eagle FH data. Distinctive deep crouch at wind-up, long arm path, explosive hip clearance."
+            }
+          ],
+          "clip_count": 1,
+          "notes": "Eagle FH: deepest knee bend at wind-up of any FH player. Long wide arm path. Explosive hip clearance at release.",
+          "phases": {
+            "wind_up": {
+              "elbow_flexion_deg": 27,
+              "shoulder_abduction_deg": 29,
+              "x_factor_deg": 29,
+              "lead_knee_flexion_deg": 171,
+              "trail_knee_flexion_deg": 158,
+              "trunk_lateral_tilt_deg": 1,
+              "hip_rotation_deg": 29,
+              "confidence": 1.0,
+              "visibility_notes": "Deepest knee bend of any FH player \u2014 knees nearly at 90deg. Distinctive low crouch.",
+              "reference_frame": "Eagle FH Wind up_2.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 0.0,
+                "hip_rotation_deg": 0.0,
+                "x_factor_3d_est_deg": 0,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 46.3,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 0.0,
+                "trail_shank_depth_deg": 0.0,
+                "px_per_mm": 0.0667
+              }
+            },
+            "power_pocket": {
+              "elbow_flexion_deg": 115,
+              "shoulder_abduction_deg": 18,
+              "x_factor_deg": 163,
+              "lead_knee_flexion_deg": 153,
+              "trail_knee_flexion_deg": 119,
+              "trunk_lateral_tilt_deg": 6,
+              "hip_rotation_deg": 163,
+              "confidence": 1.0,
+              "visibility_notes": "Arm extends wider than other FH players at power pocket \u2014 longer arc. Rising out of crouch.",
+              "reference_frame": "Eagle FH power pocket_2.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 79.0,
+                "hip_rotation_deg": 77.5,
+                "x_factor_3d_est_deg": 2,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 55.8,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 30.6,
+                "trail_shank_depth_deg": 30.3,
+                "px_per_mm": 0.1029
+              }
+            },
+            "release": {
+              "elbow_flexion_deg": 143,
+              "shoulder_abduction_deg": 54,
+              "x_factor_deg": 8,
+              "lead_knee_flexion_deg": 154,
+              "trail_knee_flexion_deg": 120,
+              "trunk_lateral_tilt_deg": 10,
+              "hip_rotation_deg": 8,
+              "confidence": 1.0,
+              "visibility_notes": "Explosive upward hip drive at release, body rising from crouch into throw. Disc exits cleanly.",
+              "reference_frame": "Eagle FH Release_2.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 0.0,
+                "hip_rotation_deg": 69.1,
+                "x_factor_3d_est_deg": 69,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 0.0,
+                "trail_shank_depth_deg": 0.0,
+                "px_per_mm": 0.0739
+              }
+            },
+            "follow_through": {
+              "elbow_flexion_deg": 129,
+              "shoulder_abduction_deg": 48,
+              "x_factor_deg": 3,
+              "lead_knee_flexion_deg": 163,
+              "trail_knee_flexion_deg": 155,
+              "trunk_lateral_tilt_deg": 13,
+              "hip_rotation_deg": 3,
+              "confidence": 1.0,
+              "visibility_notes": "Wide sweeping arm path continues. Posterior camera angle at end limits precision.",
+              "reference_frame": "Eagle FH follow-through_2.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 28.1,
+                "hip_rotation_deg": 68.6,
+                "x_factor_3d_est_deg": 40,
+                "upper_arm_depth_angle_deg": 75.5,
+                "forearm_depth_angle_deg": 69.1,
+                "lead_thigh_depth_deg": 12.2,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 0.0,
+                "trail_shank_depth_deg": 0.0,
+                "px_per_mm": 0.0913
+              }
+            }
+          }
+        }
+      },
+      "anthropometry": {
+        "source": "ANSUR II proportionality constants (Drillis & Contini 1966, validated on ANSUR II male)",
+        "stature_in": 73,
+        "stature_mm": 1854,
+        "height_confidence": "approximate (public sources, not directly measured)",
+        "segments": {
+          "biacromial_breadth": {
+            "estimated_mm": 423,
+            "ci95_mm": 29,
+            "ratio_to_stature": 0.228,
+            "r2": 0.3
+          },
+          "bideltoid_breadth": {
+            "estimated_mm": 480,
+            "ci95_mm": 47,
+            "ratio_to_stature": 0.259,
+            "r2": 0.15
+          },
+          "hip_breadth": {
+            "estimated_mm": 354,
+            "ci95_mm": 35,
+            "ratio_to_stature": 0.191,
+            "r2": 0.2
+          },
+          "upper_arm_length": {
+            "estimated_mm": 345,
+            "ci95_mm": 20,
+            "ratio_to_stature": 0.186,
+            "r2": 0.64
+          },
+          "forearm_length": {
+            "estimated_mm": 271,
+            "ci95_mm": 22,
+            "ratio_to_stature": 0.146,
+            "r2": 0.48
+          },
+          "thigh_length": {
+            "estimated_mm": 454,
+            "ci95_mm": 29,
+            "ratio_to_stature": 0.245,
+            "r2": 0.55
+          },
+          "shank_length": {
+            "estimated_mm": 528,
+            "ci95_mm": 25,
+            "ratio_to_stature": 0.285,
+            "r2": 0.76
+          },
+          "shoulder_height": {
+            "estimated_mm": 1517,
+            "ci95_mm": 31,
+            "ratio_to_stature": 0.818,
+            "r2": 0.93
+          },
+          "leg_length": {
+            "estimated_mm": 983,
+            "ci95_mm": 47,
+            "ratio_to_stature": 0.53,
+            "r2": 0.75
+          }
+        }
+      }
+    },
+    "Calvin Heimburg": {
+      "pdga_rating": 1045,
+      "throws": {
+        "BH": {
+          "clips": [
+            {
+              "source": "Disc Golf Crew 2023 LVC",
+              "camera": "side",
+              "fps": 120,
+              "notes": "Distant shot, body mechanics clear"
+            }
+          ],
+          "phases": {
+            "reach_back": {
+              "elbow_flexion_deg": 87,
+              "shoulder_abduction_deg": 57,
+              "x_factor_deg": 54,
+              "lead_knee_flexion_deg": 168,
+              "trail_knee_flexion_deg": 175,
+              "trunk_lateral_tilt_deg": 5,
+              "hip_rotation_deg": 54,
+              "confidence": 1.0,
+              "visibility_notes": "Distance reduces precision",
+              "reference_frame": "Calvin BH reach back.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 66.1,
+                "hip_rotation_deg": 33.2,
+                "x_factor_3d_est_deg": 33,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 0.0,
+                "trail_shank_depth_deg": 0.0,
+                "px_per_mm": 0.0626
+              }
+            },
+            "power_pocket": {
+              "elbow_flexion_deg": 50,
+              "shoulder_abduction_deg": 21,
+              "x_factor_deg": 4,
+              "lead_knee_flexion_deg": 170,
+              "trail_knee_flexion_deg": 141,
+              "trunk_lateral_tilt_deg": 3,
+              "hip_rotation_deg": 4,
+              "confidence": 1.0,
+              "visibility_notes": "Hip-shoulder separation clear despite distance",
+              "reference_frame": "Calvin BH power pocket.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 42.4,
+                "hip_rotation_deg": 56.3,
+                "x_factor_3d_est_deg": 14,
+                "upper_arm_depth_angle_deg": 60.2,
+                "forearm_depth_angle_deg": 28.7,
+                "lead_thigh_depth_deg": 27.5,
+                "trail_thigh_depth_deg": 27.1,
+                "lead_shank_depth_deg": 34.8,
+                "trail_shank_depth_deg": 48.4,
+                "px_per_mm": 0.0835
+              }
+            },
+            "release": {
+              "elbow_flexion_deg": 166,
+              "shoulder_abduction_deg": 55,
+              "x_factor_deg": 10,
+              "lead_knee_flexion_deg": 166,
+              "trail_knee_flexion_deg": 138,
+              "trunk_lateral_tilt_deg": 7,
+              "hip_rotation_deg": 10,
+              "confidence": 1.0,
+              "visibility_notes": "Slightly more elbow bend at release vs McBeth/Wysocki",
+              "reference_frame": "Calvin BH release.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 64.5,
+                "hip_rotation_deg": 74.1,
+                "x_factor_3d_est_deg": 10,
+                "upper_arm_depth_angle_deg": 39.9,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 35.3,
+                "trail_shank_depth_deg": 40.6,
+                "px_per_mm": 0.078
+              }
+            },
+            "follow_through": {
+              "elbow_flexion_deg": 151,
+              "shoulder_abduction_deg": 84,
+              "x_factor_deg": 1,
+              "lead_knee_flexion_deg": 175,
+              "trail_knee_flexion_deg": 143,
+              "trunk_lateral_tilt_deg": 8,
+              "hip_rotation_deg": 1,
+              "confidence": 1.0,
+              "visibility_notes": "Distance limits fine measurement",
+              "reference_frame": "Calvin BH follow through .jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 50.6,
+                "hip_rotation_deg": 81.1,
+                "x_factor_3d_est_deg": 30,
+                "upper_arm_depth_angle_deg": 33.5,
+                "forearm_depth_angle_deg": 20.9,
+                "lead_thigh_depth_deg": 23.3,
+                "trail_thigh_depth_deg": 27.1,
+                "lead_shank_depth_deg": 41.9,
+                "trail_shank_depth_deg": 43.3,
+                "px_per_mm": 0.0905
+              }
+            }
+          }
+        },
+        "FH": {
+          "clips": [
+            {
+              "source": "AnthemDiscGolf Slow Motion Forehand",
+              "camera": "posterior",
+              "fps": 120,
+              "notes": "Excellent hip-shoulder separation from behind"
+            }
+          ],
+          "phases": {
+            "wind_up": {
+              "elbow_flexion_deg": 71,
+              "shoulder_abduction_deg": 57,
+              "x_factor_deg": 73,
+              "lead_knee_flexion_deg": 161,
+              "trail_knee_flexion_deg": 127,
+              "trunk_lateral_tilt_deg": 59,
+              "hip_rotation_deg": 73,
+              "confidence": 1.0,
+              "visibility_notes": "Posterior view, elbow estimated from silhouette",
+              "reference_frame": "Calvin FH wind up .jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 61.9,
+                "hip_rotation_deg": 29.2,
+                "x_factor_3d_est_deg": 33,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 0.0,
+                "trail_shank_depth_deg": 51.8,
+                "px_per_mm": 0.3063
+              }
+            },
+            "power_pocket": {
+              "elbow_flexion_deg": 121,
+              "shoulder_abduction_deg": 94,
+              "x_factor_deg": 16,
+              "lead_knee_flexion_deg": 175,
+              "trail_knee_flexion_deg": 157,
+              "trunk_lateral_tilt_deg": 45,
+              "hip_rotation_deg": 16,
+              "confidence": 1.0,
+              "visibility_notes": "Strong X-factor clearly visible from posterior",
+              "reference_frame": "Calvin FH power pocket .jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 0.0,
+                "hip_rotation_deg": 0.0,
+                "x_factor_3d_est_deg": 0,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 51.8,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 16.2,
+                "trail_shank_depth_deg": 64.4,
+                "px_per_mm": 0.346
+              }
+            },
+            "release": {
+              "elbow_flexion_deg": 132,
+              "shoulder_abduction_deg": 88,
+              "x_factor_deg": 10,
+              "lead_knee_flexion_deg": 172,
+              "trail_knee_flexion_deg": 150,
+              "trunk_lateral_tilt_deg": 42,
+              "hip_rotation_deg": 10,
+              "confidence": 1.0,
+              "visibility_notes": "Disc visible exiting right, arm nearly straight",
+              "reference_frame": "Calvin FH release.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 0.0,
+                "hip_rotation_deg": 39.3,
+                "x_factor_3d_est_deg": 39,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 41.8,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 28.7,
+                "trail_shank_depth_deg": 73.2,
+                "px_per_mm": 0.4056
+              }
+            },
+            "follow_through": {
+              "elbow_flexion_deg": 164,
+              "shoulder_abduction_deg": 70,
+              "x_factor_deg": 4,
+              "lead_knee_flexion_deg": 144,
+              "trail_knee_flexion_deg": 168,
+              "trunk_lateral_tilt_deg": 11,
+              "hip_rotation_deg": 4,
+              "confidence": 1.0,
+              "visibility_notes": "Full hip rotation from posterior view",
+              "reference_frame": "Calvin FH follow through .jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 45.3,
+                "hip_rotation_deg": 45.8,
+                "x_factor_3d_est_deg": 0,
+                "upper_arm_depth_angle_deg": 21.6,
+                "forearm_depth_angle_deg": 25.2,
+                "lead_thigh_depth_deg": 39.3,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 43.2,
+                "trail_shank_depth_deg": 64.4,
+                "px_per_mm": 0.4963
+              }
+            }
+          }
+        }
+      },
+      "anthropometry": {
+        "source": "ANSUR II proportionality constants (Drillis & Contini 1966, validated on ANSUR II male)",
+        "stature_in": 76,
+        "stature_mm": 1930,
+        "height_confidence": "approximate (public sources, not directly measured)",
+        "segments": {
+          "biacromial_breadth": {
+            "estimated_mm": 440,
+            "ci95_mm": 29,
+            "ratio_to_stature": 0.228,
+            "r2": 0.3
+          },
+          "bideltoid_breadth": {
+            "estimated_mm": 500,
+            "ci95_mm": 47,
+            "ratio_to_stature": 0.259,
+            "r2": 0.15
+          },
+          "hip_breadth": {
+            "estimated_mm": 369,
+            "ci95_mm": 35,
+            "ratio_to_stature": 0.191,
+            "r2": 0.2
+          },
+          "upper_arm_length": {
+            "estimated_mm": 359,
+            "ci95_mm": 20,
+            "ratio_to_stature": 0.186,
+            "r2": 0.64
+          },
+          "forearm_length": {
+            "estimated_mm": 282,
+            "ci95_mm": 22,
+            "ratio_to_stature": 0.146,
+            "r2": 0.48
+          },
+          "thigh_length": {
+            "estimated_mm": 473,
+            "ci95_mm": 29,
+            "ratio_to_stature": 0.245,
+            "r2": 0.55
+          },
+          "shank_length": {
+            "estimated_mm": 550,
+            "ci95_mm": 25,
+            "ratio_to_stature": 0.285,
+            "r2": 0.76
+          },
+          "shoulder_height": {
+            "estimated_mm": 1579,
+            "ci95_mm": 31,
+            "ratio_to_stature": 0.818,
+            "r2": 0.93
+          },
+          "leg_length": {
+            "estimated_mm": 1023,
+            "ci95_mm": 47,
+            "ratio_to_stature": 0.53,
+            "r2": 0.75
+          }
+        }
+      }
+    },
+    "Gannon Buhr": {
+      "pdga_rating": 1040,
+      "throws": {
+        "FH": {
+          "clips": [
+            {
+              "source": "AnthemDiscGolf simple but powerful FH",
+              "camera": "posterior",
+              "fps": 120,
+              "notes": "Compact efficient FH"
+            },
+            {
+              "source": "AnthemDiscGolf World Champion FH split screen",
+              "camera": "side+posterior",
+              "fps": 120,
+              "notes": "Two-angle view"
+            }
+          ],
+          "phases": {
+            "wind_up": {
+              "elbow_flexion_deg": 120,
+              "shoulder_abduction_deg": 81,
+              "x_factor_deg": 31,
+              "lead_knee_flexion_deg": 179,
+              "trail_knee_flexion_deg": 121,
+              "trunk_lateral_tilt_deg": 40,
+              "hip_rotation_deg": 31,
+              "confidence": 1.0,
+              "visibility_notes": "Posterior view, elbow from silhouette",
+              "reference_frame": "Gannon FH wind up 2.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 71.5,
+                "hip_rotation_deg": 74.1,
+                "x_factor_3d_est_deg": 3,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 21.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 37.0,
+                "trail_shank_depth_deg": 53.4,
+                "px_per_mm": 0.4518
+              }
+            },
+            "power_pocket": {
+              "elbow_flexion_deg": 99,
+              "shoulder_abduction_deg": 45,
+              "x_factor_deg": 14,
+              "lead_knee_flexion_deg": 152,
+              "trail_knee_flexion_deg": 129,
+              "trunk_lateral_tilt_deg": 18,
+              "hip_rotation_deg": 14,
+              "confidence": 1.0,
+              "visibility_notes": "Compact swing, less X-factor than McMahon/Heimburg",
+              "reference_frame": "Gannon FH power pocket 2.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 0.0,
+                "hip_rotation_deg": 27.0,
+                "x_factor_3d_est_deg": 27,
+                "upper_arm_depth_angle_deg": 22.8,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 41.8,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 46.7,
+                "trail_shank_depth_deg": 69.6,
+                "px_per_mm": 0.4949
+              }
+            },
+            "release": {
+              "elbow_flexion_deg": 66,
+              "shoulder_abduction_deg": 18,
+              "x_factor_deg": 13,
+              "lead_knee_flexion_deg": 155,
+              "trail_knee_flexion_deg": 145,
+              "trunk_lateral_tilt_deg": 21,
+              "hip_rotation_deg": 13,
+              "confidence": 1.0,
+              "visibility_notes": "Clean extension confirmed by side view in second clip",
+              "reference_frame": "Gannon FH release 2.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 22.2,
+                "hip_rotation_deg": 41.6,
+                "x_factor_3d_est_deg": 19,
+                "upper_arm_depth_angle_deg": 34.7,
+                "forearm_depth_angle_deg": 32.4,
+                "lead_thigh_depth_deg": 50.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 42.9,
+                "trail_shank_depth_deg": 71.9,
+                "px_per_mm": 0.5352
+              }
+            },
+            "follow_through": {
+              "elbow_flexion_deg": 146,
+              "shoulder_abduction_deg": 85,
+              "x_factor_deg": 17,
+              "lead_knee_flexion_deg": 164,
+              "trail_knee_flexion_deg": 115,
+              "trunk_lateral_tilt_deg": 24,
+              "hip_rotation_deg": 17,
+              "confidence": 1.0,
+              "visibility_notes": "Compact deceleration arc vs McBeth wider sweep",
+              "reference_frame": "Gannon FH follow through 2.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 51.2,
+                "hip_rotation_deg": 0.0,
+                "x_factor_3d_est_deg": 51,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 35.2,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 42.3,
+                "trail_shank_depth_deg": 67.8,
+                "px_per_mm": 0.5554
+              }
+            }
+          }
+        },
+        "BH": {
+          "clips": [
+            {
+              "source": "Discmania Finland event (190858)",
+              "camera": "side",
+              "fps": 120,
+              "notes": "Clean outdoor side view, full throw cycle visible. Confirms compact Buhr BH style."
+            }
+          ],
+          "clip_count": 1,
+          "notes": "First Buhr BH data. Compact mechanics consistent with his FH style \u2014 less arm extension at reach-back, tight elbow path.",
+          "phases": {
+            "reach_back": {
+              "elbow_flexion_deg": 163,
+              "shoulder_abduction_deg": 73,
+              "x_factor_deg": 106,
+              "lead_knee_flexion_deg": 168,
+              "trail_knee_flexion_deg": 179,
+              "trunk_lateral_tilt_deg": 8,
+              "hip_rotation_deg": 106,
+              "confidence": 1.0,
+              "visibility_notes": "Clean side view. Compact reach-back, less extension than McBeth/Wysocki",
+              "reference_frame": "Gannon BH Reach back.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 35.5,
+                "hip_rotation_deg": 0.0,
+                "x_factor_3d_est_deg": 36,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 0.0,
+                "lead_shank_depth_deg": 0.0,
+                "trail_shank_depth_deg": 0.0,
+                "px_per_mm": 0.1201
+              }
+            },
+            "power_pocket": {
+              "elbow_flexion_deg": 87,
+              "shoulder_abduction_deg": 4,
+              "x_factor_deg": 16,
+              "lead_knee_flexion_deg": 173,
+              "trail_knee_flexion_deg": 117,
+              "trunk_lateral_tilt_deg": 5,
+              "hip_rotation_deg": 16,
+              "confidence": 1.0,
+              "visibility_notes": "Disc tight to hip, elbow close to body \u2014 compact Buhr signature visible in BH too",
+              "reference_frame": "Gannon BH Power pocket.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 29.7,
+                "hip_rotation_deg": 42.7,
+                "x_factor_3d_est_deg": 13,
+                "upper_arm_depth_angle_deg": 39.1,
+                "forearm_depth_angle_deg": 0.0,
+                "lead_thigh_depth_deg": 0.0,
+                "trail_thigh_depth_deg": 21.9,
+                "lead_shank_depth_deg": 44.4,
+                "trail_shank_depth_deg": 25.8,
+                "px_per_mm": 0.1737
+              }
+            },
+            "release": {
+              "elbow_flexion_deg": 176,
+              "shoulder_abduction_deg": 58,
+              "x_factor_deg": 0,
+              "lead_knee_flexion_deg": 166,
+              "trail_knee_flexion_deg": 111,
+              "trunk_lateral_tilt_deg": 11,
+              "hip_rotation_deg": 0,
+              "confidence": 1.0,
+              "visibility_notes": "Clean arm extension, stepping through at release, disc exits left clearly",
+              "reference_frame": "Gannon BH Release.jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 34.8,
+                "hip_rotation_deg": 65.6,
+                "x_factor_3d_est_deg": 31,
+                "upper_arm_depth_angle_deg": 37.9,
+                "forearm_depth_angle_deg": 21.6,
+                "lead_thigh_depth_deg": 5.8,
+                "trail_thigh_depth_deg": 20.8,
+                "lead_shank_depth_deg": 47.6,
+                "trail_shank_depth_deg": 29.9,
+                "px_per_mm": 0.1822
+              }
+            },
+            "follow_through": {
+              "elbow_flexion_deg": 151,
+              "shoulder_abduction_deg": 106,
+              "x_factor_deg": 4,
+              "lead_knee_flexion_deg": 156,
+              "trail_knee_flexion_deg": 102,
+              "trunk_lateral_tilt_deg": 14,
+              "hip_rotation_deg": 4,
+              "confidence": 1.0,
+              "visibility_notes": "Full hip rotation, compact deceleration arc consistent with FH follow-through style",
+              "reference_frame": "Gannon BH Follow through .jpg",
+              "depth_estimates": {
+                "shoulder_rotation_deg": 33.8,
+                "hip_rotation_deg": 84.6,
+                "x_factor_3d_est_deg": 51,
+                "upper_arm_depth_angle_deg": 0.0,
+                "forearm_depth_angle_deg": 39.9,
+                "lead_thigh_depth_deg": 7.0,
+                "trail_thigh_depth_deg": 12.9,
+                "lead_shank_depth_deg": 38.0,
+                "trail_shank_depth_deg": 30.4,
+                "px_per_mm": 0.1935
+              }
+            }
+          }
+        }
+      },
+      "anthropometry": {
+        "source": "ANSUR II proportionality constants (Drillis & Contini 1966, validated on ANSUR II male)",
+        "stature_in": 75,
+        "stature_mm": 1905,
+        "height_confidence": "approximate (public sources, not directly measured)",
+        "segments": {
+          "biacromial_breadth": {
+            "estimated_mm": 434,
+            "ci95_mm": 29,
+            "ratio_to_stature": 0.228,
+            "r2": 0.3
+          },
+          "bideltoid_breadth": {
+            "estimated_mm": 493,
+            "ci95_mm": 47,
+            "ratio_to_stature": 0.259,
+            "r2": 0.15
+          },
+          "hip_breadth": {
+            "estimated_mm": 364,
+            "ci95_mm": 35,
+            "ratio_to_stature": 0.191,
+            "r2": 0.2
+          },
+          "upper_arm_length": {
+            "estimated_mm": 354,
+            "ci95_mm": 20,
+            "ratio_to_stature": 0.186,
+            "r2": 0.64
+          },
+          "forearm_length": {
+            "estimated_mm": 278,
+            "ci95_mm": 22,
+            "ratio_to_stature": 0.146,
+            "r2": 0.48
+          },
+          "thigh_length": {
+            "estimated_mm": 467,
+            "ci95_mm": 29,
+            "ratio_to_stature": 0.245,
+            "r2": 0.55
+          },
+          "shank_length": {
+            "estimated_mm": 543,
+            "ci95_mm": 25,
+            "ratio_to_stature": 0.285,
+            "r2": 0.76
+          },
+          "shoulder_height": {
+            "estimated_mm": 1558,
+            "ci95_mm": 31,
+            "ratio_to_stature": 0.818,
+            "r2": 0.93
+          },
+          "leg_length": {
+            "estimated_mm": 1010,
+            "ci95_mm": 47,
+            "ratio_to_stature": 0.53,
+            "r2": 0.75
+          }
+        }
+      }
+    }
+  },
+  "baseline_summary": {
+    "BH": {
+      "reach_back": {
+        "elbow_flexion_deg": {
+          "mean": 130.4,
+          "median": 126,
+          "min": 87,
+          "max": 163,
+          "sd": 32.5,
+          "p25": 114,
+          "p75": 162,
+          "n": 5
+        },
+        "shoulder_abduction_deg": {
+          "mean": 60,
+          "median": 57,
+          "min": 50,
+          "max": 73,
+          "sd": 9.1,
+          "p25": 55,
+          "p75": 65,
+          "n": 5
+        },
+        "x_factor_deg": {
+          "mean": 69.4,
+          "median": 54,
+          "min": 34,
+          "max": 106,
+          "sd": 31.4,
+          "p25": 54,
+          "p75": 99,
+          "n": 5
+        },
+        "lead_knee_flexion_deg": {
+          "mean": 164.4,
+          "median": 168,
+          "min": 158,
+          "max": 170,
+          "sd": 5.9,
+          "p25": 158,
+          "p75": 168,
+          "n": 5
+        },
+        "trail_knee_flexion_deg": {
+          "mean": 169.6,
+          "median": 174,
+          "min": 155,
+          "max": 179,
+          "sd": 9.6,
+          "p25": 165,
+          "p75": 175,
+          "n": 5
+        },
+        "trunk_lateral_tilt_deg": {
+          "mean": 7.4,
+          "median": 8,
+          "min": 5,
+          "max": 9,
+          "sd": 1.5,
+          "p25": 7,
+          "p75": 8,
+          "n": 5
+        },
+        "hip_rotation_deg": {
+          "mean": 69.4,
+          "median": 54,
+          "min": 34,
+          "max": 106,
+          "sd": 31.4,
+          "p25": 54,
+          "p75": 99,
+          "n": 5
+        }
+      },
+      "power_pocket": {
+        "elbow_flexion_deg": {
+          "mean": 73.4,
+          "median": 87,
+          "min": 48,
+          "max": 95,
+          "sd": 22.5,
+          "p25": 50,
+          "p75": 87,
+          "n": 5
+        },
+        "shoulder_abduction_deg": {
+          "mean": 15.4,
+          "median": 15,
+          "min": 4,
+          "max": 28,
+          "sd": 9.5,
+          "p25": 9,
+          "p75": 21,
+          "n": 5
+        },
+        "x_factor_deg": {
+          "mean": 10,
+          "median": 12,
+          "min": 2,
+          "max": 16,
+          "sd": 6.6,
+          "p25": 4,
+          "p75": 16,
+          "n": 5
+        },
+        "lead_knee_flexion_deg": {
+          "mean": 175,
+          "median": 174,
+          "min": 170,
+          "max": 180,
+          "sd": 4.0,
+          "p25": 173,
+          "p75": 178,
+          "n": 5
+        },
+        "trail_knee_flexion_deg": {
+          "mean": 124.2,
+          "median": 117,
+          "min": 112,
+          "max": 141,
+          "sd": 14.6,
+          "p25": 112,
+          "p75": 139,
+          "n": 5
+        },
+        "trunk_lateral_tilt_deg": {
+          "mean": 6,
+          "median": 5,
+          "min": 3,
+          "max": 10,
+          "sd": 2.6,
+          "p25": 5,
+          "p75": 7,
+          "n": 5
+        },
+        "hip_rotation_deg": {
+          "mean": 10,
+          "median": 12,
+          "min": 2,
+          "max": 16,
+          "sd": 6.6,
+          "p25": 4,
+          "p75": 16,
+          "n": 5
+        }
+      },
+      "release": {
+        "elbow_flexion_deg": {
+          "mean": 170.4,
+          "median": 176,
+          "min": 156,
+          "max": 178,
+          "sd": 9.3,
+          "p25": 166,
+          "p75": 176,
+          "n": 5
+        },
+        "shoulder_abduction_deg": {
+          "mean": 69.2,
+          "median": 71,
+          "min": 55,
+          "max": 89,
+          "sd": 13.6,
+          "p25": 58,
+          "p75": 73,
+          "n": 5
+        },
+        "x_factor_deg": {
+          "mean": 13.6,
+          "median": 10,
+          "min": 0,
+          "max": 30,
+          "sd": 12.9,
+          "p25": 4,
+          "p75": 24,
+          "n": 5
+        },
+        "lead_knee_flexion_deg": {
+          "mean": 169.8,
+          "median": 166,
+          "min": 163,
+          "max": 178,
+          "sd": 6.7,
+          "p25": 166,
+          "p75": 176,
+          "n": 5
+        },
+        "trail_knee_flexion_deg": {
+          "mean": 129.6,
+          "median": 127,
+          "min": 111,
+          "max": 148,
+          "sd": 14.1,
+          "p25": 124,
+          "p75": 138,
+          "n": 5
+        },
+        "trunk_lateral_tilt_deg": {
+          "mean": 10.2,
+          "median": 11,
+          "min": 7,
+          "max": 13,
+          "sd": 2.3,
+          "p25": 9,
+          "p75": 11,
+          "n": 5
+        },
+        "hip_rotation_deg": {
+          "mean": 13.6,
+          "median": 10,
+          "min": 0,
+          "max": 30,
+          "sd": 12.9,
+          "p25": 4,
+          "p75": 24,
+          "n": 5
+        }
+      },
+      "follow_through": {
+        "elbow_flexion_deg": {
+          "mean": 154.2,
+          "median": 151,
+          "min": 132,
+          "max": 169,
+          "sd": 15.2,
+          "p25": 151,
+          "p75": 168,
+          "n": 5
+        },
+        "shoulder_abduction_deg": {
+          "mean": 81.2,
+          "median": 84,
+          "min": 43,
+          "max": 106,
+          "sd": 26.6,
+          "p25": 68,
+          "p75": 105,
+          "n": 5
+        },
+        "x_factor_deg": {
+          "mean": 11.2,
+          "median": 4,
+          "min": 1,
+          "max": 35,
+          "sd": 14.3,
+          "p25": 2,
+          "p75": 14,
+          "n": 5
+        },
+        "lead_knee_flexion_deg": {
+          "mean": 164.8,
+          "median": 162,
+          "min": 156,
+          "max": 175,
+          "sd": 8.7,
+          "p25": 158,
+          "p75": 173,
+          "n": 5
+        },
+        "trail_knee_flexion_deg": {
+          "mean": 123.8,
+          "median": 130,
+          "min": 94,
+          "max": 150,
+          "sd": 24.8,
+          "p25": 102,
+          "p75": 143,
+          "n": 5
+        },
+        "trunk_lateral_tilt_deg": {
+          "mean": 11.8,
+          "median": 10,
+          "min": 8,
+          "max": 19,
+          "sd": 4.7,
+          "p25": 8,
+          "p75": 14,
+          "n": 5
+        },
+        "hip_rotation_deg": {
+          "mean": 11.2,
+          "median": 4,
+          "min": 1,
+          "max": 35,
+          "sd": 14.3,
+          "p25": 2,
+          "p75": 14,
+          "n": 5
+        }
+      }
+    },
+    "FH": {
+      "wind_up": {
+        "elbow_flexion_deg": {
+          "mean": 94.4,
+          "median": 90,
+          "min": 27,
+          "max": 164,
+          "sd": 51.5,
+          "p25": 71,
+          "p75": 120,
+          "n": 5
+        },
+        "shoulder_abduction_deg": {
+          "mean": 74.8,
+          "median": 75,
+          "min": 29,
+          "max": 132,
+          "sd": 37.8,
+          "p25": 57,
+          "p75": 81,
+          "n": 5
+        },
+        "x_factor_deg": {
+          "mean": 29.2,
+          "median": 29,
+          "min": 5,
+          "max": 73,
+          "sd": 27.2,
+          "p25": 8,
+          "p75": 31,
+          "n": 5
+        },
+        "lead_knee_flexion_deg": {
+          "mean": 153.8,
+          "median": 161,
+          "min": 107,
+          "max": 179,
+          "sd": 28.2,
+          "p25": 151,
+          "p75": 171,
+          "n": 5
+        },
+        "trail_knee_flexion_deg": {
+          "mean": 128.2,
+          "median": 127,
+          "min": 103,
+          "max": 158,
+          "sd": 19.9,
+          "p25": 121,
+          "p75": 132,
+          "n": 5
+        },
+        "trunk_lateral_tilt_deg": {
+          "mean": 43,
+          "median": 57,
+          "min": 1,
+          "max": 59,
+          "sd": 24.7,
+          "p25": 40,
+          "p75": 58,
+          "n": 5
+        },
+        "hip_rotation_deg": {
+          "mean": 29.2,
+          "median": 29,
+          "min": 5,
+          "max": 73,
+          "sd": 27.2,
+          "p25": 8,
+          "p75": 31,
+          "n": 5
+        }
+      },
+      "power_pocket": {
+        "elbow_flexion_deg": {
+          "mean": 110.6,
+          "median": 115,
+          "min": 99,
+          "max": 121,
+          "sd": 9.9,
+          "p25": 101,
+          "p75": 117,
+          "n": 5
+        },
+        "shoulder_abduction_deg": {
+          "mean": 55.8,
+          "median": 48,
+          "min": 18,
+          "max": 94,
+          "sd": 29.1,
+          "p25": 45,
+          "p75": 74,
+          "n": 5
+        },
+        "x_factor_deg": {
+          "mean": 49.2,
+          "median": 15.0,
+          "min": 4,
+          "max": 163,
+          "sd": 76.0,
+          "p25": 4,
+          "p75": 163,
+          "n": 4
+        },
+        "lead_knee_flexion_deg": {
+          "mean": 161.8,
+          "median": 160.0,
+          "min": 152,
+          "max": 175,
+          "sd": 11.2,
+          "p25": 152,
+          "p75": 175,
+          "n": 4
+        },
+        "trail_knee_flexion_deg": {
+          "mean": 140.2,
+          "median": 129,
+          "min": 119,
+          "max": 171,
+          "sd": 22.6,
+          "p25": 125,
+          "p75": 157,
+          "n": 5
+        },
+        "trunk_lateral_tilt_deg": {
+          "mean": 23.5,
+          "median": 21.5,
+          "min": 6,
+          "max": 45,
+          "sd": 16.3,
+          "p25": 6,
+          "p75": 45,
+          "n": 4
+        },
+        "hip_rotation_deg": {
+          "mean": 49.2,
+          "median": 15.0,
+          "min": 4,
+          "max": 163,
+          "sd": 76.0,
+          "p25": 4,
+          "p75": 163,
+          "n": 4
+        }
+      },
+      "release": {
+        "elbow_flexion_deg": {
+          "mean": 105.8,
+          "median": 118,
+          "min": 66,
+          "max": 143,
+          "sd": 35.7,
+          "p25": 70,
+          "p75": 132,
+          "n": 5
+        },
+        "shoulder_abduction_deg": {
+          "mean": 45.4,
+          "median": 54,
+          "min": 10,
+          "max": 88,
+          "sd": 31.7,
+          "p25": 18,
+          "p75": 57,
+          "n": 5
+        },
+        "x_factor_deg": {
+          "mean": 8.2,
+          "median": 9.0,
+          "min": 2,
+          "max": 13,
+          "sd": 4.6,
+          "p25": 2,
+          "p75": 13,
+          "n": 4
+        },
+        "lead_knee_flexion_deg": {
+          "mean": 164,
+          "median": 163.5,
+          "min": 154,
+          "max": 175,
+          "sd": 11.0,
+          "p25": 154,
+          "p75": 175,
+          "n": 4
+        },
+        "trail_knee_flexion_deg": {
+          "mean": 139,
+          "median": 145,
+          "min": 120,
+          "max": 157,
+          "sd": 16.6,
+          "p25": 123,
+          "p75": 150,
+          "n": 5
+        },
+        "trunk_lateral_tilt_deg": {
+          "mean": 23.5,
+          "median": 21.0,
+          "min": 10,
+          "max": 42,
+          "sd": 13.4,
+          "p25": 10,
+          "p75": 42,
+          "n": 4
+        },
+        "hip_rotation_deg": {
+          "mean": 8.2,
+          "median": 9.0,
+          "min": 2,
+          "max": 13,
+          "sd": 4.6,
+          "p25": 2,
+          "p75": 13,
+          "n": 4
+        }
+      },
+      "follow_through": {
+        "elbow_flexion_deg": {
+          "mean": 150.2,
+          "median": 152,
+          "min": 129,
+          "max": 164,
+          "sd": 13.8,
+          "p25": 146,
+          "p75": 160,
+          "n": 5
+        },
+        "shoulder_abduction_deg": {
+          "mean": 81,
+          "median": 80,
+          "min": 48,
+          "max": 122,
+          "sd": 27.0,
+          "p25": 70,
+          "p75": 85,
+          "n": 5
+        },
+        "x_factor_deg": {
+          "mean": 8,
+          "median": 5,
+          "min": 3,
+          "max": 17,
+          "sd": 5.9,
+          "p25": 4,
+          "p75": 11,
+          "n": 5
+        },
+        "lead_knee_flexion_deg": {
+          "mean": 156.6,
+          "median": 161,
+          "min": 144,
+          "max": 164,
+          "sd": 8.7,
+          "p25": 151,
+          "p75": 163,
+          "n": 5
+        },
+        "trail_knee_flexion_deg": {
+          "mean": 146.8,
+          "median": 155,
+          "min": 115,
+          "max": 168,
+          "sd": 20.8,
+          "p25": 138,
+          "p75": 158,
+          "n": 5
+        },
+        "trunk_lateral_tilt_deg": {
+          "mean": 13,
+          "median": 13,
+          "min": 4,
+          "max": 24,
+          "sd": 7.2,
+          "p25": 11,
+          "p75": 13,
+          "n": 5
+        },
+        "hip_rotation_deg": {
+          "mean": 8,
+          "median": 5,
+          "min": 3,
+          "max": 17,
+          "sd": 5.9,
+          "p25": 4,
+          "p75": 11,
+          "n": 5
+        }
+      }
+    }
+  }
+}
