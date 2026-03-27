@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'dart:io';
 import '../../services/video_frame_extractor.dart';
-import 'posture_analysis_screen.dart';
+import 'phase_frame_selector_screen.dart';
 
 class VideoTrimScreen extends StatefulWidget {
   final String videoPath;
@@ -97,7 +97,7 @@ class _VideoTrimScreenState extends State<VideoTrimScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => PostureAnalysisScreen(
+          builder: (context) => PhaseFrameSelectorScreen(
             videoPath: widget.videoPath,
             proPlayer: widget.proPlayer,
             analysisStartMs: startMs,
@@ -205,7 +205,7 @@ class _VideoTrimScreenState extends State<VideoTrimScreen> {
 
                         // Frame count info
                         Text(
-                          '${((_trimRange.end - _trimRange.start) / VideoFrameExtractor.defaultIntervalMs).ceil()} frames will be analyzed',
+                          '${((_trimRange.end - _trimRange.start) / VideoFrameExtractor.defaultIntervalMs).ceil()} frames · Next: mark the 4 key throw phases',
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 12,
@@ -232,10 +232,10 @@ class _VideoTrimScreenState extends State<VideoTrimScreen> {
                                 onPressed: _analyzeSelection,
                                 icon: Icon(widget.onTrimComplete != null
                                     ? Icons.check
-                                    : Icons.analytics),
+                                    : Icons.flag),
                                 label: Text(widget.onTrimComplete != null
                                     ? 'Use Selection'
-                                    : 'Analyze Selection'),
+                                    : 'Select Phases'),
                                 style: ElevatedButton.styleFrom(
                                   padding: const EdgeInsets.all(14),
                                 ),

@@ -8,6 +8,7 @@ import '../../models/form_analysis.dart';
 import '../../utils/pro_data_parser.dart';
 import '../../widgets/skeleton_overlay.dart';
 import 'phase_comparison_screen.dart';
+import 'pose_correction_screen.dart';
 import 'dart:io';
 
 class PostureAnalysisScreen extends StatefulWidget {
@@ -17,6 +18,10 @@ class PostureAnalysisScreen extends StatefulWidget {
   final int? analysisStartMs;
   final int? analysisEndMs;
   final int? analysisFrameCount;
+  /// Phase timestamps from [PhaseFrameSelectorScreen]: phase key → absolute ms.
+  /// When provided, guided per-phase verification runs after full analysis.
+  final Map<String, int>? phaseTimestamps;
+  final String throwType;
 
   const PostureAnalysisScreen({
     Key? key,
@@ -26,6 +31,8 @@ class PostureAnalysisScreen extends StatefulWidget {
     this.analysisStartMs,
     this.analysisEndMs,
     this.analysisFrameCount,
+    this.phaseTimestamps,
+    this.throwType = 'BH',
   }) : super(key: key);
 
   @override
@@ -43,8 +50,21 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   bool _inAnalysisRange = false;
   bool _showSkeleton = true;
   bool _showThresholds = true;
+
+  // Phase verification state (used when phaseTimestamps != null)
+  bool _isVerifying = false;
+  int _verificationPhaseIndex = 0;
+
+  // Manual phase selection fallback (used when phaseTimestamps == null)
   bool _phaseSelectionMode = false;
   final Map<String, int> _phaseFrames = {};
+
+  List<MapEntry<String, int>> get _sortedPhases {
+    if (widget.phaseTimestamps == null) return [];
+    final entries = widget.phaseTimestamps!.entries.toList();
+    entries.sort((a, b) => a.value.compareTo(b.value));
+    return entries;
+  }
 
   @override
   void initState() {
@@ -97,11 +117,90 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
       _isAnalyzing = false;
     });
 
-    // Show verification banner after delay so user can inspect the overlay
-    Future.delayed(const Duration(seconds: 3), () {
-      if (!mounted || _analysis == null) return;
-      _showFormVerificationBanner();
+    if (widget.phaseTimestamps != null && widget.phaseTimestamps!.isNotEmpty) {
+      // Guided per-phase verification after a short pause
+      Future.delayed(const Duration(seconds: 2), () {
+        if (!mounted || _analysis == null) return;
+        _startPhaseVerification();
+      });
+    } else {
+      // Generic verification banner
+      Future.delayed(const Duration(seconds: 3), () {
+        if (!mounted || _analysis == null) return;
+        _showFormVerificationBanner();
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phase verification
+  // ---------------------------------------------------------------------------
+
+  int _frameForPhase(int absoluteMs) {
+    if (_analysis == null) return 0;
+    final startMs = widget.analysisStartMs ?? 0;
+    return ((absoluteMs - startMs) / _frameIntervalMs)
+        .floor()
+        .clamp(0, _analysis!.frames.length - 1);
+  }
+
+  void _seekToPhase(int absoluteMs) {
+    if (_controller == null || _analysis == null) return;
+    _controller!.seekTo(Duration(milliseconds: absoluteMs));
+    setState(() {
+      _currentFrame = _frameForPhase(absoluteMs);
     });
+  }
+
+  void _startPhaseVerification() {
+    final sorted = _sortedPhases;
+    if (sorted.isEmpty) return;
+    setState(() {
+      _isVerifying = true;
+      _verificationPhaseIndex = 0;
+    });
+    _controller?.pause();
+    _seekToPhase(sorted[0].value);
+  }
+
+  void _approveCurrentPhase() {
+    final sorted = _sortedPhases;
+    final nextIndex = _verificationPhaseIndex + 1;
+    if (nextIndex < sorted.length) {
+      setState(() => _verificationPhaseIndex = nextIndex);
+      _seekToPhase(sorted[nextIndex].value);
+    } else {
+      setState(() => _isVerifying = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All phases verified!')),
+      );
+    }
+  }
+
+  Future<void> _fixCurrentPhase() async {
+    if (_analysis == null || widget.videoPath == null) return;
+    final sorted = _sortedPhases;
+    final phaseMs = sorted[_verificationPhaseIndex].value;
+    final initialFrame = _frameForPhase(phaseMs);
+
+    final corrected = await Navigator.push<FormAnalysis>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PoseCorrectionScreen(
+          analysis: _analysis!,
+          videoPath: widget.videoPath!,
+          analysisStartMs: widget.analysisStartMs,
+          analysisEndMs: widget.analysisEndMs,
+          initialFrame: initialFrame,
+        ),
+      ),
+    );
+
+    if (corrected != null && mounted) {
+      setState(() => _analysis = corrected);
+    }
+
+    if (mounted) _approveCurrentPhase();
   }
 
   void _showFormVerificationBanner() {
@@ -117,13 +216,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                 'verified': false,
                 'type': 'form_analysis',
               });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                      'Tip: Use a side-view camera angle with good lighting for best results.'),
-                  duration: Duration(seconds: 5),
-                ),
-              );
+              _showCorrectionOptions();
             },
             child: const Text("It's Off"),
           ),
@@ -142,10 +235,170 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
     );
   }
 
+  void _showCorrectionOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'How would you like to fix it?',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.videocam, color: Colors.blue),
+              title: const Text('Retake Tips'),
+              subtitle: const Text(
+                  'Get advice on camera angle and lighting'),
+              onTap: () {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                        'Tip: Use a side-view camera angle with good lighting for best results.'),
+                    duration: Duration(seconds: 5),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit, color: Colors.orange),
+              title: const Text('Correct Manually'),
+              subtitle: const Text(
+                  'Drag joints to the right positions frame by frame'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _navigateToCorrection();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _navigateToCorrection() async {
+    if (_analysis == null || widget.videoPath == null) return;
+
+    final corrected = await Navigator.push<FormAnalysis>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PoseCorrectionScreen(
+          analysis: _analysis!,
+          videoPath: widget.videoPath!,
+          analysisStartMs: widget.analysisStartMs,
+          analysisEndMs: widget.analysisEndMs,
+        ),
+      ),
+    );
+
+    if (corrected != null && mounted) {
+      setState(() {
+        _analysis = corrected;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _controller?.dispose();
     super.dispose();
+  }
+
+  Widget _buildPhaseVerificationCard() {
+    final sorted = _sortedPhases;
+    if (_verificationPhaseIndex >= sorted.length) return const SizedBox.shrink();
+
+    final phaseKey = sorted[_verificationPhaseIndex].key;
+    final phaseName = _formatPhaseName(phaseKey);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Colors.blue.shade900,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.verified_user,
+                    color: Colors.lightBlue, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Verify Phase: $phaseName',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                // Progress dots
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(sorted.length, (i) {
+                    final color = i < _verificationPhaseIndex
+                        ? Colors.greenAccent
+                        : i == _verificationPhaseIndex
+                            ? Colors.white
+                            : Colors.grey;
+                    return Container(
+                      margin: const EdgeInsets.only(left: 4),
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: color,
+                      ),
+                    );
+                  }),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Is the pose overlay correct for this frame?',
+              style: TextStyle(color: Colors.blue.shade100, fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _fixCurrentPhase,
+                    icon: const Icon(Icons.edit,
+                        size: 16, color: Colors.orange),
+                    label: const Text('Fix It',
+                        style: TextStyle(color: Colors.orange)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.orange),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _approveCurrentPhase,
+                    icon: const Icon(Icons.check, size: 16),
+                    label: const Text('Looks Good'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.shade700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -206,6 +459,9 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                       // Video player with skeleton overlay
                       if (_isInitialized && _controller != null)
                         _buildVideoWithOverlay(),
+
+                      // Phase verification card (shown between video and controls)
+                      if (_isVerifying) _buildPhaseVerificationCard(),
 
                       // Video controls
                       if (_isInitialized && _controller != null)
@@ -399,10 +655,41 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   }
 
   Widget _buildPhaseComparisonSection() {
-    // Determine throw type — default to BH
-    final throwType = 'BH';
+    final throwType = widget.throwType;
     final phases = ProBaselineParser.getPhaseNames(throwType);
 
+    // When phase timestamps were provided (via PhaseFrameSelectorScreen),
+    // we can go directly to comparison without manual frame selection.
+    if (widget.phaseTimestamps != null && _analysis != null) {
+      final phaseFrames = {
+        for (final e in widget.phaseTimestamps!.entries)
+          e.key: _frameForPhase(e.value)
+      };
+      final allPresent = phases.every((p) => phaseFrames.containsKey(p));
+      if (!allPresent) return const SizedBox.shrink();
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: ElevatedButton.icon(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PhaseComparisonScreen(
+                userAnalysis: _analysis!,
+                phaseFrames: phaseFrames,
+                proName: widget.proPlayer!,
+                throwType: throwType,
+              ),
+            ),
+          ),
+          icon: const Icon(Icons.compare_arrows),
+          label: const Text('Compare Phases vs Pro'),
+          style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(14)),
+        ),
+      );
+    }
+
+    // Fallback: manual phase frame selection inline
     if (!_phaseSelectionMode) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

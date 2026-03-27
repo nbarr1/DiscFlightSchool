@@ -5,6 +5,7 @@ import 'roulette/roulette_screen.dart';
 import 'roulette/start_round_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'settings/training_settings_screen.dart';
+import 'gallery/video_gallery_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -16,6 +17,16 @@ class HomeScreen extends StatelessWidget {
         title: const Text('Disc Flight School'),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.video_library),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const VideoGalleryScreen(),
+              ),
+            ),
+            tooltip: 'Flight Path Gallery',
+          ),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () => Navigator.push(

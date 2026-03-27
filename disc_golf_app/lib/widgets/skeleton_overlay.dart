@@ -2,13 +2,36 @@ import 'package:flutter/material.dart';
 import '../models/form_analysis.dart';
 
 /// Clean skeleton overlay — color-coded limbs, minimal labels.
+/// In interactive mode, adjustable joints are highlighted for drag-to-correct.
 class SkeletonOverlay extends CustomPainter {
   final FormAnalysis analysis;
   final int currentFrame;
+  final bool interactive;
+  final String? selectedLandmark;
+  final Set<int>? correctedFrames;
+
+  /// The 12 landmarks that can be manually adjusted in correction mode.
+  static const adjustableLandmarks = [
+    'PoseLandmarkType.rightShoulder',
+    'PoseLandmarkType.leftShoulder',
+    'PoseLandmarkType.rightElbow',
+    'PoseLandmarkType.leftElbow',
+    'PoseLandmarkType.rightWrist',
+    'PoseLandmarkType.leftWrist',
+    'PoseLandmarkType.rightHip',
+    'PoseLandmarkType.leftHip',
+    'PoseLandmarkType.rightKnee',
+    'PoseLandmarkType.leftKnee',
+    'PoseLandmarkType.rightAnkle',
+    'PoseLandmarkType.leftAnkle',
+  ];
 
   SkeletonOverlay({
     required this.analysis,
     required this.currentFrame,
+    this.interactive = false,
+    this.selectedLandmark,
+    this.correctedFrames,
   });
 
   // Ideal angles for disc golf form
@@ -132,7 +155,7 @@ class SkeletonOverlay extends CustomPainter {
   }
 
   void _drawJoints(Canvas canvas, Size size, FormFrame frame) {
-    final paint = Paint()
+    final defaultPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.fill;
 
@@ -141,10 +164,39 @@ class SkeletonOverlay extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
 
-    for (final point in frame.keyPoints.values) {
-      final scaled = _scalePoint(point, size, frame);
-      canvas.drawCircle(scaled, 3.5, paint);
-      canvas.drawCircle(scaled, 3.5, borderPaint);
+    for (final entry in frame.keyPoints.entries) {
+      final scaled = _scalePoint(entry.value, size, frame);
+
+      if (interactive && adjustableLandmarks.contains(entry.key)) {
+        // Adjustable joint — larger, with distinct styling
+        if (entry.key == selectedLandmark) {
+          // Selected joint — yellow, largest
+          canvas.drawCircle(
+              scaled, 12, Paint()..color = Colors.yellow.withAlpha(60));
+          canvas.drawCircle(scaled, 8, Paint()..color = Colors.yellow);
+          canvas.drawCircle(
+              scaled,
+              8,
+              Paint()
+                ..color = Colors.black
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 2);
+        } else {
+          // Adjustable but not selected — cyan border
+          canvas.drawCircle(scaled, 6, Paint()..color = Colors.white);
+          canvas.drawCircle(
+              scaled,
+              6,
+              Paint()
+                ..color = Colors.cyanAccent
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 2);
+        }
+      } else {
+        // Normal joint dot
+        canvas.drawCircle(scaled, 3.5, defaultPaint);
+        canvas.drawCircle(scaled, 3.5, borderPaint);
+      }
     }
   }
 
@@ -224,7 +276,71 @@ class SkeletonOverlay extends CustomPainter {
 
   @override
   bool shouldRepaint(SkeletonOverlay oldDelegate) {
-    return oldDelegate.currentFrame != currentFrame;
+    return oldDelegate.currentFrame != currentFrame ||
+        oldDelegate.selectedLandmark != selectedLandmark ||
+        oldDelegate.interactive != interactive;
+  }
+
+  /// Find the nearest adjustable landmark to a canvas-space tap point.
+  /// Returns the landmark key, or null if none within [threshold] pixels.
+  static String? nearestLandmark(
+    Offset tapPoint,
+    Size canvasSize,
+    FormFrame frame, {
+    double threshold = 30.0,
+  }) {
+    String? closest;
+    double closestDist = threshold;
+
+    for (final key in adjustableLandmarks) {
+      final point = frame.keyPoints[key];
+      if (point == null) continue;
+
+      // Scale to canvas coords
+      final imgW = frame.imageWidth;
+      final imgH = frame.imageHeight;
+      Offset scaled;
+      if (imgW != null && imgH != null && imgW > 0 && imgH > 0) {
+        scaled = Offset(
+          point.dx * canvasSize.width / imgW,
+          point.dy * canvasSize.height / imgH,
+        );
+      } else if (point.dx <= 1.0 && point.dy <= 1.0) {
+        scaled = Offset(
+            point.dx * canvasSize.width, point.dy * canvasSize.height);
+      } else {
+        scaled = Offset(
+          point.dx * canvasSize.width / 640,
+          point.dy * canvasSize.height / 640,
+        );
+      }
+
+      final dist = (scaled - tapPoint).distance;
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = key;
+      }
+    }
+
+    return closest;
+  }
+
+  /// Convert canvas-space coordinates back to image pixel coordinates.
+  static Offset canvasToImage(
+      Offset canvasPoint, Size canvasSize, FormFrame frame) {
+    final imgW = frame.imageWidth;
+    final imgH = frame.imageHeight;
+    if (imgW != null && imgH != null && imgW > 0 && imgH > 0) {
+      return Offset(
+        canvasPoint.dx * imgW / canvasSize.width,
+        canvasPoint.dy * imgH / canvasSize.height,
+      );
+    }
+    // Fallback: normalized
+    return Offset(
+      canvasPoint.dx / canvasSize.width,
+      canvasPoint.dy / canvasSize.height,
+    );
   }
 }
 

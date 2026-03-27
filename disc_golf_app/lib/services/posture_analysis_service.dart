@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/form_analysis.dart';
+import '../utils/angle_calculator.dart';
 import '../utils/pro_data_parser.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'video_frame_extractor.dart';
@@ -409,6 +410,17 @@ class PostureAnalysisService extends ChangeNotifier {
 
     return suggestions;
   }
+
+  /// Recalculate angles for a single frame from its current keyPoints.
+  void recalculateFrameAngles(FormFrame frame) {
+    final newAngles = AngleCalculator.calculateFromKeyPoints(frame.keyPoints);
+    frame.angles
+      ..clear()
+      ..addAll(newAngles);
+  }
+
+  /// Recalculate the overall form score from a list of frames.
+  double recalculateScore(List<FormFrame> frames) => _calculateScore(frames);
 
   void clearAnalyses() {
     _analyses.clear();

@@ -10,6 +10,7 @@ import '../../services/disc_detection_service.dart';
 import '../../services/feedback_service.dart';
 import '../../services/training_data_service.dart';
 import '../../widgets/follow_flight_overlay.dart';
+import '../gallery/video_gallery_screen.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -455,6 +456,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       overlayDir.createSync();
 
       // Calculate flight time window
+      // Detection timestamps are relative to trim start (frame 0 = 0ms).
+      // FFmpeg video clock starts from the original video's beginning,
+      // so we must add the trim offset to align overlays correctly.
+      final trimOffsetSec = (widget.trimStartMs ?? 0) / 1000.0;
       final detections = _trackingResult!.detections;
       final firstSec = detections.first.timestamp.inMilliseconds / 1000.0;
       final lastSec = detections.last.timestamp.inMilliseconds / 1000.0;
@@ -483,7 +488,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         final path = '${overlayDir.path}/seg_$i.png';
         await File(path).writeAsBytes(byteData.buffer.asUint8List());
         overlayPaths.add(path);
-        segmentTimes.add(firstSec + i * segmentDur);
+        segmentTimes.add(trimOffsetSec + firstSec + i * segmentDur);
       }
 
       if (overlayPaths.isEmpty) throw Exception('No overlay segments rendered');
@@ -531,6 +536,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       }
 
       await Gal.putVideo(outputPath, album: 'Disc Flight School');
+
+      // Save a persistent copy to the internal gallery
+      await VideoGalleryScreen.saveToGallery(outputPath);
 
       // Cleanup temp files
       Future.delayed(const Duration(seconds: 120), () {
@@ -608,9 +616,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         horizontal: 16, vertical: 8),
                     color: Colors.blue.withAlpha(40),
                     child: const Text(
-                      'Tap to mark disc, or hold for zoom precision. '
-                      'Enable Box mode for bounding box annotation '
-                      '(2 taps = box corners). Mark 2+ keyframes, then tap Process.',
+                      'Tap to mark disc position, or hold for zoom precision. '
+                      'Mark 2+ keyframes, then tap Process to generate path.',
                       style:
                           TextStyle(color: Colors.white70, fontSize: 12),
                       textAlign: TextAlign.center,
@@ -629,8 +636,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                           return GestureDetector(
                             onTapUp: _addKeyframeFromTap,
                             onLongPressStart: _onLongPressStart,
-                            onLongPressMoveUpdate:
-                                _onLongPressMoveUpdate,
+                            onLongPressMoveUpdate: _onLongPressMoveUpdate,
                             onLongPressEnd: _onLongPressEnd,
                             child: Stack(
                               clipBehavior: Clip.none,
@@ -1001,22 +1007,24 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 8,
+        runSpacing: 6,
         children: [
           if (trainingService.isOptedIn)
             _buildBoxModeToggle(),
           ElevatedButton.icon(
             onPressed:
                 _keyframes.isEmpty ? null : _undoLastKeyframe,
-            icon: const Icon(Icons.undo, size: 18),
-            label: const Text('Undo', style: TextStyle(fontSize: 13)),
+            icon: const Icon(Icons.undo, size: 16),
+            label: const Text('Undo', style: TextStyle(fontSize: 12)),
           ),
           ElevatedButton.icon(
             onPressed: hasEnoughKeyframes ? _processKeyframes : null,
-            icon: const Icon(Icons.auto_awesome, size: 18),
+            icon: const Icon(Icons.auto_awesome, size: 16),
             label:
-                const Text('Process', style: TextStyle(fontSize: 13)),
+                const Text('Process', style: TextStyle(fontSize: 12)),
             style: ElevatedButton.styleFrom(
               backgroundColor:
                   hasEnoughKeyframes ? Colors.green : null,
@@ -1028,9 +1036,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             onPressed: (_keyframes.isEmpty && _trackingResult == null)
                 ? null
                 : _clearAll,
-            icon: const Icon(Icons.clear, size: 18),
+            icon: const Icon(Icons.clear, size: 16),
             label:
-                const Text('Clear', style: TextStyle(fontSize: 13)),
+                const Text('Clear', style: TextStyle(fontSize: 12)),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,

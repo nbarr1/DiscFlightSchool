@@ -573,6 +573,34 @@ class DiscDetectionService extends ChangeNotifier {
     return result;
   }
 
+  /// Public wrapper around [_detectDisc] for use by HybridDetectionService.
+  Future<DiscDetection?> detectInImage(
+    img.Image image,
+    int frameIndex,
+    double fps,
+  ) async {
+    if (!_isModelLoaded) await loadModel();
+    return _detectDisc(image, frameIndex, fps);
+  }
+
+  /// Public wrapper around [_extractFrames] for use by HybridDetectionService.
+  Future<List<String>> extractFrames(
+    String videoPath,
+    String outputDir, {
+    required double fps,
+    int maxFrames = 300,
+  }) {
+    return _extractFrames(videoPath, outputDir, fps: fps, maxFrames: maxFrames);
+  }
+
+  /// Public access to smoothing for use by HybridDetectionService.
+  List<DiscDetection> smoothDetections(
+    List<DiscDetection> detections, {
+    int windowSize = 3,
+  }) {
+    return _smoothDetections(detections, windowSize: windowSize);
+  }
+
   @override
   void dispose() {
     _interpreter?.close();

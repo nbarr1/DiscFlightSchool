@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "version": "3.0",
+    "version": "4.0",
     "generated": "2026-03-21",
     "source": "landmark_annotations.json geometric recalculation",
     "players": 5,
@@ -33,7 +33,8 @@
       "Ricky Wysocki FH power_pocket & release: l_hip, l_knee, l_ankle occluded - some angles null",
       "x_factor and hip_rotation identical in 2D side view (both measure shoulder-hip angular separation)",
       "Calvin Heimburg FH: posterior camera view - trunk_tilt may differ from side-view measurements",
-      "BH lead/trail knee corrected: RHBH lead=R side, trail=L side"
+      "BH lead/trail knee corrected: RHBH lead=R side, trail=L side",
+      "v3.2: Shoulder angle is always flexion (arm elevated from trunk). Removed extension label \u2014 in disc golf throwing, the arm does not go below the trunk line. Elbow angle reported as interior angle (180\u00b0=straight). Knee angles always reported as interior angle (180\u00b0=straight, always flexion)."
     ],
     "data_quality_flags": [
       {
@@ -108,7 +109,27 @@
         "2D perspective distortion (lens) not accounted for"
       ],
       "best_use": "Relative comparison between phases/players, not absolute 3D reconstruction"
-    }
+    },
+    "angle_conventions": {
+      "shoulder_flexion_deg": "Angle at shoulder (hip-shoulder-elbow). Flexion=arm forward of frontal plane (+), Extension=arm behind (-).",
+      "shoulder_flexion_dir": "Phase-determined: BH reach_back/power_pocket/release=flexion, follow_through=extension. FH wind_up/power_pocket=extension, release/follow_through=flexion.",
+      "shoulder_flexion_signed_deg": "Signed value: positive=flexion, negative=extension.",
+      "elbow_angle_deg": "Interior angle at elbow (180=straight, decreasing=more flexed).",
+      "lead/trail_knee_flexion_deg": "Interior angle at knee (180=straight, decreasing=more flexed). Always reported as flexion.",
+      "note": "2D side-view limitation: shoulder flex/ext direction cannot be determined from geometry alone due to torso rotation. Direction is assigned based on known phase biomechanics."
+    },
+    "landmark_version": "2.0 (12 landmarks including off-arm)",
+    "angles_computed": [
+      "elbow_angle_deg (throwing arm, 180=straight)",
+      "shoulder_flexion_deg (throwing arm, hip-shoulder-elbow)",
+      "lead_knee_flexion_deg (180=straight)",
+      "trail_knee_flexion_deg (180=straight)",
+      "trunk_lateral_tilt_deg (0=upright)",
+      "x_factor_deg (shoulder-hip angular separation)",
+      "off_arm_elbow_angle_deg (off arm, 180=straight)",
+      "off_arm_shoulder_angle_deg (off arm, hip-shoulder-elbow)",
+      "off_arm_moment_arm_norm (off-arm wrist distance from trunk midline, normalized by trunk length)"
+    ]
   },
   "players": {
     "Paul McBeth": {
@@ -144,11 +165,10 @@
           "phases": {
             "reach_back": {
               "elbow_flexion_deg": 126,
-              "shoulder_abduction_deg": 55,
-              "x_factor_deg": 34,
-              "lead_knee_flexion_deg": 158,
-              "trail_knee_flexion_deg": 165,
-              "trunk_lateral_tilt_deg": 7,
+              "x_factor_deg": 41,
+              "lead_knee_flexion_deg": 161,
+              "trail_knee_flexion_deg": 166,
+              "trunk_lateral_tilt_deg": 5,
               "hip_rotation_deg": 34,
               "confidence": 1.0,
               "visibility_notes": "Wrist partially behind body at full reach-back",
@@ -164,15 +184,23 @@
                 "lead_shank_depth_deg": 31.7,
                 "trail_shank_depth_deg": 0.0,
                 "px_per_mm": 0.1713
-              }
+              },
+              "shoulder_flexion_deg": 55,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 55,
+              "elbow_angle_deg": 126,
+              "off_arm_elbow_angle_deg": 180,
+              "off_arm_shoulder_angle_deg": 23,
+              "off_arm_moment_arm_norm": 0.454,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "power_pocket": {
               "elbow_flexion_deg": 48,
-              "shoulder_abduction_deg": 9,
-              "x_factor_deg": 2,
-              "lead_knee_flexion_deg": 178,
+              "x_factor_deg": 12,
+              "lead_knee_flexion_deg": 177,
               "trail_knee_flexion_deg": 112,
-              "trunk_lateral_tilt_deg": 5,
+              "trunk_lateral_tilt_deg": 6,
               "hip_rotation_deg": 2,
               "confidence": 1.0,
               "visibility_notes": "Disc pulled tight to chest, hips clearly leading shoulders",
@@ -188,15 +216,23 @@
                 "lead_shank_depth_deg": 43.2,
                 "trail_shank_depth_deg": 31.5,
                 "px_per_mm": 0.2129
-              }
+              },
+              "shoulder_flexion_deg": 11,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 11,
+              "elbow_angle_deg": 46,
+              "off_arm_elbow_angle_deg": 160,
+              "off_arm_shoulder_angle_deg": 1,
+              "off_arm_moment_arm_norm": 0.071,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "release": {
               "elbow_flexion_deg": 178,
-              "shoulder_abduction_deg": 73,
-              "x_factor_deg": 30,
-              "lead_knee_flexion_deg": 163,
-              "trail_knee_flexion_deg": 127,
-              "trunk_lateral_tilt_deg": 11,
+              "x_factor_deg": 10,
+              "lead_knee_flexion_deg": 166,
+              "trail_knee_flexion_deg": 123,
+              "trunk_lateral_tilt_deg": 10,
               "hip_rotation_deg": 30,
               "confidence": 1.0,
               "visibility_notes": "Arm near full extension, wide low base, disc visible exiting",
@@ -212,15 +248,23 @@
                 "lead_shank_depth_deg": 47.6,
                 "trail_shank_depth_deg": 26.7,
                 "px_per_mm": 0.2207
-              }
+              },
+              "shoulder_flexion_deg": 71,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 71,
+              "elbow_angle_deg": 179,
+              "off_arm_elbow_angle_deg": 171,
+              "off_arm_shoulder_angle_deg": 7,
+              "off_arm_moment_arm_norm": 0.168,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "follow_through": {
               "elbow_flexion_deg": 168,
-              "shoulder_abduction_deg": 43,
-              "x_factor_deg": 35,
-              "lead_knee_flexion_deg": 158,
-              "trail_knee_flexion_deg": 94,
-              "trunk_lateral_tilt_deg": 10,
+              "x_factor_deg": 107,
+              "lead_knee_flexion_deg": 162,
+              "trail_knee_flexion_deg": 96,
+              "trunk_lateral_tilt_deg": 9,
               "hip_rotation_deg": 35,
               "confidence": 1.0,
               "visibility_notes": "Arm crossing body, hips fully open, trunk forward lean",
@@ -236,7 +280,16 @@
                 "lead_shank_depth_deg": 35.9,
                 "trail_shank_depth_deg": 34.4,
                 "px_per_mm": 0.2471
-              }
+              },
+              "shoulder_flexion_deg": 41,
+              "shoulder_flexion_dir": "extension",
+              "shoulder_flexion_signed_deg": -41,
+              "elbow_angle_deg": 167,
+              "off_arm_elbow_angle_deg": 145,
+              "off_arm_shoulder_angle_deg": 61,
+              "off_arm_moment_arm_norm": 0.715,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             }
           }
         },
@@ -258,11 +311,10 @@
           "phases": {
             "wind_up": {
               "elbow_flexion_deg": 164,
-              "shoulder_abduction_deg": 132,
-              "x_factor_deg": 8,
-              "lead_knee_flexion_deg": 151,
-              "trail_knee_flexion_deg": 132,
-              "trunk_lateral_tilt_deg": 58,
+              "x_factor_deg": 9,
+              "lead_knee_flexion_deg": 144,
+              "trail_knee_flexion_deg": 129,
+              "trunk_lateral_tilt_deg": 66,
               "hip_rotation_deg": 8,
               "confidence": 1.0,
               "visibility_notes": "Disc held high, elbow externally loaded",
@@ -278,15 +330,23 @@
                 "lead_shank_depth_deg": 28.2,
                 "trail_shank_depth_deg": 65.3,
                 "px_per_mm": 0.4465
-              }
+              },
+              "shoulder_flexion_deg": 145,
+              "shoulder_flexion_dir": "extension",
+              "shoulder_flexion_signed_deg": -145,
+              "elbow_angle_deg": 169,
+              "off_arm_elbow_angle_deg": 176,
+              "off_arm_shoulder_angle_deg": 23,
+              "off_arm_moment_arm_norm": 0.517,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "power_pocket": {
               "elbow_flexion_deg": 101,
-              "shoulder_abduction_deg": 48,
-              "x_factor_deg": 4,
-              "lead_knee_flexion_deg": 167,
-              "trail_knee_flexion_deg": 125,
-              "trunk_lateral_tilt_deg": 25,
+              "x_factor_deg": 5,
+              "lead_knee_flexion_deg": 170,
+              "trail_knee_flexion_deg": 133,
+              "trunk_lateral_tilt_deg": 32,
               "hip_rotation_deg": 4,
               "confidence": 1.0,
               "visibility_notes": "Elbow leading at ~90deg, forearm parallel to ground",
@@ -302,15 +362,23 @@
                 "lead_shank_depth_deg": 42.0,
                 "trail_shank_depth_deg": 71.4,
                 "px_per_mm": 0.5098
-              }
+              },
+              "shoulder_flexion_deg": 73,
+              "shoulder_flexion_dir": "extension",
+              "shoulder_flexion_signed_deg": -73,
+              "elbow_angle_deg": 122,
+              "off_arm_elbow_angle_deg": 168,
+              "off_arm_shoulder_angle_deg": 41,
+              "off_arm_moment_arm_norm": 1.655,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "release": {
               "elbow_flexion_deg": 70,
-              "shoulder_abduction_deg": 10,
               "x_factor_deg": 2,
-              "lead_knee_flexion_deg": 175,
-              "trail_knee_flexion_deg": 123,
-              "trunk_lateral_tilt_deg": 21,
+              "lead_knee_flexion_deg": 171,
+              "trail_knee_flexion_deg": 129,
+              "trunk_lateral_tilt_deg": 23,
               "hip_rotation_deg": 2,
               "confidence": 1.0,
               "visibility_notes": "Strong wrist snap visible, disc exiting frame",
@@ -326,15 +394,23 @@
                 "lead_shank_depth_deg": 35.0,
                 "trail_shank_depth_deg": 69.1,
                 "px_per_mm": 0.4876
-              }
+              },
+              "shoulder_flexion_deg": 14,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 14,
+              "elbow_angle_deg": 75,
+              "off_arm_elbow_angle_deg": 160,
+              "off_arm_shoulder_angle_deg": 47,
+              "off_arm_moment_arm_norm": 1.66,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "follow_through": {
               "elbow_flexion_deg": 152,
-              "shoulder_abduction_deg": 122,
-              "x_factor_deg": 5,
-              "lead_knee_flexion_deg": 151,
-              "trail_knee_flexion_deg": 138,
-              "trunk_lateral_tilt_deg": 13,
+              "x_factor_deg": 2,
+              "lead_knee_flexion_deg": 144,
+              "trail_knee_flexion_deg": 140,
+              "trunk_lateral_tilt_deg": 18,
               "hip_rotation_deg": 5,
               "confidence": 1.0,
               "visibility_notes": "Arm crossing upward and across chest",
@@ -350,7 +426,16 @@
                 "lead_shank_depth_deg": 18.9,
                 "trail_shank_depth_deg": 33.2,
                 "px_per_mm": 0.4718
-              }
+              },
+              "shoulder_flexion_deg": 126,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 126,
+              "elbow_angle_deg": 160,
+              "off_arm_elbow_angle_deg": 119,
+              "off_arm_shoulder_angle_deg": 25,
+              "off_arm_moment_arm_norm": 1.149,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             }
           }
         }
@@ -439,11 +524,10 @@
           "phases": {
             "reach_back": {
               "elbow_flexion_deg": 114,
-              "shoulder_abduction_deg": 50,
-              "x_factor_deg": 54,
-              "lead_knee_flexion_deg": 170,
-              "trail_knee_flexion_deg": 155,
-              "trunk_lateral_tilt_deg": 9,
+              "x_factor_deg": 66,
+              "lead_knee_flexion_deg": 171,
+              "trail_knee_flexion_deg": 158,
+              "trunk_lateral_tilt_deg": 8,
               "hip_rotation_deg": 54,
               "confidence": 1.0,
               "visibility_notes": "Notably upright trunk vs McBeth, full reach visible",
@@ -459,15 +543,23 @@
                 "lead_shank_depth_deg": 0.0,
                 "trail_shank_depth_deg": 0.0,
                 "px_per_mm": 0.1085
-              }
+              },
+              "shoulder_flexion_deg": 47,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 47,
+              "elbow_angle_deg": 113,
+              "off_arm_elbow_angle_deg": 169,
+              "off_arm_shoulder_angle_deg": 46,
+              "off_arm_moment_arm_norm": 0.49,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "power_pocket": {
               "elbow_flexion_deg": 87,
-              "shoulder_abduction_deg": 15,
-              "x_factor_deg": 12,
-              "lead_knee_flexion_deg": 174,
-              "trail_knee_flexion_deg": 139,
-              "trunk_lateral_tilt_deg": 7,
+              "x_factor_deg": 15,
+              "lead_knee_flexion_deg": 176,
+              "trail_knee_flexion_deg": 137,
+              "trunk_lateral_tilt_deg": 6,
               "hip_rotation_deg": 12,
               "confidence": 1.0,
               "visibility_notes": "Highest X-factor of BH group",
@@ -483,15 +575,23 @@
                 "lead_shank_depth_deg": 38.5,
                 "trail_shank_depth_deg": 9.7,
                 "px_per_mm": 0.1214
-              }
+              },
+              "shoulder_flexion_deg": 14,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 14,
+              "elbow_angle_deg": 80,
+              "off_arm_elbow_angle_deg": 155,
+              "off_arm_shoulder_angle_deg": 8,
+              "off_arm_moment_arm_norm": 0.024,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "release": {
               "elbow_flexion_deg": 176,
-              "shoulder_abduction_deg": 71,
-              "x_factor_deg": 24,
-              "lead_knee_flexion_deg": 178,
-              "trail_knee_flexion_deg": 148,
-              "trunk_lateral_tilt_deg": 9,
+              "x_factor_deg": 4,
+              "lead_knee_flexion_deg": 179,
+              "trail_knee_flexion_deg": 149,
+              "trunk_lateral_tilt_deg": 10,
               "hip_rotation_deg": 24,
               "confidence": 1.0,
               "visibility_notes": "Greatest arm extension at release of BH group",
@@ -507,14 +607,22 @@
                 "lead_shank_depth_deg": 36.0,
                 "trail_shank_depth_deg": 15.3,
                 "px_per_mm": 0.1285
-              }
+              },
+              "shoulder_flexion_deg": 60,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 60,
+              "elbow_angle_deg": 166,
+              "off_arm_elbow_angle_deg": 161,
+              "off_arm_shoulder_angle_deg": 8,
+              "off_arm_moment_arm_norm": 0.039,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "follow_through": {
               "elbow_flexion_deg": 132,
-              "shoulder_abduction_deg": 68,
-              "x_factor_deg": 2,
+              "x_factor_deg": 17,
               "lead_knee_flexion_deg": 173,
-              "trail_knee_flexion_deg": 150,
+              "trail_knee_flexion_deg": 144,
               "trunk_lateral_tilt_deg": 8,
               "hip_rotation_deg": 2,
               "confidence": 1.0,
@@ -531,7 +639,16 @@
                 "lead_shank_depth_deg": 25.0,
                 "trail_shank_depth_deg": 28.7,
                 "px_per_mm": 0.1471
-              }
+              },
+              "shoulder_flexion_deg": 82,
+              "shoulder_flexion_dir": "extension",
+              "shoulder_flexion_signed_deg": -82,
+              "elbow_angle_deg": 147,
+              "off_arm_elbow_angle_deg": 179,
+              "off_arm_shoulder_angle_deg": 36,
+              "off_arm_moment_arm_norm": 0.641,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             }
           },
           "clip_count": 2,
@@ -557,11 +674,10 @@
           "phases": {
             "wind_up": {
               "elbow_flexion_deg": 90,
-              "shoulder_abduction_deg": 75,
-              "x_factor_deg": 5,
-              "lead_knee_flexion_deg": 107,
-              "trail_knee_flexion_deg": 103,
-              "trunk_lateral_tilt_deg": 57,
+              "x_factor_deg": 29,
+              "lead_knee_flexion_deg": 76,
+              "trail_knee_flexion_deg": 90,
+              "trunk_lateral_tilt_deg": 70,
               "hip_rotation_deg": 5,
               "confidence": 1.0,
               "visibility_notes": "Excellent close-up side view. Deep knee bend setup, disc held low.",
@@ -577,15 +693,23 @@
                 "lead_shank_depth_deg": 70.7,
                 "trail_shank_depth_deg": 0.0,
                 "px_per_mm": 0.4539
-              }
+              },
+              "shoulder_flexion_deg": 103,
+              "shoulder_flexion_dir": "extension",
+              "shoulder_flexion_signed_deg": -103,
+              "elbow_angle_deg": 106,
+              "off_arm_elbow_angle_deg": 131,
+              "off_arm_shoulder_angle_deg": 180,
+              "off_arm_moment_arm_norm": 0.232,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "power_pocket": {
               "elbow_flexion_deg": 117,
-              "shoulder_abduction_deg": 74,
-              "x_factor_deg": null,
-              "lead_knee_flexion_deg": null,
-              "trail_knee_flexion_deg": 171,
-              "trunk_lateral_tilt_deg": null,
+              "x_factor_deg": 13,
+              "lead_knee_flexion_deg": 172,
+              "trail_knee_flexion_deg": 169,
+              "trunk_lateral_tilt_deg": 60,
               "hip_rotation_deg": null,
               "confidence": 0.7,
               "visibility_notes": "Deepest trunk lean of any FH player. Elbow extremely low and tucked. Highest X-factor of FH group. [l_hip, l_knee, l_ankle occluded - some angles null, old estimated values removed]",
@@ -601,15 +725,23 @@
                 "lead_shank_depth_deg": null,
                 "trail_shank_depth_deg": 75.2,
                 "px_per_mm": 0.4364
-              }
+              },
+              "shoulder_flexion_deg": 96,
+              "shoulder_flexion_dir": "extension",
+              "shoulder_flexion_signed_deg": -96,
+              "elbow_angle_deg": 130,
+              "off_arm_elbow_angle_deg": 161,
+              "off_arm_shoulder_angle_deg": 28,
+              "off_arm_moment_arm_norm": 0.659,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "release": {
               "elbow_flexion_deg": 118,
-              "shoulder_abduction_deg": 57,
-              "x_factor_deg": null,
-              "lead_knee_flexion_deg": null,
-              "trail_knee_flexion_deg": 157,
-              "trunk_lateral_tilt_deg": null,
+              "x_factor_deg": 7,
+              "lead_knee_flexion_deg": 170,
+              "trail_knee_flexion_deg": 158,
+              "trunk_lateral_tilt_deg": 55,
               "hip_rotation_deg": null,
               "confidence": 0.7,
               "visibility_notes": "Full arm extension, disc clearly exiting. Very upright snap at release vs deep lean at power pocket. [l_hip, l_knee, l_ankle occluded - some angles null, old estimated values removed]",
@@ -625,15 +757,23 @@
                 "lead_shank_depth_deg": null,
                 "trail_shank_depth_deg": 82.4,
                 "px_per_mm": 0.448
-              }
+              },
+              "shoulder_flexion_deg": 74,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 74,
+              "elbow_angle_deg": 124,
+              "off_arm_elbow_angle_deg": 164,
+              "off_arm_shoulder_angle_deg": 21,
+              "off_arm_moment_arm_norm": 0.56,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "follow_through": {
               "elbow_flexion_deg": 160,
-              "shoulder_abduction_deg": 80,
-              "x_factor_deg": 11,
-              "lead_knee_flexion_deg": 161,
-              "trail_knee_flexion_deg": 158,
-              "trunk_lateral_tilt_deg": 4,
+              "x_factor_deg": 12,
+              "lead_knee_flexion_deg": 162,
+              "trail_knee_flexion_deg": 147,
+              "trunk_lateral_tilt_deg": 1,
               "hip_rotation_deg": 11,
               "confidence": 1.0,
               "visibility_notes": "High knee lift on lead leg, full hip rotation, arm wraps upward.",
@@ -649,7 +789,16 @@
                 "lead_shank_depth_deg": 0.0,
                 "trail_shank_depth_deg": 0.0,
                 "px_per_mm": 0.4364
-              }
+              },
+              "shoulder_flexion_deg": 88,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 88,
+              "elbow_angle_deg": 165,
+              "off_arm_elbow_angle_deg": 177,
+              "off_arm_shoulder_angle_deg": 52,
+              "off_arm_moment_arm_norm": 1.699,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             }
           }
         }
@@ -738,11 +887,10 @@
           "phases": {
             "reach_back": {
               "elbow_flexion_deg": 162,
-              "shoulder_abduction_deg": 65,
-              "x_factor_deg": 99,
-              "lead_knee_flexion_deg": 158,
-              "trail_knee_flexion_deg": 174,
-              "trunk_lateral_tilt_deg": 8,
+              "x_factor_deg": 77,
+              "lead_knee_flexion_deg": 160,
+              "trail_knee_flexion_deg": 173,
+              "trunk_lateral_tilt_deg": 7,
               "hip_rotation_deg": 99,
               "confidence": 1.0,
               "visibility_notes": "Most elbow flex at reach-back of BH group \u2014 longer arm path",
@@ -758,14 +906,22 @@
                 "lead_shank_depth_deg": 0.0,
                 "trail_shank_depth_deg": 0.0,
                 "px_per_mm": 0.058
-              }
+              },
+              "shoulder_flexion_deg": 61,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 61,
+              "elbow_angle_deg": 168,
+              "off_arm_elbow_angle_deg": 27,
+              "off_arm_shoulder_angle_deg": 173,
+              "off_arm_moment_arm_norm": 0.183,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "power_pocket": {
               "elbow_flexion_deg": 95,
-              "shoulder_abduction_deg": 28,
-              "x_factor_deg": 16,
+              "x_factor_deg": 21,
               "lead_knee_flexion_deg": 180,
-              "trail_knee_flexion_deg": 112,
+              "trail_knee_flexion_deg": 110,
               "trunk_lateral_tilt_deg": 10,
               "hip_rotation_deg": 16,
               "confidence": 1.0,
@@ -782,14 +938,22 @@
                 "lead_shank_depth_deg": 0.0,
                 "trail_shank_depth_deg": 0.0,
                 "px_per_mm": 0.0855
-              }
+              },
+              "shoulder_flexion_deg": 29,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 29,
+              "elbow_angle_deg": 96,
+              "off_arm_elbow_angle_deg": 168,
+              "off_arm_shoulder_angle_deg": 12,
+              "off_arm_moment_arm_norm": 0.233,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "release": {
               "elbow_flexion_deg": 156,
-              "shoulder_abduction_deg": 89,
-              "x_factor_deg": 4,
-              "lead_knee_flexion_deg": 176,
-              "trail_knee_flexion_deg": 124,
+              "x_factor_deg": 17,
+              "lead_knee_flexion_deg": 179,
+              "trail_knee_flexion_deg": 128,
               "trunk_lateral_tilt_deg": 13,
               "hip_rotation_deg": 4,
               "confidence": 1.0,
@@ -806,15 +970,23 @@
                 "lead_shank_depth_deg": 29.0,
                 "trail_shank_depth_deg": 0.0,
                 "px_per_mm": 0.0986
-              }
+              },
+              "shoulder_flexion_deg": 78,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 78,
+              "elbow_angle_deg": 167,
+              "off_arm_elbow_angle_deg": 179,
+              "off_arm_shoulder_angle_deg": 11,
+              "off_arm_moment_arm_norm": 0.272,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "follow_through": {
               "elbow_flexion_deg": 169,
-              "shoulder_abduction_deg": 105,
-              "x_factor_deg": 14,
-              "lead_knee_flexion_deg": 162,
-              "trail_knee_flexion_deg": 130,
-              "trunk_lateral_tilt_deg": 19,
+              "x_factor_deg": 48,
+              "lead_knee_flexion_deg": 166,
+              "trail_knee_flexion_deg": 128,
+              "trunk_lateral_tilt_deg": 16,
               "hip_rotation_deg": 14,
               "confidence": 1.0,
               "visibility_notes": "Wide sweeping follow-through, signature Eagle style",
@@ -830,7 +1002,16 @@
                 "lead_shank_depth_deg": 34.0,
                 "trail_shank_depth_deg": 21.5,
                 "px_per_mm": 0.1189
-              }
+              },
+              "shoulder_flexion_deg": 110,
+              "shoulder_flexion_dir": "extension",
+              "shoulder_flexion_signed_deg": -110,
+              "elbow_angle_deg": 175,
+              "off_arm_elbow_angle_deg": 178,
+              "off_arm_shoulder_angle_deg": 23,
+              "off_arm_moment_arm_norm": 0.491,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             }
           },
           "clip_count": 2
@@ -849,11 +1030,10 @@
           "phases": {
             "wind_up": {
               "elbow_flexion_deg": 27,
-              "shoulder_abduction_deg": 29,
-              "x_factor_deg": 29,
-              "lead_knee_flexion_deg": 171,
-              "trail_knee_flexion_deg": 158,
-              "trunk_lateral_tilt_deg": 1,
+              "x_factor_deg": 12,
+              "lead_knee_flexion_deg": 169,
+              "trail_knee_flexion_deg": 163,
+              "trunk_lateral_tilt_deg": 5,
               "hip_rotation_deg": 29,
               "confidence": 1.0,
               "visibility_notes": "Deepest knee bend of any FH player \u2014 knees nearly at 90deg. Distinctive low crouch.",
@@ -869,15 +1049,23 @@
                 "lead_shank_depth_deg": 0.0,
                 "trail_shank_depth_deg": 0.0,
                 "px_per_mm": 0.0667
-              }
+              },
+              "shoulder_flexion_deg": 32,
+              "shoulder_flexion_dir": "extension",
+              "shoulder_flexion_signed_deg": -32,
+              "elbow_angle_deg": 26,
+              "off_arm_elbow_angle_deg": 116,
+              "off_arm_shoulder_angle_deg": 49,
+              "off_arm_moment_arm_norm": 0.443,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "power_pocket": {
               "elbow_flexion_deg": 115,
-              "shoulder_abduction_deg": 18,
-              "x_factor_deg": 163,
-              "lead_knee_flexion_deg": 153,
-              "trail_knee_flexion_deg": 119,
-              "trunk_lateral_tilt_deg": 6,
+              "x_factor_deg": 118,
+              "lead_knee_flexion_deg": 151,
+              "trail_knee_flexion_deg": 116,
+              "trunk_lateral_tilt_deg": 5,
               "hip_rotation_deg": 163,
               "confidence": 1.0,
               "visibility_notes": "Arm extends wider than other FH players at power pocket \u2014 longer arc. Rising out of crouch.",
@@ -893,15 +1081,23 @@
                 "lead_shank_depth_deg": 30.6,
                 "trail_shank_depth_deg": 30.3,
                 "px_per_mm": 0.1029
-              }
+              },
+              "shoulder_flexion_deg": 22,
+              "shoulder_flexion_dir": "extension",
+              "shoulder_flexion_signed_deg": -22,
+              "elbow_angle_deg": 112,
+              "off_arm_elbow_angle_deg": null,
+              "off_arm_shoulder_angle_deg": null,
+              "off_arm_moment_arm_norm": null,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "release": {
               "elbow_flexion_deg": 143,
-              "shoulder_abduction_deg": 54,
-              "x_factor_deg": 8,
-              "lead_knee_flexion_deg": 154,
-              "trail_knee_flexion_deg": 120,
-              "trunk_lateral_tilt_deg": 10,
+              "x_factor_deg": 5,
+              "lead_knee_flexion_deg": 155,
+              "trail_knee_flexion_deg": 115,
+              "trunk_lateral_tilt_deg": 8,
               "hip_rotation_deg": 8,
               "confidence": 1.0,
               "visibility_notes": "Explosive upward hip drive at release, body rising from crouch into throw. Disc exits cleanly.",
@@ -917,15 +1113,23 @@
                 "lead_shank_depth_deg": 0.0,
                 "trail_shank_depth_deg": 0.0,
                 "px_per_mm": 0.0739
-              }
+              },
+              "shoulder_flexion_deg": 49,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 49,
+              "elbow_angle_deg": 143,
+              "off_arm_elbow_angle_deg": null,
+              "off_arm_shoulder_angle_deg": null,
+              "off_arm_moment_arm_norm": null,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "follow_through": {
               "elbow_flexion_deg": 129,
-              "shoulder_abduction_deg": 48,
-              "x_factor_deg": 3,
-              "lead_knee_flexion_deg": 163,
-              "trail_knee_flexion_deg": 155,
-              "trunk_lateral_tilt_deg": 13,
+              "x_factor_deg": 9,
+              "lead_knee_flexion_deg": 154,
+              "trail_knee_flexion_deg": 160,
+              "trunk_lateral_tilt_deg": 12,
               "hip_rotation_deg": 3,
               "confidence": 1.0,
               "visibility_notes": "Wide sweeping arm path continues. Posterior camera angle at end limits precision.",
@@ -941,7 +1145,16 @@
                 "lead_shank_depth_deg": 0.0,
                 "trail_shank_depth_deg": 0.0,
                 "px_per_mm": 0.0913
-              }
+              },
+              "shoulder_flexion_deg": 147,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 147,
+              "elbow_angle_deg": 104,
+              "off_arm_elbow_angle_deg": 145,
+              "off_arm_shoulder_angle_deg": 15,
+              "off_arm_moment_arm_norm": 0.066,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             }
           }
         }
@@ -1024,11 +1237,10 @@
           "phases": {
             "reach_back": {
               "elbow_flexion_deg": 87,
-              "shoulder_abduction_deg": 57,
-              "x_factor_deg": 54,
-              "lead_knee_flexion_deg": 168,
+              "x_factor_deg": 62,
+              "lead_knee_flexion_deg": 171,
               "trail_knee_flexion_deg": 175,
-              "trunk_lateral_tilt_deg": 5,
+              "trunk_lateral_tilt_deg": 4,
               "hip_rotation_deg": 54,
               "confidence": 1.0,
               "visibility_notes": "Distance reduces precision",
@@ -1044,15 +1256,23 @@
                 "lead_shank_depth_deg": 0.0,
                 "trail_shank_depth_deg": 0.0,
                 "px_per_mm": 0.0626
-              }
+              },
+              "shoulder_flexion_deg": 49,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 49,
+              "elbow_angle_deg": 75,
+              "off_arm_elbow_angle_deg": 109,
+              "off_arm_shoulder_angle_deg": 40,
+              "off_arm_moment_arm_norm": 0.559,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "power_pocket": {
               "elbow_flexion_deg": 50,
-              "shoulder_abduction_deg": 21,
-              "x_factor_deg": 4,
-              "lead_knee_flexion_deg": 170,
-              "trail_knee_flexion_deg": 141,
-              "trunk_lateral_tilt_deg": 3,
+              "x_factor_deg": 3,
+              "lead_knee_flexion_deg": 169,
+              "trail_knee_flexion_deg": 148,
+              "trunk_lateral_tilt_deg": 5,
               "hip_rotation_deg": 4,
               "confidence": 1.0,
               "visibility_notes": "Hip-shoulder separation clear despite distance",
@@ -1068,15 +1288,23 @@
                 "lead_shank_depth_deg": 34.8,
                 "trail_shank_depth_deg": 48.4,
                 "px_per_mm": 0.0835
-              }
+              },
+              "shoulder_flexion_deg": 15,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 15,
+              "elbow_angle_deg": 52,
+              "off_arm_elbow_angle_deg": 153,
+              "off_arm_shoulder_angle_deg": 4,
+              "off_arm_moment_arm_norm": 0.075,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "release": {
               "elbow_flexion_deg": 166,
-              "shoulder_abduction_deg": 55,
-              "x_factor_deg": 10,
-              "lead_knee_flexion_deg": 166,
-              "trail_knee_flexion_deg": 138,
-              "trunk_lateral_tilt_deg": 7,
+              "x_factor_deg": 32,
+              "lead_knee_flexion_deg": 169,
+              "trail_knee_flexion_deg": 142,
+              "trunk_lateral_tilt_deg": 6,
               "hip_rotation_deg": 10,
               "confidence": 1.0,
               "visibility_notes": "Slightly more elbow bend at release vs McBeth/Wysocki",
@@ -1092,15 +1320,23 @@
                 "lead_shank_depth_deg": 35.3,
                 "trail_shank_depth_deg": 40.6,
                 "px_per_mm": 0.078
-              }
+              },
+              "shoulder_flexion_deg": 53,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 53,
+              "elbow_angle_deg": 167,
+              "off_arm_elbow_angle_deg": 163,
+              "off_arm_shoulder_angle_deg": 2,
+              "off_arm_moment_arm_norm": 0.127,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "follow_through": {
               "elbow_flexion_deg": 151,
-              "shoulder_abduction_deg": 84,
-              "x_factor_deg": 1,
-              "lead_knee_flexion_deg": 175,
-              "trail_knee_flexion_deg": 143,
-              "trunk_lateral_tilt_deg": 8,
+              "x_factor_deg": 4,
+              "lead_knee_flexion_deg": 176,
+              "trail_knee_flexion_deg": 141,
+              "trunk_lateral_tilt_deg": 7,
               "hip_rotation_deg": 1,
               "confidence": 1.0,
               "visibility_notes": "Distance limits fine measurement",
@@ -1116,7 +1352,16 @@
                 "lead_shank_depth_deg": 41.9,
                 "trail_shank_depth_deg": 43.3,
                 "px_per_mm": 0.0905
-              }
+              },
+              "shoulder_flexion_deg": 81,
+              "shoulder_flexion_dir": "extension",
+              "shoulder_flexion_signed_deg": -81,
+              "elbow_angle_deg": 148,
+              "off_arm_elbow_angle_deg": 180,
+              "off_arm_shoulder_angle_deg": 21,
+              "off_arm_moment_arm_norm": 0.274,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             }
           }
         },
@@ -1132,11 +1377,10 @@
           "phases": {
             "wind_up": {
               "elbow_flexion_deg": 71,
-              "shoulder_abduction_deg": 57,
-              "x_factor_deg": 73,
+              "x_factor_deg": 66,
               "lead_knee_flexion_deg": 161,
-              "trail_knee_flexion_deg": 127,
-              "trunk_lateral_tilt_deg": 59,
+              "trail_knee_flexion_deg": 106,
+              "trunk_lateral_tilt_deg": 64,
               "hip_rotation_deg": 73,
               "confidence": 1.0,
               "visibility_notes": "Posterior view, elbow estimated from silhouette",
@@ -1152,15 +1396,23 @@
                 "lead_shank_depth_deg": 0.0,
                 "trail_shank_depth_deg": 51.8,
                 "px_per_mm": 0.3063
-              }
+              },
+              "shoulder_flexion_deg": 77,
+              "shoulder_flexion_dir": "extension",
+              "shoulder_flexion_signed_deg": -77,
+              "elbow_angle_deg": 87,
+              "off_arm_elbow_angle_deg": null,
+              "off_arm_shoulder_angle_deg": null,
+              "off_arm_moment_arm_norm": null,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "power_pocket": {
               "elbow_flexion_deg": 121,
-              "shoulder_abduction_deg": 94,
-              "x_factor_deg": 16,
-              "lead_knee_flexion_deg": 175,
-              "trail_knee_flexion_deg": 157,
-              "trunk_lateral_tilt_deg": 45,
+              "x_factor_deg": 19,
+              "lead_knee_flexion_deg": 156,
+              "trail_knee_flexion_deg": 162,
+              "trunk_lateral_tilt_deg": 51,
               "hip_rotation_deg": 16,
               "confidence": 1.0,
               "visibility_notes": "Strong X-factor clearly visible from posterior",
@@ -1176,15 +1428,23 @@
                 "lead_shank_depth_deg": 16.2,
                 "trail_shank_depth_deg": 64.4,
                 "px_per_mm": 0.346
-              }
+              },
+              "shoulder_flexion_deg": 107,
+              "shoulder_flexion_dir": "extension",
+              "shoulder_flexion_signed_deg": -107,
+              "elbow_angle_deg": 139,
+              "off_arm_elbow_angle_deg": 171,
+              "off_arm_shoulder_angle_deg": 36,
+              "off_arm_moment_arm_norm": 1.072,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "release": {
               "elbow_flexion_deg": 132,
-              "shoulder_abduction_deg": 88,
-              "x_factor_deg": 10,
-              "lead_knee_flexion_deg": 172,
-              "trail_knee_flexion_deg": 150,
-              "trunk_lateral_tilt_deg": 42,
+              "x_factor_deg": 6,
+              "lead_knee_flexion_deg": 173,
+              "trail_knee_flexion_deg": 141,
+              "trunk_lateral_tilt_deg": 48,
               "hip_rotation_deg": 10,
               "confidence": 1.0,
               "visibility_notes": "Disc visible exiting right, arm nearly straight",
@@ -1200,15 +1460,23 @@
                 "lead_shank_depth_deg": 28.7,
                 "trail_shank_depth_deg": 73.2,
                 "px_per_mm": 0.4056
-              }
+              },
+              "shoulder_flexion_deg": 103,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 103,
+              "elbow_angle_deg": 143,
+              "off_arm_elbow_angle_deg": 136,
+              "off_arm_shoulder_angle_deg": 30,
+              "off_arm_moment_arm_norm": 0.871,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "follow_through": {
               "elbow_flexion_deg": 164,
-              "shoulder_abduction_deg": 70,
-              "x_factor_deg": 4,
-              "lead_knee_flexion_deg": 144,
-              "trail_knee_flexion_deg": 168,
-              "trunk_lateral_tilt_deg": 11,
+              "x_factor_deg": 6,
+              "lead_knee_flexion_deg": 151,
+              "trail_knee_flexion_deg": 89,
+              "trunk_lateral_tilt_deg": 13,
               "hip_rotation_deg": 4,
               "confidence": 1.0,
               "visibility_notes": "Full hip rotation from posterior view",
@@ -1224,7 +1492,16 @@
                 "lead_shank_depth_deg": 43.2,
                 "trail_shank_depth_deg": 64.4,
                 "px_per_mm": 0.4963
-              }
+              },
+              "shoulder_flexion_deg": 73,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 73,
+              "elbow_angle_deg": 169,
+              "off_arm_elbow_angle_deg": 142,
+              "off_arm_shoulder_angle_deg": 53,
+              "off_arm_moment_arm_norm": 1.642,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             }
           }
         }
@@ -1313,11 +1590,10 @@
           "phases": {
             "wind_up": {
               "elbow_flexion_deg": 120,
-              "shoulder_abduction_deg": 81,
-              "x_factor_deg": 31,
-              "lead_knee_flexion_deg": 179,
-              "trail_knee_flexion_deg": 121,
-              "trunk_lateral_tilt_deg": 40,
+              "x_factor_deg": 68,
+              "lead_knee_flexion_deg": 170,
+              "trail_knee_flexion_deg": 109,
+              "trunk_lateral_tilt_deg": 43,
               "hip_rotation_deg": 31,
               "confidence": 1.0,
               "visibility_notes": "Posterior view, elbow from silhouette",
@@ -1333,15 +1609,23 @@
                 "lead_shank_depth_deg": 37.0,
                 "trail_shank_depth_deg": 53.4,
                 "px_per_mm": 0.4518
-              }
+              },
+              "shoulder_flexion_deg": 91,
+              "shoulder_flexion_dir": "extension",
+              "shoulder_flexion_signed_deg": -91,
+              "elbow_angle_deg": 135,
+              "off_arm_elbow_angle_deg": 82,
+              "off_arm_shoulder_angle_deg": 7,
+              "off_arm_moment_arm_norm": 0.328,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "power_pocket": {
               "elbow_flexion_deg": 99,
-              "shoulder_abduction_deg": 45,
               "x_factor_deg": 14,
-              "lead_knee_flexion_deg": 152,
-              "trail_knee_flexion_deg": 129,
-              "trunk_lateral_tilt_deg": 18,
+              "lead_knee_flexion_deg": 142,
+              "trail_knee_flexion_deg": 138,
+              "trunk_lateral_tilt_deg": 23,
               "hip_rotation_deg": 14,
               "confidence": 1.0,
               "visibility_notes": "Compact swing, less X-factor than McMahon/Heimburg",
@@ -1357,15 +1641,23 @@
                 "lead_shank_depth_deg": 46.7,
                 "trail_shank_depth_deg": 69.6,
                 "px_per_mm": 0.4949
-              }
+              },
+              "shoulder_flexion_deg": 60,
+              "shoulder_flexion_dir": "extension",
+              "shoulder_flexion_signed_deg": -60,
+              "elbow_angle_deg": 103,
+              "off_arm_elbow_angle_deg": 16,
+              "off_arm_shoulder_angle_deg": 63,
+              "off_arm_moment_arm_norm": 0.626,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "release": {
               "elbow_flexion_deg": 66,
-              "shoulder_abduction_deg": 18,
-              "x_factor_deg": 13,
-              "lead_knee_flexion_deg": 155,
-              "trail_knee_flexion_deg": 145,
-              "trunk_lateral_tilt_deg": 21,
+              "x_factor_deg": 10,
+              "lead_knee_flexion_deg": 145,
+              "trail_knee_flexion_deg": 139,
+              "trunk_lateral_tilt_deg": 26,
               "hip_rotation_deg": 13,
               "confidence": 1.0,
               "visibility_notes": "Clean extension confirmed by side view in second clip",
@@ -1381,15 +1673,23 @@
                 "lead_shank_depth_deg": 42.9,
                 "trail_shank_depth_deg": 71.9,
                 "px_per_mm": 0.5352
-              }
+              },
+              "shoulder_flexion_deg": 24,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 24,
+              "elbow_angle_deg": 71,
+              "off_arm_elbow_angle_deg": 10,
+              "off_arm_shoulder_angle_deg": 48,
+              "off_arm_moment_arm_norm": 0.726,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "follow_through": {
               "elbow_flexion_deg": 146,
-              "shoulder_abduction_deg": 85,
-              "x_factor_deg": 17,
-              "lead_knee_flexion_deg": 164,
-              "trail_knee_flexion_deg": 115,
-              "trunk_lateral_tilt_deg": 24,
+              "x_factor_deg": 15,
+              "lead_knee_flexion_deg": 152,
+              "trail_knee_flexion_deg": 123,
+              "trunk_lateral_tilt_deg": 35,
               "hip_rotation_deg": 17,
               "confidence": 1.0,
               "visibility_notes": "Compact deceleration arc vs McBeth wider sweep",
@@ -1405,7 +1705,16 @@
                 "lead_shank_depth_deg": 42.3,
                 "trail_shank_depth_deg": 67.8,
                 "px_per_mm": 0.5554
-              }
+              },
+              "shoulder_flexion_deg": 96,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 96,
+              "elbow_angle_deg": 153,
+              "off_arm_elbow_angle_deg": 161,
+              "off_arm_shoulder_angle_deg": 45,
+              "off_arm_moment_arm_norm": 0.819,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             }
           }
         },
@@ -1423,11 +1732,10 @@
           "phases": {
             "reach_back": {
               "elbow_flexion_deg": 163,
-              "shoulder_abduction_deg": 73,
-              "x_factor_deg": 106,
+              "x_factor_deg": 113,
               "lead_knee_flexion_deg": 168,
-              "trail_knee_flexion_deg": 179,
-              "trunk_lateral_tilt_deg": 8,
+              "trail_knee_flexion_deg": 178,
+              "trunk_lateral_tilt_deg": 7,
               "hip_rotation_deg": 106,
               "confidence": 1.0,
               "visibility_notes": "Clean side view. Compact reach-back, less extension than McBeth/Wysocki",
@@ -1443,14 +1751,22 @@
                 "lead_shank_depth_deg": 0.0,
                 "trail_shank_depth_deg": 0.0,
                 "px_per_mm": 0.1201
-              }
+              },
+              "shoulder_flexion_deg": 71,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 71,
+              "elbow_angle_deg": 163,
+              "off_arm_elbow_angle_deg": 128,
+              "off_arm_shoulder_angle_deg": 57,
+              "off_arm_moment_arm_norm": 0.323,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "power_pocket": {
               "elbow_flexion_deg": 87,
-              "shoulder_abduction_deg": 4,
-              "x_factor_deg": 16,
-              "lead_knee_flexion_deg": 173,
-              "trail_knee_flexion_deg": 117,
+              "x_factor_deg": 37,
+              "lead_knee_flexion_deg": 174,
+              "trail_knee_flexion_deg": 120,
               "trunk_lateral_tilt_deg": 5,
               "hip_rotation_deg": 16,
               "confidence": 1.0,
@@ -1467,15 +1783,23 @@
                 "lead_shank_depth_deg": 44.4,
                 "trail_shank_depth_deg": 25.8,
                 "px_per_mm": 0.1737
-              }
+              },
+              "shoulder_flexion_deg": 4,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 4,
+              "elbow_angle_deg": 84,
+              "off_arm_elbow_angle_deg": 174,
+              "off_arm_shoulder_angle_deg": 4,
+              "off_arm_moment_arm_norm": 0.111,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "release": {
               "elbow_flexion_deg": 176,
-              "shoulder_abduction_deg": 58,
-              "x_factor_deg": 0,
-              "lead_knee_flexion_deg": 166,
-              "trail_knee_flexion_deg": 111,
-              "trunk_lateral_tilt_deg": 11,
+              "x_factor_deg": 15,
+              "lead_knee_flexion_deg": 165,
+              "trail_knee_flexion_deg": 117,
+              "trunk_lateral_tilt_deg": 10,
               "hip_rotation_deg": 0,
               "confidence": 1.0,
               "visibility_notes": "Clean arm extension, stepping through at release, disc exits left clearly",
@@ -1491,15 +1815,23 @@
                 "lead_shank_depth_deg": 47.6,
                 "trail_shank_depth_deg": 29.9,
                 "px_per_mm": 0.1822
-              }
+              },
+              "shoulder_flexion_deg": 57,
+              "shoulder_flexion_dir": "flexion",
+              "shoulder_flexion_signed_deg": 57,
+              "elbow_angle_deg": 179,
+              "off_arm_elbow_angle_deg": 161,
+              "off_arm_shoulder_angle_deg": 1,
+              "off_arm_moment_arm_norm": 0.122,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             },
             "follow_through": {
               "elbow_flexion_deg": 151,
-              "shoulder_abduction_deg": 106,
-              "x_factor_deg": 4,
-              "lead_knee_flexion_deg": 156,
-              "trail_knee_flexion_deg": 102,
-              "trunk_lateral_tilt_deg": 14,
+              "x_factor_deg": 75,
+              "lead_knee_flexion_deg": 161,
+              "trail_knee_flexion_deg": 99,
+              "trunk_lateral_tilt_deg": 11,
               "hip_rotation_deg": 4,
               "confidence": 1.0,
               "visibility_notes": "Full hip rotation, compact deceleration arc consistent with FH follow-through style",
@@ -1515,7 +1847,16 @@
                 "lead_shank_depth_deg": 38.0,
                 "trail_shank_depth_deg": 30.4,
                 "px_per_mm": 0.1935
-              }
+              },
+              "shoulder_flexion_deg": 113,
+              "shoulder_flexion_dir": "extension",
+              "shoulder_flexion_signed_deg": -113,
+              "elbow_angle_deg": 154,
+              "off_arm_elbow_angle_deg": 169,
+              "off_arm_shoulder_angle_deg": 28,
+              "off_arm_moment_arm_norm": 0.615,
+              "landmark_version": "2.0",
+              "landmark_count": 12
             }
           }
         }
@@ -1587,580 +1928,596 @@
   "baseline_summary": {
     "BH": {
       "reach_back": {
-        "elbow_flexion_deg": {
-          "mean": 130.4,
+        "elbow_angle_deg": {
+          "mean": 129,
           "median": 126,
-          "min": 87,
-          "max": 163,
-          "sd": 32.5,
-          "p25": 114,
-          "p75": 162,
+          "min": 75,
+          "max": 168,
+          "sd": 38.3,
           "n": 5
         },
-        "shoulder_abduction_deg": {
-          "mean": 60,
-          "median": 57,
-          "min": 50,
-          "max": 73,
-          "sd": 9.1,
-          "p25": 55,
-          "p75": 65,
-          "n": 5
-        },
-        "x_factor_deg": {
-          "mean": 69.4,
-          "median": 54,
-          "min": 34,
-          "max": 106,
-          "sd": 31.4,
-          "p25": 54,
-          "p75": 99,
+        "shoulder_flexion_deg": {
+          "mean": 56.6,
+          "median": 55,
+          "min": 47,
+          "max": 71,
+          "sd": 9.7,
           "n": 5
         },
         "lead_knee_flexion_deg": {
-          "mean": 164.4,
+          "mean": 166.2,
           "median": 168,
-          "min": 158,
-          "max": 170,
-          "sd": 5.9,
-          "p25": 158,
-          "p75": 168,
+          "min": 160,
+          "max": 171,
+          "sd": 5.4,
           "n": 5
         },
         "trail_knee_flexion_deg": {
-          "mean": 169.6,
-          "median": 174,
-          "min": 155,
-          "max": 179,
-          "sd": 9.6,
-          "p25": 165,
-          "p75": 175,
+          "mean": 170,
+          "median": 173,
+          "min": 158,
+          "max": 178,
+          "sd": 8.0,
           "n": 5
         },
         "trunk_lateral_tilt_deg": {
-          "mean": 7.4,
-          "median": 8,
-          "min": 5,
-          "max": 9,
-          "sd": 1.5,
-          "p25": 7,
-          "p75": 8,
+          "mean": 6.2,
+          "median": 7,
+          "min": 4,
+          "max": 8,
+          "sd": 1.6,
           "n": 5
         },
-        "hip_rotation_deg": {
-          "mean": 69.4,
-          "median": 54,
-          "min": 34,
-          "max": 106,
-          "sd": 31.4,
-          "p25": 54,
-          "p75": 99,
+        "x_factor_deg": {
+          "mean": 71.8,
+          "median": 66,
+          "min": 41,
+          "max": 113,
+          "sd": 26.5,
+          "n": 5
+        },
+        "off_arm_elbow_angle_deg": {
+          "mean": 122.6,
+          "median": 128,
+          "min": 27,
+          "max": 180,
+          "sd": 60.8,
+          "n": 5
+        },
+        "off_arm_shoulder_angle_deg": {
+          "mean": 67.8,
+          "median": 46,
+          "min": 23,
+          "max": 173,
+          "sd": 60.1,
+          "n": 5
+        },
+        "off_arm_moment_arm_norm": {
+          "mean": 0.4,
+          "median": 0.5,
+          "min": 0.18,
+          "max": 0.56,
+          "sd": 0.1,
           "n": 5
         }
       },
       "power_pocket": {
-        "elbow_flexion_deg": {
-          "mean": 73.4,
-          "median": 87,
-          "min": 48,
-          "max": 95,
-          "sd": 22.5,
-          "p25": 50,
-          "p75": 87,
+        "elbow_angle_deg": {
+          "mean": 71.6,
+          "median": 80,
+          "min": 46,
+          "max": 96,
+          "sd": 21.6,
           "n": 5
         },
-        "shoulder_abduction_deg": {
-          "mean": 15.4,
-          "median": 15,
+        "shoulder_flexion_deg": {
+          "mean": 14.6,
+          "median": 14,
           "min": 4,
-          "max": 28,
-          "sd": 9.5,
-          "p25": 9,
-          "p75": 21,
-          "n": 5
-        },
-        "x_factor_deg": {
-          "mean": 10,
-          "median": 12,
-          "min": 2,
-          "max": 16,
-          "sd": 6.6,
-          "p25": 4,
-          "p75": 16,
+          "max": 29,
+          "sd": 9.1,
           "n": 5
         },
         "lead_knee_flexion_deg": {
-          "mean": 175,
-          "median": 174,
-          "min": 170,
+          "mean": 175.2,
+          "median": 176,
+          "min": 169,
           "max": 180,
-          "sd": 4.0,
-          "p25": 173,
-          "p75": 178,
+          "sd": 4.1,
           "n": 5
         },
         "trail_knee_flexion_deg": {
-          "mean": 124.2,
-          "median": 117,
-          "min": 112,
-          "max": 141,
-          "sd": 14.6,
-          "p25": 112,
-          "p75": 139,
+          "mean": 125.4,
+          "median": 120,
+          "min": 110,
+          "max": 148,
+          "sd": 16.5,
           "n": 5
         },
         "trunk_lateral_tilt_deg": {
-          "mean": 6,
-          "median": 5,
-          "min": 3,
+          "mean": 6.4,
+          "median": 6,
+          "min": 5,
           "max": 10,
-          "sd": 2.6,
-          "p25": 5,
-          "p75": 7,
+          "sd": 2.1,
           "n": 5
         },
-        "hip_rotation_deg": {
-          "mean": 10,
-          "median": 12,
-          "min": 2,
-          "max": 16,
-          "sd": 6.6,
-          "p25": 4,
-          "p75": 16,
+        "x_factor_deg": {
+          "mean": 17.6,
+          "median": 15,
+          "min": 3,
+          "max": 37,
+          "sd": 12.6,
+          "n": 5
+        },
+        "off_arm_elbow_angle_deg": {
+          "mean": 162,
+          "median": 160,
+          "min": 153,
+          "max": 174,
+          "sd": 8.9,
+          "n": 5
+        },
+        "off_arm_shoulder_angle_deg": {
+          "mean": 5.8,
+          "median": 4,
+          "min": 1,
+          "max": 12,
+          "sd": 4.3,
+          "n": 5
+        },
+        "off_arm_moment_arm_norm": {
+          "mean": 0.1,
+          "median": 0.1,
+          "min": 0.02,
+          "max": 0.23,
+          "sd": 0.1,
           "n": 5
         }
       },
       "release": {
-        "elbow_flexion_deg": {
-          "mean": 170.4,
-          "median": 176,
-          "min": 156,
-          "max": 178,
-          "sd": 9.3,
-          "p25": 166,
-          "p75": 176,
+        "elbow_angle_deg": {
+          "mean": 171.6,
+          "median": 167,
+          "min": 166,
+          "max": 179,
+          "sd": 6.8,
           "n": 5
         },
-        "shoulder_abduction_deg": {
-          "mean": 69.2,
-          "median": 71,
-          "min": 55,
-          "max": 89,
-          "sd": 13.6,
-          "p25": 58,
-          "p75": 73,
-          "n": 5
-        },
-        "x_factor_deg": {
-          "mean": 13.6,
-          "median": 10,
-          "min": 0,
-          "max": 30,
-          "sd": 12.9,
-          "p25": 4,
-          "p75": 24,
+        "shoulder_flexion_deg": {
+          "mean": 63.8,
+          "median": 60,
+          "min": 53,
+          "max": 78,
+          "sd": 10.4,
           "n": 5
         },
         "lead_knee_flexion_deg": {
-          "mean": 169.8,
-          "median": 166,
-          "min": 163,
-          "max": 178,
-          "sd": 6.7,
-          "p25": 166,
-          "p75": 176,
+          "mean": 171.6,
+          "median": 169,
+          "min": 165,
+          "max": 179,
+          "sd": 6.9,
           "n": 5
         },
         "trail_knee_flexion_deg": {
-          "mean": 129.6,
-          "median": 127,
-          "min": 111,
-          "max": 148,
-          "sd": 14.1,
-          "p25": 124,
-          "p75": 138,
+          "mean": 131.8,
+          "median": 128,
+          "min": 117,
+          "max": 149,
+          "sd": 13.3,
           "n": 5
         },
         "trunk_lateral_tilt_deg": {
-          "mean": 10.2,
-          "median": 11,
-          "min": 7,
+          "mean": 9.8,
+          "median": 10,
+          "min": 6,
           "max": 13,
-          "sd": 2.3,
-          "p25": 9,
-          "p75": 11,
+          "sd": 2.5,
           "n": 5
         },
-        "hip_rotation_deg": {
-          "mean": 13.6,
-          "median": 10,
-          "min": 0,
-          "max": 30,
-          "sd": 12.9,
-          "p25": 4,
-          "p75": 24,
+        "x_factor_deg": {
+          "mean": 15.6,
+          "median": 15,
+          "min": 4,
+          "max": 32,
+          "sd": 10.5,
+          "n": 5
+        },
+        "off_arm_elbow_angle_deg": {
+          "mean": 167,
+          "median": 163,
+          "min": 161,
+          "max": 179,
+          "sd": 7.9,
+          "n": 5
+        },
+        "off_arm_shoulder_angle_deg": {
+          "mean": 5.8,
+          "median": 7,
+          "min": 1,
+          "max": 11,
+          "sd": 4.2,
+          "n": 5
+        },
+        "off_arm_moment_arm_norm": {
+          "mean": 0.1,
+          "median": 0.1,
+          "min": 0.04,
+          "max": 0.27,
+          "sd": 0.1,
           "n": 5
         }
       },
       "follow_through": {
-        "elbow_flexion_deg": {
-          "mean": 154.2,
-          "median": 151,
-          "min": 132,
-          "max": 169,
-          "sd": 15.2,
-          "p25": 151,
-          "p75": 168,
+        "elbow_angle_deg": {
+          "mean": 158.2,
+          "median": 154,
+          "min": 147,
+          "max": 175,
+          "sd": 12.3,
           "n": 5
         },
-        "shoulder_abduction_deg": {
-          "mean": 81.2,
-          "median": 84,
-          "min": 43,
-          "max": 106,
-          "sd": 26.6,
-          "p25": 68,
-          "p75": 105,
-          "n": 5
-        },
-        "x_factor_deg": {
-          "mean": 11.2,
-          "median": 4,
-          "min": 1,
-          "max": 35,
-          "sd": 14.3,
-          "p25": 2,
-          "p75": 14,
+        "shoulder_flexion_deg": {
+          "mean": 85.4,
+          "median": 82,
+          "min": 41,
+          "max": 113,
+          "sd": 29.0,
           "n": 5
         },
         "lead_knee_flexion_deg": {
-          "mean": 164.8,
-          "median": 162,
-          "min": 156,
-          "max": 175,
-          "sd": 8.7,
-          "p25": 158,
-          "p75": 173,
+          "mean": 167.6,
+          "median": 166,
+          "min": 161,
+          "max": 176,
+          "sd": 6.7,
           "n": 5
         },
         "trail_knee_flexion_deg": {
-          "mean": 123.8,
-          "median": 130,
-          "min": 94,
-          "max": 150,
-          "sd": 24.8,
-          "p25": 102,
-          "p75": 143,
+          "mean": 121.6,
+          "median": 128,
+          "min": 96,
+          "max": 144,
+          "sd": 22.8,
           "n": 5
         },
         "trunk_lateral_tilt_deg": {
-          "mean": 11.8,
-          "median": 10,
-          "min": 8,
-          "max": 19,
-          "sd": 4.7,
-          "p25": 8,
-          "p75": 14,
+          "mean": 10.2,
+          "median": 9,
+          "min": 7,
+          "max": 16,
+          "sd": 3.6,
           "n": 5
         },
-        "hip_rotation_deg": {
-          "mean": 11.2,
-          "median": 4,
-          "min": 1,
-          "max": 35,
-          "sd": 14.3,
-          "p25": 2,
-          "p75": 14,
+        "x_factor_deg": {
+          "mean": 50.2,
+          "median": 48,
+          "min": 4,
+          "max": 107,
+          "sd": 42.1,
+          "n": 5
+        },
+        "off_arm_elbow_angle_deg": {
+          "mean": 170.2,
+          "median": 178,
+          "min": 145,
+          "max": 180,
+          "sd": 14.8,
+          "n": 5
+        },
+        "off_arm_shoulder_angle_deg": {
+          "mean": 33.8,
+          "median": 28,
+          "min": 21,
+          "max": 61,
+          "sd": 16.3,
+          "n": 5
+        },
+        "off_arm_moment_arm_norm": {
+          "mean": 0.5,
+          "median": 0.6,
+          "min": 0.27,
+          "max": 0.71,
+          "sd": 0.2,
           "n": 5
         }
       }
     },
     "FH": {
       "wind_up": {
-        "elbow_flexion_deg": {
-          "mean": 94.4,
-          "median": 90,
-          "min": 27,
-          "max": 164,
-          "sd": 51.5,
-          "p25": 71,
-          "p75": 120,
+        "elbow_angle_deg": {
+          "mean": 104.6,
+          "median": 106,
+          "min": 26,
+          "max": 169,
+          "sd": 53.8,
           "n": 5
         },
-        "shoulder_abduction_deg": {
-          "mean": 74.8,
-          "median": 75,
-          "min": 29,
-          "max": 132,
-          "sd": 37.8,
-          "p25": 57,
-          "p75": 81,
-          "n": 5
-        },
-        "x_factor_deg": {
-          "mean": 29.2,
-          "median": 29,
-          "min": 5,
-          "max": 73,
-          "sd": 27.2,
-          "p25": 8,
-          "p75": 31,
+        "shoulder_flexion_deg": {
+          "mean": 89.6,
+          "median": 91,
+          "min": 32,
+          "max": 145,
+          "sd": 41.0,
           "n": 5
         },
         "lead_knee_flexion_deg": {
-          "mean": 153.8,
+          "mean": 144,
           "median": 161,
-          "min": 107,
-          "max": 179,
-          "sd": 28.2,
-          "p25": 151,
-          "p75": 171,
+          "min": 76,
+          "max": 170,
+          "sd": 39.4,
           "n": 5
         },
         "trail_knee_flexion_deg": {
-          "mean": 128.2,
-          "median": 127,
-          "min": 103,
-          "max": 158,
-          "sd": 19.9,
-          "p25": 121,
-          "p75": 132,
+          "mean": 119.4,
+          "median": 109,
+          "min": 90,
+          "max": 163,
+          "sd": 28.0,
           "n": 5
         },
         "trunk_lateral_tilt_deg": {
-          "mean": 43,
-          "median": 57,
-          "min": 1,
-          "max": 59,
-          "sd": 24.7,
-          "p25": 40,
-          "p75": 58,
+          "mean": 49.6,
+          "median": 64,
+          "min": 5,
+          "max": 70,
+          "sd": 27.0,
           "n": 5
         },
-        "hip_rotation_deg": {
-          "mean": 29.2,
+        "x_factor_deg": {
+          "mean": 36.8,
           "median": 29,
-          "min": 5,
-          "max": 73,
-          "sd": 27.2,
-          "p25": 8,
-          "p75": 31,
+          "min": 9,
+          "max": 68,
+          "sd": 28.6,
           "n": 5
+        },
+        "off_arm_elbow_angle_deg": {
+          "mean": 126.2,
+          "median": 123.5,
+          "min": 82,
+          "max": 176,
+          "sd": 39.0,
+          "n": 4
+        },
+        "off_arm_shoulder_angle_deg": {
+          "mean": 64.8,
+          "median": 36.0,
+          "min": 7,
+          "max": 180,
+          "sd": 78.8,
+          "n": 4
+        },
+        "off_arm_moment_arm_norm": {
+          "mean": 0.4,
+          "median": 0.4,
+          "min": 0.23,
+          "max": 0.52,
+          "sd": 0.1,
+          "n": 4
         }
       },
       "power_pocket": {
-        "elbow_flexion_deg": {
-          "mean": 110.6,
-          "median": 115,
-          "min": 99,
-          "max": 121,
-          "sd": 9.9,
-          "p25": 101,
-          "p75": 117,
+        "elbow_angle_deg": {
+          "mean": 121.2,
+          "median": 122,
+          "min": 103,
+          "max": 139,
+          "sd": 14.2,
           "n": 5
         },
-        "shoulder_abduction_deg": {
-          "mean": 55.8,
-          "median": 48,
-          "min": 18,
-          "max": 94,
-          "sd": 29.1,
-          "p25": 45,
-          "p75": 74,
+        "shoulder_flexion_deg": {
+          "mean": 71.6,
+          "median": 73,
+          "min": 22,
+          "max": 107,
+          "sd": 33.3,
           "n": 5
-        },
-        "x_factor_deg": {
-          "mean": 49.2,
-          "median": 15.0,
-          "min": 4,
-          "max": 163,
-          "sd": 76.0,
-          "p25": 4,
-          "p75": 163,
-          "n": 4
         },
         "lead_knee_flexion_deg": {
-          "mean": 161.8,
-          "median": 160.0,
-          "min": 152,
-          "max": 175,
-          "sd": 11.2,
-          "p25": 152,
-          "p75": 175,
-          "n": 4
+          "mean": 158.2,
+          "median": 156,
+          "min": 142,
+          "max": 172,
+          "sd": 12.7,
+          "n": 5
         },
         "trail_knee_flexion_deg": {
-          "mean": 140.2,
-          "median": 129,
-          "min": 119,
-          "max": 171,
-          "sd": 22.6,
-          "p25": 125,
-          "p75": 157,
+          "mean": 143.6,
+          "median": 138,
+          "min": 116,
+          "max": 169,
+          "sd": 21.7,
           "n": 5
         },
         "trunk_lateral_tilt_deg": {
-          "mean": 23.5,
-          "median": 21.5,
-          "min": 6,
-          "max": 45,
-          "sd": 16.3,
-          "p25": 6,
-          "p75": 45,
+          "mean": 34.2,
+          "median": 32,
+          "min": 5,
+          "max": 60,
+          "sd": 22.0,
+          "n": 5
+        },
+        "x_factor_deg": {
+          "mean": 33.8,
+          "median": 14,
+          "min": 5,
+          "max": 118,
+          "sd": 47.3,
+          "n": 5
+        },
+        "off_arm_elbow_angle_deg": {
+          "mean": 129,
+          "median": 164.5,
+          "min": 16,
+          "max": 171,
+          "sd": 75.4,
           "n": 4
         },
-        "hip_rotation_deg": {
-          "mean": 49.2,
-          "median": 15.0,
-          "min": 4,
-          "max": 163,
-          "sd": 76.0,
-          "p25": 4,
-          "p75": 163,
+        "off_arm_shoulder_angle_deg": {
+          "mean": 42,
+          "median": 38.5,
+          "min": 28,
+          "max": 63,
+          "sd": 15.0,
+          "n": 4
+        },
+        "off_arm_moment_arm_norm": {
+          "mean": 1.0,
+          "median": 0.9,
+          "min": 0.63,
+          "max": 1.66,
+          "sd": 0.5,
           "n": 4
         }
       },
       "release": {
-        "elbow_flexion_deg": {
-          "mean": 105.8,
-          "median": 118,
-          "min": 66,
+        "elbow_angle_deg": {
+          "mean": 111.2,
+          "median": 124,
+          "min": 71,
           "max": 143,
-          "sd": 35.7,
-          "p25": 70,
-          "p75": 132,
+          "sd": 35.8,
           "n": 5
         },
-        "shoulder_abduction_deg": {
-          "mean": 45.4,
-          "median": 54,
-          "min": 10,
-          "max": 88,
-          "sd": 31.7,
-          "p25": 18,
-          "p75": 57,
+        "shoulder_flexion_deg": {
+          "mean": 52.8,
+          "median": 49,
+          "min": 14,
+          "max": 103,
+          "sd": 36.5,
           "n": 5
-        },
-        "x_factor_deg": {
-          "mean": 8.2,
-          "median": 9.0,
-          "min": 2,
-          "max": 13,
-          "sd": 4.6,
-          "p25": 2,
-          "p75": 13,
-          "n": 4
         },
         "lead_knee_flexion_deg": {
-          "mean": 164,
-          "median": 163.5,
-          "min": 154,
-          "max": 175,
-          "sd": 11.0,
-          "p25": 154,
-          "p75": 175,
-          "n": 4
+          "mean": 162.8,
+          "median": 170,
+          "min": 145,
+          "max": 173,
+          "sd": 12.3,
+          "n": 5
         },
         "trail_knee_flexion_deg": {
-          "mean": 139,
-          "median": 145,
-          "min": 120,
-          "max": 157,
-          "sd": 16.6,
-          "p25": 123,
-          "p75": 150,
+          "mean": 136.4,
+          "median": 139,
+          "min": 115,
+          "max": 158,
+          "sd": 15.9,
           "n": 5
         },
         "trunk_lateral_tilt_deg": {
-          "mean": 23.5,
-          "median": 21.0,
+          "mean": 32,
+          "median": 26,
+          "min": 8,
+          "max": 55,
+          "sd": 19.2,
+          "n": 5
+        },
+        "x_factor_deg": {
+          "mean": 6,
+          "median": 6,
+          "min": 2,
+          "max": 10,
+          "sd": 2.9,
+          "n": 5
+        },
+        "off_arm_elbow_angle_deg": {
+          "mean": 117.5,
+          "median": 148.0,
           "min": 10,
-          "max": 42,
-          "sd": 13.4,
-          "p25": 10,
-          "p75": 42,
+          "max": 164,
+          "sd": 72.7,
           "n": 4
         },
-        "hip_rotation_deg": {
-          "mean": 8.2,
-          "median": 9.0,
-          "min": 2,
-          "max": 13,
-          "sd": 4.6,
-          "p25": 2,
-          "p75": 13,
+        "off_arm_shoulder_angle_deg": {
+          "mean": 36.5,
+          "median": 38.5,
+          "min": 21,
+          "max": 48,
+          "sd": 13.2,
+          "n": 4
+        },
+        "off_arm_moment_arm_norm": {
+          "mean": 1.0,
+          "median": 0.8,
+          "min": 0.56,
+          "max": 1.66,
+          "sd": 0.5,
           "n": 4
         }
       },
       "follow_through": {
-        "elbow_flexion_deg": {
+        "elbow_angle_deg": {
           "mean": 150.2,
-          "median": 152,
-          "min": 129,
-          "max": 164,
-          "sd": 13.8,
-          "p25": 146,
-          "p75": 160,
+          "median": 160,
+          "min": 104,
+          "max": 169,
+          "sd": 26.5,
           "n": 5
         },
-        "shoulder_abduction_deg": {
-          "mean": 81,
-          "median": 80,
-          "min": 48,
-          "max": 122,
-          "sd": 27.0,
-          "p25": 70,
-          "p75": 85,
-          "n": 5
-        },
-        "x_factor_deg": {
-          "mean": 8,
-          "median": 5,
-          "min": 3,
-          "max": 17,
-          "sd": 5.9,
-          "p25": 4,
-          "p75": 11,
+        "shoulder_flexion_deg": {
+          "mean": 106,
+          "median": 96,
+          "min": 73,
+          "max": 147,
+          "sd": 30.0,
           "n": 5
         },
         "lead_knee_flexion_deg": {
-          "mean": 156.6,
-          "median": 161,
+          "mean": 152.6,
+          "median": 152,
           "min": 144,
-          "max": 164,
-          "sd": 8.7,
-          "p25": 151,
-          "p75": 163,
+          "max": 162,
+          "sd": 6.5,
           "n": 5
         },
         "trail_knee_flexion_deg": {
-          "mean": 146.8,
-          "median": 155,
-          "min": 115,
-          "max": 168,
-          "sd": 20.8,
-          "p25": 138,
-          "p75": 158,
+          "mean": 131.8,
+          "median": 140,
+          "min": 89,
+          "max": 160,
+          "sd": 27.4,
           "n": 5
         },
         "trunk_lateral_tilt_deg": {
-          "mean": 13,
+          "mean": 15.8,
           "median": 13,
-          "min": 4,
-          "max": 24,
-          "sd": 7.2,
-          "p25": 11,
-          "p75": 13,
+          "min": 1,
+          "max": 35,
+          "sd": 12.4,
           "n": 5
         },
-        "hip_rotation_deg": {
-          "mean": 8,
-          "median": 5,
-          "min": 3,
-          "max": 17,
-          "sd": 5.9,
-          "p25": 4,
-          "p75": 11,
+        "x_factor_deg": {
+          "mean": 8.8,
+          "median": 9,
+          "min": 2,
+          "max": 15,
+          "sd": 5.1,
+          "n": 5
+        },
+        "off_arm_elbow_angle_deg": {
+          "mean": 148.8,
+          "median": 145,
+          "min": 119,
+          "max": 177,
+          "sd": 21.8,
+          "n": 5
+        },
+        "off_arm_shoulder_angle_deg": {
+          "mean": 38,
+          "median": 45,
+          "min": 15,
+          "max": 53,
+          "sd": 17.1,
+          "n": 5
+        },
+        "off_arm_moment_arm_norm": {
+          "mean": 1.1,
+          "median": 1.1,
+          "min": 0.07,
+          "max": 1.7,
+          "sd": 0.7,
           "n": 5
         }
       }

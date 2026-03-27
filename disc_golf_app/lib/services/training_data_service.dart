@@ -32,7 +32,7 @@ class TrainingDataService extends ChangeNotifier {
   static const String _serverUrlKey = 'training_server_url';
   static const String _modelVersionKey = 'disc_model_version';
   static const String _manifestFile = 'manifest.json';
-  static const String _defaultServerUrl = 'https://disc-flight-school.onrender.com';
+  static const String _defaultServerUrl = 'https://discflightschool.onrender.com';
   static const double _defaultBoxSize = 0.03; // Normalized bounding box size
   static const int _cropPixels = 64; // Crop region size in pixels
 

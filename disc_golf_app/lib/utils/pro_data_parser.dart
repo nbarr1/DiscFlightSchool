@@ -33,25 +33,28 @@ class ProBaselineParser {
   }
 
   /// Mapping from pro JSON angle names to app angle names.
-  /// BH assumes right-hand backhand (RHBH).
+  /// All players are right-handed. Throwing arm = right for both BH and FH.
   static Map<String, String> _getAngleMapping(String throwType) {
     if (throwType == 'BH') {
       return {
-        'elbow_flexion_deg': 'rightElbowAngle',
-        'shoulder_abduction_deg': 'rightShoulderAngle',
-        'lead_knee_flexion_deg': 'rightKneeAngle', // RHBH lead = R side
-        'trail_knee_flexion_deg': 'leftKneeAngle',  // RHBH trail = L side
+        'elbow_angle_deg': 'rightElbowAngle',            // throwing arm
+        'shoulder_flexion_deg': 'rightShoulderAngle',     // throwing arm
+        'lead_knee_flexion_deg': 'rightKneeAngle',        // RHBH lead = R side
+        'trail_knee_flexion_deg': 'leftKneeAngle',        // RHBH trail = L side
         'trunk_lateral_tilt_deg': 'spineAngle',
-        // x_factor_deg and hip_rotation_deg skipped — no app equivalent
+        'off_arm_elbow_angle_deg': 'leftElbowAngle',      // off-arm = L side
+        'off_arm_shoulder_angle_deg': 'leftShoulderAngle', // off-arm = L side
       };
     } else {
-      // FH
+      // FH — throwing arm is still right for RHFH
       return {
-        'elbow_flexion_deg': 'leftElbowAngle',
-        'shoulder_abduction_deg': 'leftShoulderAngle',
-        'lead_knee_flexion_deg': 'rightKneeAngle',
-        'trail_knee_flexion_deg': 'leftKneeAngle',
+        'elbow_angle_deg': 'rightElbowAngle',             // throwing arm
+        'shoulder_flexion_deg': 'rightShoulderAngle',      // throwing arm
+        'lead_knee_flexion_deg': 'leftKneeAngle',          // RHFH lead = L side
+        'trail_knee_flexion_deg': 'rightKneeAngle',        // RHFH trail = R side
         'trunk_lateral_tilt_deg': 'spineAngle',
+        'off_arm_elbow_angle_deg': 'leftElbowAngle',       // off-arm = L side
+        'off_arm_shoulder_angle_deg': 'leftShoulderAngle',  // off-arm = L side
       };
     }
   }
