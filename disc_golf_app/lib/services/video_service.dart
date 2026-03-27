@@ -6,26 +6,33 @@ class VideoService extends ChangeNotifier {
   final ImagePicker _picker = ImagePicker();
   String? _currentVideoPath;
   List<String> _recentVideos = [];
+  String? _lastError;
 
   String? get currentVideoPath => _currentVideoPath;
   List<String> get recentVideos => List.unmodifiable(_recentVideos);
 
+  /// The last error message from a failed capture/select call.
+  String? get lastError => _lastError;
+
   /// Capture a new video using the device camera
   Future<String?> captureVideo() async {
+    _lastError = null;
     try {
+      // Note: maxDuration omitted — some Android camera apps return null when it is set
       final XFile? video = await _picker.pickVideo(
         source: ImageSource.camera,
-        maxDuration: const Duration(seconds: 30),
       );
-      
+
       if (video != null) {
         _currentVideoPath = video.path;
         _addToRecentVideos(video.path);
         notifyListeners();
         return video.path;
       }
+      _lastError = 'No video returned from camera. Please record a video and confirm.';
       return null;
     } catch (e) {
+      _lastError = e.toString();
       debugPrint('Error capturing video: $e');
       return null;
     }
@@ -33,19 +40,22 @@ class VideoService extends ChangeNotifier {
 
   /// Select an existing video from the gallery
   Future<String?> selectVideo() async {
+    _lastError = null;
     try {
       final XFile? video = await _picker.pickVideo(
         source: ImageSource.gallery,
       );
-      
+
       if (video != null) {
         _currentVideoPath = video.path;
         _addToRecentVideos(video.path);
         notifyListeners();
         return video.path;
       }
+      _lastError = 'No video selected from gallery.';
       return null;
     } catch (e) {
+      _lastError = e.toString();
       debugPrint('Error selecting video: $e');
       return null;
     }
