@@ -217,6 +217,31 @@ factory RouletteResult.fromJson(Map<String, dynamic> json) {
 
   bool get isPutt => puttStyle != null;
 
+  String getPowerModifierName() {
+    switch (powerModifier) {
+      case PowerModifier.fullPower:    return 'Full Power';
+      case PowerModifier.halfPower:    return 'Half Power';
+      case PowerModifier.quarterPower: return 'Quarter Power';
+      case PowerModifier.overhand:     return 'Overhand';
+      case PowerModifier.standstill:   return 'Standstill';
+      case PowerModifier.runUp:        return 'Run Up';
+      case PowerModifier.xStep:        return 'X Step';
+    }
+  }
+
+  String getHindranceName() {
+    switch (hindrance) {
+      case Hindrance.none:       return 'No Hindrance';
+      case Hindrance.offHand:    return 'Off Hand';
+      case Hindrance.eyesClosed: return 'Eyes Closed';
+      case Hindrance.backwards:  return 'Backwards';
+      case Hindrance.oneLeg:     return 'One Leg';
+      case Hindrance.sitting:    return 'Sitting';
+      case Hindrance.kneeling:   return 'Kneeling';
+      case Hindrance.spinFirst:  return 'Spin First';
+    }
+  }
+
   String getPuttStyleDescription() {
     if (puttStyle == null) return '';
     switch (puttStyle!) {

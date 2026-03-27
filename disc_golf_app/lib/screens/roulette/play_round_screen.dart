@@ -420,7 +420,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
                   ? challenge.getPuttStyleDescription()
                   : '${challenge.getShotTypeDescription().split(' - ').first} · '
                       '${challenge.discName ?? "Any"} · '
-                      '${challenge.hindrance == Hindrance.none ? "No Hindrance" : challenge.hindrance.name}';
+                      '${challenge.hindrance == Hindrance.none ? "No Hindrance" : challenge.getHindranceName()}';
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
@@ -593,15 +593,13 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
               const SizedBox(height: 12),
               _buildChallengeRow(
                 'Power',
-                challenge.powerModifier.name,
+                challenge.getPowerModifierName(),
                 Icons.flash_on,
               ),
               const SizedBox(height: 12),
               _buildChallengeRow(
                 'Challenge',
-                challenge.hindrance == Hindrance.none
-                    ? 'No Hindrance'
-                    : challenge.hindrance.name,
+                challenge.getHindranceName(),
                 challenge.hindrance == Hindrance.none
                     ? Icons.check_circle
                     : Icons.warning,

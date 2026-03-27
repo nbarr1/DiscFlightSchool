@@ -78,13 +78,20 @@ class _FlightTrackerScreenState extends State<FlightTrackerScreen> {
                 color: Colors.red,
                 onTap: () async {
                   final videoPath = await videoService.captureVideo();
-                  if (videoPath != null && mounted) {
+                  if (videoPath != null && context.mounted) {
                     _navigateToTrim(videoPath);
+                  } else if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Could Not Open Camera. Check Camera Permission In Settings.'),
+                        duration: Duration(seconds: 4),
+                      ),
+                    );
                   }
                 },
               ),
               const SizedBox(height: 16),
-              
+
               _buildActionCard(
                 context,
                 title: 'Upload Video',
@@ -93,8 +100,15 @@ class _FlightTrackerScreenState extends State<FlightTrackerScreen> {
                 color: Colors.blue,
                 onTap: () async {
                   final videoPath = await videoService.selectVideo();
-                  if (videoPath != null && mounted) {
+                  if (videoPath != null && context.mounted) {
                     _navigateToTrim(videoPath);
+                  } else if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Could Not Open Gallery. Check Storage Permission In Settings.'),
+                        duration: Duration(seconds: 4),
+                      ),
+                    );
                   }
                 },
               ),

@@ -526,7 +526,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       final session = await FFmpegKit.execute(
         '${inputs.toString()}'
         '-filter_complex "${filters.toString()}" '
-        '-codec:a copy "$outputPath"',
+        '-c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p '
+        '-c:a copy "$outputPath"',
       );
 
       final returnCode = await session.getReturnCode();

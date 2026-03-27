@@ -95,8 +95,15 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
             ElevatedButton.icon(
               onPressed: () async {
                 final videoPath = await videoService.selectVideo();
-                if (videoPath != null && mounted) {
+                if (videoPath != null && context.mounted) {
                   _navigateToAnalysis(videoPath);
+                } else if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Could Not Open Gallery. Check Storage Permission In Settings.'),
+                      duration: Duration(seconds: 4),
+                    ),
+                  );
                 }
               },
               icon: const Icon(Icons.video_library),
@@ -109,8 +116,15 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
             ElevatedButton.icon(
               onPressed: () async {
                 final videoPath = await videoService.captureVideo();
-                if (videoPath != null && mounted) {
+                if (videoPath != null && context.mounted) {
                   _navigateToAnalysis(videoPath);
+                } else if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Could Not Open Camera. Check Camera Permission In Settings.'),
+                      duration: Duration(seconds: 4),
+                    ),
+                  );
                 }
               },
               icon: const Icon(Icons.videocam),

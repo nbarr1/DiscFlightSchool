@@ -185,15 +185,13 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
               const SizedBox(height: 12),
               _buildResultRow(
                 'Power',
-                _currentResult!.powerModifier.name,
+                _currentResult!.getPowerModifierName(),
                 Icons.flash_on,
               ),
               const SizedBox(height: 12),
               _buildResultRow(
                 'Challenge',
-                _currentResult!.hindrance.name == 'none'
-                    ? 'No Hindrance'
-                    : _currentResult!.hindrance.name,
+                _currentResult!.getHindranceName(),
                 _currentResult!.hindrance == Hindrance.none
                     ? Icons.check_circle
                     : Icons.warning,

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/scoring_service.dart';
 import '../../models/roulette_scoring.dart';
-import '../../models/roulette_data.dart';
 
 class ScorecardScreen extends StatelessWidget {
   const ScorecardScreen({Key? key}) : super(key: key);
@@ -219,8 +218,8 @@ class ScorecardScreen extends StatelessWidget {
                   ? c.getPuttStyleDescription()
                   : '${c.getShotTypeDescription().split(' - ').first} · '
                       '${c.discName ?? "Any"} · '
-                      '${c.powerModifier.name} · '
-                      '${c.hindrance == Hindrance.none ? "No Hindrance" : c.hindrance.name}';
+                      '${c.getPowerModifierName()} · '
+                      '${c.getHindranceName()}';
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
