@@ -70,7 +70,7 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Add excitement to your round with random shot challenges',
+                      'Add Excitement To Your Round With Random Shot Challenges',
                       style: Theme.of(context).textTheme.bodyMedium,
                       textAlign: TextAlign.center,
                     ),
@@ -118,9 +118,9 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
         ),
         subtitle: Text(
           _isPutting
-              ? 'Challenges: putt style (putter only)'
-              : 'Challenges: shot type, disc, power, hindrance',
-          style: TextStyle(color: Colors.grey.shade700),
+              ? 'Challenges: Putt Style (Putter Only)'
+              : 'Challenges: Shot Type, Disc, Power, Hindrance',
+          style: TextStyle(color: Colors.black87.withAlpha(180)),
         ),
         secondary: Icon(
           _isPutting ? Icons.gps_fixed : Icons.album,
@@ -219,9 +219,9 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
             children: [
               Text(
                 label,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
-                  color: Colors.grey.shade700,
+                  color: Colors.black87,
                 ),
               ),
               Text(

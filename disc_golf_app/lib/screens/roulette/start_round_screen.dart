@@ -118,7 +118,7 @@ class _StartRoundScreenState extends State<StartRoundScreen> {
                     const SizedBox(height: 16),
                     SwitchListTile(
                       title: const Text('Use Difficulty Weighting'),
-                      subtitle: const Text('Harder challenges earn bonus points'),
+                      subtitle: const Text('Harder Challenges Earn Bonus Points'),
                       value: _useWeighting,
                       onChanged: (value) {
                         setState(() {
@@ -129,7 +129,7 @@ class _StartRoundScreenState extends State<StartRoundScreen> {
                     const Divider(),
                     SwitchListTile(
                       title: const Text('Custom Pars'),
-                      subtitle: const Text('Set par for each hole'),
+                      subtitle: const Text('Set Par For Each Hole'),
                       value: _customPars,
                       onChanged: (value) {
                         setState(() {
@@ -162,7 +162,7 @@ class _StartRoundScreenState extends State<StartRoundScreen> {
                                 _pars = ScoredRound.defaultCourse();
                               });
                             },
-                            child: const Text('Reset to Par 3'),
+                            child: const Text('Reset To Par 3'),
                           ),
                         ],
                       ),
@@ -211,7 +211,7 @@ class _StartRoundScreenState extends State<StartRoundScreen> {
                   '${index + 1}',
                   style: const TextStyle(
                     fontSize: 12,
-                    color: Colors.grey,
+                    color: Colors.black87,
                   ),
                 ),
                 Text(
@@ -262,7 +262,7 @@ class _StartRoundScreenState extends State<StartRoundScreen> {
 
     if (playerNames.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter at least one player name')),
+        const SnackBar(content: Text('Please Enter At Least One Player Name')),
       );
       return;
     }

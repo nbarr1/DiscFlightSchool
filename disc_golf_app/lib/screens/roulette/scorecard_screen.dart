@@ -52,12 +52,12 @@ class ScorecardScreen extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Started: ${_formatDateTime(round.startedAt)}',
-              style: TextStyle(color: Colors.grey[600]),
+              style: const TextStyle(color: Colors.black87),
             ),
             if (round.isComplete && round.completedAt != null)
               Text(
                 'Completed: ${_formatDateTime(round.completedAt!)}',
-                style: TextStyle(color: Colors.grey[600]),
+                style: const TextStyle(color: Colors.black87),
               ),
             const SizedBox(height: 24),
             ...round.playerNames.map((playerName) {
@@ -119,11 +119,11 @@ class ScorecardScreen extends StatelessWidget {
             const Divider(height: 24),
             if (playerScores.isNotEmpty) ...[
               const Text(
-                'Hole-by-Hole',
+                'Hole-By-Hole',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey,
+                  color: Colors.black87,
                 ),
               ),
               const SizedBox(height: 12),
@@ -176,7 +176,7 @@ class ScorecardScreen extends StatelessWidget {
               children: [
                 Text(
                   '${score.holeNumber}',
-                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  style: const TextStyle(fontSize: 10, color: Colors.black87),
                 ),
                 Text(
                   '${score.strokes}',
@@ -188,7 +188,7 @@ class ScorecardScreen extends StatelessWidget {
                 ),
                 Text(
                   '${score.averageMultiplier.toStringAsFixed(1)}x',
-                  style: const TextStyle(fontSize: 9, color: Colors.grey),
+                  style: const TextStyle(fontSize: 9, color: Colors.black87),
                 ),
               ],
             ),
@@ -220,7 +220,7 @@ class ScorecardScreen extends StatelessWidget {
                   : '${c.getShotTypeDescription().split(' - ').first} · '
                       '${c.discName ?? "Any"} · '
                       '${c.powerModifier.name} · '
-                      '${c.hindrance == Hindrance.none ? "No hindrance" : c.hindrance.name}';
+                      '${c.hindrance == Hindrance.none ? "No Hindrance" : c.hindrance.name}';
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
@@ -251,8 +251,8 @@ class ScorecardScreen extends StatelessWidget {
             }),
             const SizedBox(height: 12),
             Text(
-              'Average multiplier: ${score.averageMultiplier.toStringAsFixed(2)}x',
-              style: const TextStyle(color: Colors.grey),
+              'Average Multiplier: ${score.averageMultiplier.toStringAsFixed(2)}x',
+              style: const TextStyle(color: Colors.black87),
             ),
             const SizedBox(height: 16),
           ],
@@ -265,7 +265,7 @@ class ScorecardScreen extends StatelessWidget {
     return Column(
       children: [
         Text(label,
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+            style: const TextStyle(fontSize: 12, color: Colors.black87)),
         const SizedBox(height: 4),
         Text(value,
             style: const TextStyle(
@@ -382,7 +382,7 @@ class ScorecardScreen extends StatelessWidget {
                             'Weighted: ${(stats['weightedScore'] as double).toStringAsFixed(1)}',
                             style: const TextStyle(
                               fontSize: 12,
-                              color: Colors.grey,
+                              color: Colors.black87,
                             ),
                           ),
                       ],

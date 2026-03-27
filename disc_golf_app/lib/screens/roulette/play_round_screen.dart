@@ -282,7 +282,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
     return Column(
       children: [
         Text(label,
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade700)),
+            style: const TextStyle(fontSize: 14, color: Colors.black87)),
         const SizedBox(height: 4),
         Text(value,
             style: const TextStyle(
@@ -348,7 +348,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
         child: Column(
           children: [
             Text('Current Player',
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade700)),
+                style: const TextStyle(fontSize: 14, color: Colors.black87)),
             const SizedBox(height: 8),
             DropdownButton<String>(
               value: remainingPlayers.contains(currentPlayer)
@@ -420,7 +420,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
                   ? challenge.getPuttStyleDescription()
                   : '${challenge.getShotTypeDescription().split(' - ').first} · '
                       '${challenge.discName ?? "Any"} · '
-                      '${challenge.hindrance == Hindrance.none ? "No hindrance" : challenge.hindrance.name}';
+                      '${challenge.hindrance == Hindrance.none ? "No Hindrance" : challenge.hindrance.name}';
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
@@ -475,9 +475,9 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
         ),
         subtitle: Text(
           _isPutting
-              ? 'Challenges: putt style (putter only)'
-              : 'Challenges: shot type, disc, power, hindrance',
-          style: TextStyle(color: Colors.grey.shade700),
+              ? 'Challenges: Putt Style (Putter Only)'
+              : 'Challenges: Shot Type, Disc, Power, Hindrance',
+          style: TextStyle(color: Colors.black87.withAlpha(180)),
         ),
         secondary: Icon(
           _isPutting ? Icons.gps_fixed : Icons.sports_golf,
@@ -501,8 +501,8 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
       children: [
         Text(
           _currentThrows.isEmpty
-              ? 'Tap the wheel to spin for Throw #1!'
-              : 'Tap the wheel to spin for Throw #${_currentThrows.length + 1}!',
+              ? 'Tap The Wheel To Spin For Throw #1!'
+              : 'Tap The Wheel To Spin For Throw #${_currentThrows.length + 1}!',
           style: const TextStyle(
               fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
           textAlign: TextAlign.center,
@@ -627,7 +627,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label,
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                  style: const TextStyle(fontSize: 12, color: Colors.black87)),
               Text(value,
                   style: const TextStyle(
                       fontSize: 16,
@@ -743,8 +743,8 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
       builder: (ctx) => AlertDialog(
         title: const Text('Undo Last Score'),
         content: Text(
-          'Remove score for ${lastScore.playerName} on Hole ${lastScore.holeNumber}?\n\n'
-          'Strokes: ${lastScore.strokes} (${lastScore.throws.length} throws)\n'
+          'Remove Score For ${lastScore.playerName} On Hole ${lastScore.holeNumber}?\n\n'
+          'Strokes: ${lastScore.strokes} (${lastScore.throws.length} Throws)\n'
           'Par: ${lastScore.par}',
         ),
         actions: [
@@ -816,7 +816,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Score removed')),
+      const SnackBar(content: Text('Score Removed')),
     );
   }
 
