@@ -128,12 +128,12 @@ class TrackingService extends ChangeNotifier {
     for (int i = 0; i < points.length - 1; i++) {
       final dx = points[i + 1].dx - points[i].dx;
       final dy = points[i + 1].dy - points[i].dy;
-      totalDistance += (dx * dx + dy * dy).abs();
+      totalDistance += dx * dx + dy * dy;
     }
 
     // Calculate straight-line distance
-    final straightDistance = ((endPoint.dx - startPoint.dx) * (endPoint.dx - startPoint.dx) + 
-                             (endPoint.dy - startPoint.dy) * (endPoint.dy - startPoint.dy)).abs();
+    final straightDistance = (endPoint.dx - startPoint.dx) * (endPoint.dx - startPoint.dx) +
+                             (endPoint.dy - startPoint.dy) * (endPoint.dy - startPoint.dy);
 
     // Calculate turn/fade
     final horizontalMovement = endPoint.dx - startPoint.dx;

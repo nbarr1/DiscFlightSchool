@@ -44,13 +44,13 @@ class FlightData {
   factory FlightData.fromJson(Map<String, dynamic> json) {
     return FlightData(
       id: json['id'],
-      distance: json['distance'],
-      maxHeight: json['maxHeight'],
-      flightTime: json['flightTime'],
-      speed: json['speed'],
-      launchAngle: json['launchAngle'],
+      distance: (json['distance'] as num).toDouble(),
+      maxHeight: (json['maxHeight'] as num).toDouble(),
+      flightTime: (json['flightTime'] as num).toDouble(),
+      speed: (json['speed'] as num).toDouble(),
+      launchAngle: (json['launchAngle'] as num).toDouble(),
       points: (json['points'] as List)
-          .map((p) => Offset(p['x'], p['y']))
+          .map((p) => Offset((p['x'] as num).toDouble(), (p['y'] as num).toDouble()))
           .toList(),
       videoPath: json['videoPath'],
       discId: json['discId'],

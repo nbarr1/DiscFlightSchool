@@ -65,116 +65,116 @@ class RouletteResult {
   final DateTime timestamp;
   
   double get difficultyMultiplier {
-  double multiplier = 1.0;
-  
-  // Shot type difficulty
-  switch (shotType) {
-    case ShotType.flat:
-    case ShotType.hyzer:
-      multiplier += 0.0;
-      break;
-    case ShotType.anhyzer:
-      multiplier += 0.2;
-      break;
-    case ShotType.roller:
-      multiplier += 0.3;
-      break;
-    case ShotType.scoober:
-    case ShotType.tomahawk:
-    case ShotType.thumber:
-      multiplier += 0.5;
-      break;
-    case ShotType.grenade:
-      multiplier += 0.7;
-      break;
-  }
-  
-  // Power modifier difficulty
-  switch (powerModifier) {
-    case PowerModifier.fullPower:
-    case PowerModifier.runUp:
-    case PowerModifier.xStep:
-      multiplier += 0.0;
-      break;
-    case PowerModifier.halfPower:
-      multiplier += 0.1;
-      break;
-    case PowerModifier.standstill:
-      multiplier += 0.2;
-      break;
-    case PowerModifier.quarterPower:
-      multiplier += 0.3;
-      break;
-    case PowerModifier.overhand:
-      multiplier += 0.4;
-      break;
-  }
-  
-  // Hindrance difficulty (biggest impact)
-  switch (hindrance) {
-    case Hindrance.none:
-      multiplier += 0.0;
-      break;
-    case Hindrance.kneeling:
-    case Hindrance.sitting:
-      multiplier += 0.3;
-      break;
-    case Hindrance.oneLeg:
-      multiplier += 0.5;
-      break;
-    case Hindrance.spinFirst:
-      multiplier += 0.7;
-      break;
-    case Hindrance.offHand:
-      multiplier += 1.0;
-      break;
-    case Hindrance.backwards:
-      multiplier += 1.2;
-      break;
-    case Hindrance.eyesClosed:
-      multiplier += 1.5;
-      break;
-  }
-  
-  // Putt style difficulty (when putting)
-  if (puttStyle != null) {
-    switch (puttStyle!) {
-      case PuttStyle.push:
+    double multiplier = 1.0;
+
+    // Shot type difficulty
+    switch (shotType) {
+      case ShotType.flat:
+      case ShotType.hyzer:
         multiplier += 0.0;
         break;
-      case PuttStyle.spush:
-        multiplier += 0.1;
-        break;
-      case PuttStyle.spin:
+      case ShotType.anhyzer:
         multiplier += 0.2;
         break;
-      case PuttStyle.straddle:
+      case ShotType.roller:
         multiplier += 0.3;
         break;
-      case PuttStyle.kneeling:
+      case ShotType.scoober:
+      case ShotType.tomahawk:
+      case ShotType.thumber:
         multiplier += 0.5;
         break;
-      case PuttStyle.turbo:
+      case ShotType.grenade:
         multiplier += 0.7;
         break;
     }
+
+    // Power modifier difficulty
+    switch (powerModifier) {
+      case PowerModifier.fullPower:
+      case PowerModifier.runUp:
+      case PowerModifier.xStep:
+        multiplier += 0.0;
+        break;
+      case PowerModifier.halfPower:
+        multiplier += 0.1;
+        break;
+      case PowerModifier.standstill:
+        multiplier += 0.2;
+        break;
+      case PowerModifier.quarterPower:
+        multiplier += 0.3;
+        break;
+      case PowerModifier.overhand:
+        multiplier += 0.4;
+        break;
+    }
+
+    // Hindrance difficulty (biggest impact)
+    switch (hindrance) {
+      case Hindrance.none:
+        multiplier += 0.0;
+        break;
+      case Hindrance.kneeling:
+      case Hindrance.sitting:
+        multiplier += 0.3;
+        break;
+      case Hindrance.oneLeg:
+        multiplier += 0.5;
+        break;
+      case Hindrance.spinFirst:
+        multiplier += 0.7;
+        break;
+      case Hindrance.offHand:
+        multiplier += 1.0;
+        break;
+      case Hindrance.backwards:
+        multiplier += 1.2;
+        break;
+      case Hindrance.eyesClosed:
+        multiplier += 1.5;
+        break;
+    }
+
+    // Putt style difficulty (when putting)
+    if (puttStyle != null) {
+      switch (puttStyle!) {
+        case PuttStyle.push:
+          multiplier += 0.0;
+          break;
+        case PuttStyle.spush:
+          multiplier += 0.1;
+          break;
+        case PuttStyle.spin:
+          multiplier += 0.2;
+          break;
+        case PuttStyle.straddle:
+          multiplier += 0.3;
+          break;
+        case PuttStyle.kneeling:
+          multiplier += 0.5;
+          break;
+        case PuttStyle.turbo:
+          multiplier += 0.7;
+          break;
+      }
+    }
+
+    return multiplier;
   }
 
-  return multiplier;
-}
-
-factory RouletteResult.fromJson(Map<String, dynamic> json) {
-  return RouletteResult(
-    shotType: ShotType.values.firstWhere((e) => e.name == json['shotType']),
-    discName: json['discName'],
-    powerModifier: PowerModifier.values.firstWhere((e) => e.name == json['powerModifier']),
-    hindrance: Hindrance.values.firstWhere((e) => e.name == json['hindrance']),
-    puttStyle: json['puttStyle'] != null
-        ? PuttStyle.values.firstWhere((e) => e.name == json['puttStyle'])
-        : null,
-    timestamp: DateTime.parse(json['timestamp']),
-  );
-}
+  factory RouletteResult.fromJson(Map<String, dynamic> json) {
+    return RouletteResult(
+      shotType: ShotType.values.firstWhere((e) => e.name == json['shotType']),
+      discName: json['discName'],
+      powerModifier: PowerModifier.values.firstWhere((e) => e.name == json['powerModifier']),
+      hindrance: Hindrance.values.firstWhere((e) => e.name == json['hindrance']),
+      puttStyle: json['puttStyle'] != null
+          ? PuttStyle.values.firstWhere((e) => e.name == json['puttStyle'])
+          : null,
+      timestamp: DateTime.parse(json['timestamp']),
+    );
+  }
 
   RouletteResult({
     required this.shotType,
