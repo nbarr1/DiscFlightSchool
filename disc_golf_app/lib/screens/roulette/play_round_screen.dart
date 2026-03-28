@@ -386,6 +386,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
 
   Widget _buildThrowHistory() {
     return Card(
+      color: Colors.purple.shade50,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -464,20 +465,20 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
 
   Widget _buildPuttingToggle() {
     return Card(
-      color: _isPutting ? Colors.teal.shade50 : null,
+      color: _isPutting ? Colors.teal.shade50 : Colors.purple.shade50,
       child: SwitchListTile(
         title: Text(
           _isPutting ? 'Putting Mode' : 'Throwing Mode',
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: _isPutting ? Colors.teal.shade800 : Colors.black,
+            color: _isPutting ? Colors.teal.shade800 : Colors.purple.shade800,
           ),
         ),
         subtitle: Text(
           _isPutting
               ? 'Challenges: Putt Style (Putter Only)'
               : 'Challenges: Shot Type, Disc, Power, Hindrance',
-          style: TextStyle(color: Colors.black87.withAlpha(180)),
+          style: const TextStyle(color: Colors.black54),
         ),
         secondary: Icon(
           _isPutting ? Icons.gps_fixed : Icons.sports_golf,
@@ -504,7 +505,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
               ? 'Tap The Wheel To Spin For Throw #1!'
               : 'Tap The Wheel To Spin For Throw #${_currentThrows.length + 1}!',
           style: const TextStyle(
-              fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
+              fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 24),

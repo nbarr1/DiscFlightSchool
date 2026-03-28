@@ -51,12 +51,12 @@ class ScorecardScreen extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Started: ${_formatDateTime(round.startedAt)}',
-              style: const TextStyle(color: Colors.black87),
+              style: const TextStyle(color: Colors.white70),
             ),
             if (round.isComplete && round.completedAt != null)
               Text(
                 'Completed: ${_formatDateTime(round.completedAt!)}',
-                style: const TextStyle(color: Colors.black87),
+                style: const TextStyle(color: Colors.white70),
               ),
             const SizedBox(height: 24),
             ...round.playerNames.map((playerName) {
@@ -81,6 +81,7 @@ class ScorecardScreen extends StatelessWidget {
     final totalWeighted = round.getTotalWeightedScore(playerName);
 
     return Card(
+      color: Colors.deepPurple.shade50,
       margin: const EdgeInsets.only(bottom: 16),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -251,7 +252,7 @@ class ScorecardScreen extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'Average Multiplier: ${score.averageMultiplier.toStringAsFixed(2)}x',
-              style: const TextStyle(color: Colors.black87),
+              style: TextStyle(color: Colors.grey.shade600),
             ),
             const SizedBox(height: 16),
           ],

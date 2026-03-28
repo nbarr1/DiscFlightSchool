@@ -60,18 +60,19 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
         child: Column(
           children: [
             Card(
+              color: Colors.purple.shade50,
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
                     Text(
                       'Spin for Your Challenge!',
-                      style: Theme.of(context).textTheme.headlineSmall,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.black),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Add Excitement To Your Round With Random Shot Challenges',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black87),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -107,20 +108,20 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
 
   Widget _buildPuttingToggle() {
     return Card(
-      color: _isPutting ? Colors.teal.shade50 : null,
+      color: _isPutting ? Colors.teal.shade50 : Colors.purple.shade50,
       child: SwitchListTile(
         title: Text(
           _isPutting ? 'Putting Mode' : 'Throwing Mode',
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: _isPutting ? Colors.teal.shade800 : Colors.black,
+            color: _isPutting ? Colors.teal.shade800 : Colors.purple.shade800,
           ),
         ),
         subtitle: Text(
           _isPutting
               ? 'Challenges: Putt Style (Putter Only)'
               : 'Challenges: Shot Type, Disc, Power, Hindrance',
-          style: TextStyle(color: Colors.black87.withAlpha(180)),
+          style: const TextStyle(color: Colors.black54),
         ),
         secondary: Icon(
           _isPutting ? Icons.gps_fixed : Icons.album,

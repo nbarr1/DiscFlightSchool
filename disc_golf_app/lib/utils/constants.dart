@@ -34,6 +34,15 @@ class AppConstants {
     'discAngle',
   ];
   
+  // Pro Players (for Form Coach comparison)
+  static const List<String> proPlayers = [
+    'Paul McBeth',
+    'Ricky Wysocki',
+    'Eagle McMahon',
+    'Gannon Buhr',
+    'Calvin Heimburg',
+  ];
+
   // Roulette Configuration
   static const List<String> defaultDiscs = [
     'Putter',

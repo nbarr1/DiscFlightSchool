@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/video_service.dart';
 import '../../services/posture_analysis_service.dart';
+import '../../utils/constants.dart';
 import 'posture_analysis_screen.dart';
 import 'video_trim_screen.dart';
 // import 'comparison_screen.dart'; // Hidden for now — video comparison TBD
@@ -16,14 +17,6 @@ class FormCoachScreen extends StatefulWidget {
 class _FormCoachScreenState extends State<FormCoachScreen> {
   String? _selectedPro;
   String _throwType = 'BH';
-
-  final List<String> _proDgPlayers = [
-    'Paul McBeth',
-    'Ricky Wysocki',
-    'Eagle McMahon',
-    'Gannon Buhr',
-    'Calvin Heimburg',
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -51,12 +44,12 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: _selectedPro,
+                      initialValue: _selectedPro,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         hintText: 'Select a pro player (optional)',
                       ),
-                      items: _proDgPlayers.map((pro) {
+                      items: AppConstants.proPlayers.map((pro) {
                         return DropdownMenuItem(
                           value: pro,
                           child: Text(pro),

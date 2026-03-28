@@ -5,6 +5,7 @@ import '../../services/feedback_service.dart';
 import '../../services/posture_analysis_service.dart';
 import '../../services/video_frame_extractor.dart';
 import '../../models/form_analysis.dart';
+import '../../utils/constants.dart';
 import '../../utils/pro_data_parser.dart';
 import '../../widgets/skeleton_overlay.dart';
 import 'phase_comparison_screen.dart';
@@ -55,6 +56,10 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   bool _isVerifying = false;
   int _verificationPhaseIndex = 0;
 
+  // Pro selector state (allows switching pro after analysis)
+  String? _selectedPro;
+  String _selectedThrowType = 'BH';
+
   // Manual phase selection fallback (used when phaseTimestamps == null)
   bool _phaseSelectionMode = false;
   final Map<String, int> _phaseFrames = {};
@@ -70,6 +75,8 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   void initState() {
     super.initState();
     _analysis = widget.analysis;
+    _selectedPro = widget.proPlayer;
+    _selectedThrowType = widget.throwType;
     if (widget.videoPath != null) {
       _initializeVideo();
       _startAnalysis();
@@ -470,8 +477,11 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                       // Score card
                       _buildScoreCard(),
 
+                      // Pro player selector (switch without re-analyzing)
+                      _buildProSelector(),
+
                       // Phase selection / comparison
-                      if (widget.proPlayer != null && _analysis != null)
+                      if (_selectedPro != null && _analysis != null)
                         _buildPhaseComparisonSection(),
 
                       // Angle charts
@@ -587,6 +597,77 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
     );
   }
 
+  Widget _buildProSelector() {
+    final postureService = Provider.of<PostureAnalysisService>(context, listen: false);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Compare With Pro',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _selectedPro,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'Select a pro player',
+                isDense: true,
+              ),
+              items: [
+                const DropdownMenuItem<String>(
+                  value: null,
+                  child: Text('None'),
+                ),
+                ...AppConstants.proPlayers.map((pro) {
+                  return DropdownMenuItem(
+                    value: pro,
+                    child: Text(pro),
+                  );
+                }),
+              ],
+              onChanged: (pro) {
+                setState(() {
+                  _selectedPro = pro;
+                  _phaseSelectionMode = false;
+                  _phaseFrames.clear();
+                });
+                if (pro != null) {
+                  postureService.loadProFormData(pro, throwType: _selectedThrowType);
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'BH', label: Text('Backhand')),
+                ButtonSegment(value: 'FH', label: Text('Forehand')),
+              ],
+              selected: {_selectedThrowType},
+              onSelectionChanged: (selection) {
+                setState(() {
+                  _selectedThrowType = selection.first;
+                  _phaseSelectionMode = false;
+                  _phaseFrames.clear();
+                });
+                if (_selectedPro != null) {
+                  postureService.loadProFormData(_selectedPro!, throwType: _selectedThrowType);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildScoreCard() {
     final score = _analysis!.score;
     final color = _getScoreColor(score);
@@ -655,7 +736,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   }
 
   Widget _buildPhaseComparisonSection() {
-    final throwType = widget.throwType;
+    final throwType = _selectedThrowType;
     final phases = ProBaselineParser.getPhaseNames(throwType);
 
     // When phase timestamps were provided (via PhaseFrameSelectorScreen),
@@ -677,7 +758,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
               builder: (_) => PhaseComparisonScreen(
                 userAnalysis: _analysis!,
                 phaseFrames: phaseFrames,
-                proName: widget.proPlayer!,
+                proName: _selectedPro!,
                 throwType: throwType,
               ),
             ),
@@ -777,7 +858,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                           builder: (context) => PhaseComparisonScreen(
                             userAnalysis: _analysis!,
                             phaseFrames: Map.from(_phaseFrames),
-                            proName: widget.proPlayer!,
+                            proName: _selectedPro!,
                             throwType: throwType,
                           ),
                         ),
