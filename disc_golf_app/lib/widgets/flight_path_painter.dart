@@ -56,12 +56,14 @@ class FlightPathPainter extends CustomPainter {
 
   double _getMaxX() {
     if (pathPoints.isEmpty) return 1.0;
-    return pathPoints.map((p) => p.dx).reduce((a, b) => a > b ? a : b);
+    final maxVal = pathPoints.map((p) => p.dx).reduce((a, b) => a > b ? a : b);
+    return maxVal == 0.0 ? 1.0 : maxVal;
   }
 
   double _getMaxY() {
     if (pathPoints.isEmpty) return 1.0;
-    return pathPoints.map((p) => p.dy).reduce((a, b) => a > b ? a : b);
+    final maxVal = pathPoints.map((p) => p.dy).reduce((a, b) => a > b ? a : b);
+    return maxVal == 0.0 ? 1.0 : maxVal;
   }
 
   @override
@@ -106,7 +108,7 @@ class _FlightPathWidgetState extends State<FlightPathWidget>
         return Offset.zero;
       }).toList();
     } catch (e) {
-      print('Error parsing flight path: $e');
+      debugPrint('Error parsing flight path: $e');
       return [];
     }
   }

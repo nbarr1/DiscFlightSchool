@@ -12,7 +12,7 @@ class ThrowRecord {
     this.isPutt = false,
   });
 
-  double get multiplier => challenge.getDifficultyMultiplier();
+  double get multiplier => challenge.difficultyMultiplier;
 
   Map<String, dynamic> toJson() {
     return {

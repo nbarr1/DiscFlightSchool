@@ -157,10 +157,7 @@ class ScoringService extends ChangeNotifier {
   }
 
   ScoredRound? getRoundById(String id) {
-    try {
-      return _savedRounds.firstWhere((round) => round.id == id);
-    } catch (e) {
-      return null;
-    }
+    final index = _savedRounds.indexWhere((round) => round.id == id);
+    return index == -1 ? null : _savedRounds[index];
   }
 }

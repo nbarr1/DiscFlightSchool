@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class PythonBridgeService {
@@ -25,7 +26,7 @@ class PythonBridgeService {
         return jsonDecode(response.body);
       }
     } catch (e) {
-      print('Error tracking disc: $e');
+      debugPrint('Error tracking disc: $e');
     }
     return null;
   }
@@ -42,7 +43,7 @@ class PythonBridgeService {
         return jsonDecode(response.body);
       }
     } catch (e) {
-      print('Error analyzing pose: $e');
+      debugPrint('Error analyzing pose: $e');
     }
     return null;
   }

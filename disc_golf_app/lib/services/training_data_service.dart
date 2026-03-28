@@ -505,8 +505,13 @@ class TrainingDataService extends ChangeNotifier {
       final file = File('${dataDir.path}/$_manifestFile');
       if (await file.exists()) {
         final content = await file.readAsString();
-        final list = jsonDecode(content) as List;
-        _samples = list
+        final decoded = jsonDecode(content);
+        if (decoded is! List) {
+          debugPrint('Training manifest is not a JSON array, resetting');
+          _samples = [];
+          return;
+        }
+        _samples = decoded
             .map((e) => TrainingSample.fromJson(e as Map<String, dynamic>))
             .toList();
       }

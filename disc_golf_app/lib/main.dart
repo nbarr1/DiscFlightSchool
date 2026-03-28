@@ -12,8 +12,23 @@ void main() {
   runApp(const DiscGolfApp());
 }
 
-class DiscGolfApp extends StatelessWidget {
+class DiscGolfApp extends StatefulWidget {
   const DiscGolfApp({super.key});
+
+  @override
+  State<DiscGolfApp> createState() => _DiscGolfAppState();
+}
+
+class _DiscGolfAppState extends State<DiscGolfApp> {
+  final _postureAnalysisService = PostureAnalysisService();
+  final _discDetectionService = DiscDetectionService();
+
+  @override
+  void dispose() {
+    _postureAnalysisService.dispose();
+    _discDetectionService.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,9 +36,9 @@ class DiscGolfApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => TrackingService()),
         ChangeNotifierProvider(create: (_) => VideoService()),
-        ChangeNotifierProvider(create: (_) => PostureAnalysisService()),
+        ChangeNotifierProvider.value(value: _postureAnalysisService),
         ChangeNotifierProvider(create: (_) => ScoringService()),
-        ChangeNotifierProvider(create: (_) => DiscDetectionService()),
+        ChangeNotifierProvider.value(value: _discDetectionService),
         ChangeNotifierProvider(create: (_) => TrainingDataService()..init()),
       ],
       child: MaterialApp(

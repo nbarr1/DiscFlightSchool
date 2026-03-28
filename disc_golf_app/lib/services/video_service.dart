@@ -152,13 +152,6 @@ class VideoService extends ChangeNotifier {
     }
   }
 
-  /// Get thumbnail from video (placeholder for future implementation)
-  Future<String?> getVideoThumbnail(String videoPath) async {
-    // TODO: Implement thumbnail generation using video_thumbnail package
-    // For now, return null
-    return null;
-  }
-
   /// Validate video file
   bool isValidVideoFile(String path) {
     final validExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.m4v'];

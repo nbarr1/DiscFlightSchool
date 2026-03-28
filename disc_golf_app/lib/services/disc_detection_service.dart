@@ -87,6 +87,11 @@ class DiscDetectionService extends ChangeNotifier {
 
   static const int _inputSize = 320;
   static const double _confidenceThreshold = 0.003;
+  /// Maximum normalized distance a detection can jump per frame-step
+  /// during spatial coherence filtering (8% of frame dimension).
+  static const double _maxJumpPerFrame = 0.08;
+  /// Maximum consecutive frames to skip when building a coherent chain.
+  static const int _maxChainGap = 5;
 
   /// Load the TFLite model. Uses a custom (retrained) model if available,
   /// otherwise falls back to the bundled asset model.
@@ -307,8 +312,10 @@ class DiscDetectionService extends ChangeNotifier {
 
     final inputImage = _preprocessImage(image);
 
-    final outputShape = _interpreter!.getOutputTensor(0).shape;
-    final outputType = _interpreter!.getOutputTensor(0).type;
+    final outputTensor = _interpreter!.getOutputTensor(0);
+    final outputShape = outputTensor.shape;
+    final outputType = outputTensor.type;
+    if (outputShape.length < 3) return null;
 
     final outputBuffer = List.generate(
       outputShape[0],
@@ -434,8 +441,8 @@ class DiscDetectionService extends ChangeNotifier {
   List<DiscDetection> _filterSpatialCoherence(
     List<DiscDetection> detections,
     int totalFrames, {
-    double maxJumpPerFrame = 0.08, // Max 8% of frame per frame-step
-    int maxGap = 5, // Max frames to skip when looking for next
+    double maxJumpPerFrame = _maxJumpPerFrame,
+    int maxGap = _maxChainGap,
     double fps = 10.0,
   }) {
     if (detections.length < 3) return detections;

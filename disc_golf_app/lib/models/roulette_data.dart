@@ -64,7 +64,7 @@ class RouletteResult {
   final PuttStyle? puttStyle; // Non-null when this is a putting challenge
   final DateTime timestamp;
   
-  double getDifficultyMultiplier() {
+  double get difficultyMultiplier {
   double multiplier = 1.0;
   
   // Shot type difficulty
@@ -307,6 +307,20 @@ class GameSession {
     required this.startedAt,
     this.endedAt,
   });
+
+  factory GameSession.fromJson(Map<String, dynamic> json) {
+    return GameSession(
+      id: json['id'] as String,
+      players: List<String>.from(json['players'] as List),
+      results: (json['results'] as List)
+          .map((r) => RouletteResult.fromJson(r as Map<String, dynamic>))
+          .toList(),
+      startedAt: DateTime.parse(json['startedAt'] as String),
+      endedAt: json['endedAt'] != null
+          ? DateTime.parse(json['endedAt'] as String)
+          : null,
+    );
+  }
 
   Map<String, dynamic> toJson() {
     return {

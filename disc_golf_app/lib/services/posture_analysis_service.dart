@@ -85,8 +85,10 @@ class PostureAnalysisService extends ChangeNotifier {
       }
       
       if (frames.isEmpty) {
-        debugPrint('No poses detected in any frame, using mock data');
-        return _generateMockAnalysis(videoPath);
+        debugPrint('WARNING: No poses detected in any frame — returning mock data');
+        final mock = _generateMockAnalysis(videoPath);
+        mock.isMock = true;
+        return mock;
       }
 
       // Smooth angles across frames to reduce pose estimation noise
@@ -110,7 +112,9 @@ class PostureAnalysisService extends ChangeNotifier {
       return analysis;
     } catch (e) {
       debugPrint('Error analyzing form: $e');
-      return _generateMockAnalysis(videoPath);
+      final mock = _generateMockAnalysis(videoPath);
+      mock.isMock = true;
+      return mock;
     } finally {
       // Cleanup extracted frames
       if (framePaths != null) {

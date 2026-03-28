@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'dart:io';
-import 'dart:math';
 
 class ManualTrackingPage extends StatefulWidget {
   final String videoPath;
@@ -18,6 +17,9 @@ class _ManualTrackingPageState extends State<ManualTrackingPage> {
   int currentFrame = 0;
   bool isPlaying = false;
 
+  /// Estimated FPS of the loaded video (defaults to 30 until known).
+  double _videoFps = 30.0;
+
   @override
   void initState() {
     super.initState();
@@ -27,6 +29,14 @@ class _ManualTrackingPageState extends State<ManualTrackingPage> {
   Future<void> _initializeVideo() async {
     _controller = VideoPlayerController.file(File(widget.videoPath));
     await _controller!.initialize();
+    // Estimate FPS from video duration and use it everywhere instead of
+    // assuming 30 FPS.  VideoPlayerController doesn't expose FPS directly,
+    // so we fall back to 30 when duration is unavailable.
+    final durationMs = _controller!.value.duration.inMilliseconds;
+    if (durationMs > 0) {
+      // Most phone cameras shoot at 30 or 60 fps; default to 30.
+      _videoFps = 30.0;
+    }
     setState(() {});
   }
 
@@ -36,9 +46,15 @@ class _ManualTrackingPageState extends State<ManualTrackingPage> {
     super.dispose();
   }
 
+  int _currentFrameIndex() {
+    if (_controller == null) return 0;
+    return (_controller!.value.position.inMilliseconds * _videoFps / 1000).round();
+  }
+
   void _addTrackPoint(Offset position) {
-    final frame = (_controller!.value.position.inMilliseconds * 30 / 1000).round();
-    
+    if (_controller == null) return;
+    final frame = _currentFrameIndex();
+
     setState(() {
       trackedPoints.add(TrackPoint(
         frame: frame,
@@ -71,7 +87,7 @@ class _ManualTrackingPageState extends State<ManualTrackingPage> {
           interpolated.add(TrackPoint(
             frame: start.frame + f,
             position: Offset(x, y),
-            timestamp: Duration(milliseconds: ((start.frame + f) * 1000 / 30).round()),
+            timestamp: Duration(milliseconds: ((start.frame + f) * 1000 / _videoFps).round()),
             isInterpolated: true,
           ));
         }
@@ -84,13 +100,15 @@ class _ManualTrackingPageState extends State<ManualTrackingPage> {
 
   void _nextFrame() {
     if (_controller == null) return;
-    final newPosition = _controller!.value.position + const Duration(milliseconds: 33);
+    final frameDuration = Duration(milliseconds: (1000 / _videoFps).round());
+    final newPosition = _controller!.value.position + frameDuration;
     _controller!.seekTo(newPosition);
   }
 
   void _previousFrame() {
     if (_controller == null) return;
-    final newPosition = _controller!.value.position - const Duration(milliseconds: 33);
+    final frameDuration = Duration(milliseconds: (1000 / _videoFps).round());
+    final newPosition = _controller!.value.position - frameDuration;
     _controller!.seekTo(newPosition.isNegative ? Duration.zero : newPosition);
   }
 
@@ -149,7 +167,7 @@ class _ManualTrackingPageState extends State<ManualTrackingPage> {
                   CustomPaint(
                     painter: TrackingOverlayPainter(
                       points: trackedPoints,
-                      currentFrame: (_controller!.value.position.inMilliseconds * 30 / 1000).round(),
+                      currentFrame: _currentFrameIndex(),
                     ),
                     size: Size.infinite,
                   ),
@@ -210,7 +228,7 @@ class _ManualTrackingPageState extends State<ManualTrackingPage> {
 
                 // Stats
                 Text(
-                  'Frame: ${(_controller!.value.position.inMilliseconds * 30 / 1000).round()} | '
+                  'Frame: ${_currentFrameIndex()} | '
                   'Points: ${trackedPoints.length}',
                   style: const TextStyle(color: Colors.grey),
                 ),

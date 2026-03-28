@@ -49,6 +49,8 @@ class FormAnalysis {
   final String videoPath;
   final List<FormFrame> frames;
   final double score;
+  /// True when pose detection failed and mock data was substituted.
+  bool isMock;
 
   FormAnalysis({
     required this.id,
@@ -56,6 +58,7 @@ class FormAnalysis {
     required this.videoPath,
     required this.frames,
     required this.score,
+    this.isMock = false,
   });
 
   Map<String, dynamic> toJson() {

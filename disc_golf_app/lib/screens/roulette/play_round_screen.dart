@@ -531,7 +531,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
 
   Widget _buildChallengeCard() {
     final challenge = _currentThrowChallenge!;
-    final difficulty = challenge.getDifficultyMultiplier();
+    final difficulty = challenge.difficultyMultiplier;
 
     return Card(
       color: _isPutting ? Colors.teal.shade50 : Colors.purple.shade50,

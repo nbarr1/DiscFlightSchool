@@ -32,7 +32,7 @@ class _FlightAnalysisScreenState extends State<FlightAnalysisScreen> {
         isLoading = false;
       });
     } catch (e) {
-      print('Error loading $e');
+      debugPrint('Error loading $e');
       setState(() {
         errorMessage = 'Failed to load analysis data. Please run the Python analysis first.';
         isLoading = false;

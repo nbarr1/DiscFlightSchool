@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class FlightDataService {
@@ -7,7 +8,7 @@ class FlightDataService {
     try {
       return await rootBundle.loadString('assets/data/output_coordinates.json');
     } catch (e) {
-      print('Error loading flight path: $e');
+      debugPrint('Error loading flight path: $e');
       rethrow;
     }
   }
@@ -18,7 +19,7 @@ class FlightDataService {
       final String jsonString = await rootBundle.loadString('assets/data/analysis_results.json');
       return json.decode(jsonString) as Map<String, dynamic>;
     } catch (e) {
-      print('Error loading analysis results: $e');
+      debugPrint('Error loading analysis results: $e');
       rethrow;
     }
   }
