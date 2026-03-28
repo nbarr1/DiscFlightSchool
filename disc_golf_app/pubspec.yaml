@@ -13,7 +13,8 @@ dependencies:
   video_player: ^2.8.2
   path_provider: ^2.1.2
   provider: ^6.1.1
-  image_picker: ^1.0.7
+  image_picker: ^1.1.0
+  file_picker: ^8.1.2
   video_thumbnail: ^0.5.3
   google_mlkit_pose_detection: ^0.14.1
   shared_preferences: ^2.2.2

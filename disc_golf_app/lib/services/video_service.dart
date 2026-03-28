@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 
 class VideoService extends ChangeNotifier {
@@ -38,19 +39,23 @@ class VideoService extends ChangeNotifier {
     }
   }
 
-  /// Select an existing video from the gallery
+  /// Select an existing video from the gallery.
+  /// Uses file_picker (Storage Access Framework) to avoid the image_picker_android
+  /// Pigeon channel bug that prevents video selection on some Android devices.
   Future<String?> selectVideo() async {
     _lastError = null;
     try {
-      final XFile? video = await _picker.pickVideo(
-        source: ImageSource.gallery,
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.video,
+        allowMultiple: false,
       );
 
-      if (video != null) {
-        _currentVideoPath = video.path;
-        _addToRecentVideos(video.path);
+      final path = result?.files.single.path;
+      if (path != null) {
+        _currentVideoPath = path;
+        _addToRecentVideos(path);
         notifyListeners();
-        return video.path;
+        return path;
       }
       _lastError = 'No video selected from gallery.';
       return null;
