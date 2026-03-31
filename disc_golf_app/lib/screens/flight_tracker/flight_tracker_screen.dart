@@ -104,9 +104,9 @@ class _FlightTrackerScreenState extends State<FlightTrackerScreen> {
                     _navigateToTrim(videoPath);
                   } else if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Could Not Open Gallery. Check Storage Permission In Settings.'),
-                        duration: Duration(seconds: 4),
+                      SnackBar(
+                        content: Text(videoService.lastError ?? 'Could Not Open Gallery. Check Storage Permission In Settings.'),
+                        duration: const Duration(seconds: 6),
                       ),
                     );
                   }

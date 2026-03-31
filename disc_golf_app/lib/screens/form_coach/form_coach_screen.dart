@@ -113,9 +113,9 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
                   _navigateToAnalysis(videoPath);
                 } else if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Could Not Open Camera. Check Camera Permission In Settings.'),
-                      duration: Duration(seconds: 4),
+                    SnackBar(
+                      content: Text(videoService.lastError ?? 'Could Not Open Camera. Check Camera Permission In Settings.'),
+                      duration: const Duration(seconds: 6),
                     ),
                   );
                 }

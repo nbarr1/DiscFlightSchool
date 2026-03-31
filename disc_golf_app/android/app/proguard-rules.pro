@@ -2,6 +2,9 @@
 -keep class io.flutter.** { *; }
 -keep class io.flutter.plugins.** { *; }
 
+# File Picker
+-keep class com.mr.flutter.plugin.filepicker.** { *; }
+
 # TFLite
 -keep class org.tensorflow.lite.** { *; }
 
