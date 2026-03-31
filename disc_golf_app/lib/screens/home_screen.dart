@@ -4,6 +4,7 @@ import 'form_coach/form_coach_screen.dart';
 import 'roulette/roulette_screen.dart';
 import 'roulette/start_round_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'knowledge_base/knowledge_base_screen.dart';
 import 'settings/training_settings_screen.dart';
 import 'gallery/video_gallery_screen.dart';
 
@@ -113,6 +114,20 @@ class HomeScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (context) => const StartRoundScreen(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildFeatureButton(
+                  context,
+                  'Knowledge Base',
+                  'Research-backed tips and AI-powered FAQ',
+                  Icons.menu_book,
+                  Colors.teal,
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const KnowledgeBaseScreen(),
                     ),
                   ),
                 ),

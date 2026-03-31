@@ -23,6 +23,7 @@ dependencies:
   ffmpeg_kit_flutter_new: ^4.1.0
   gal: ^2.3.0
   flutter_svg: ^2.0.10
+  http: ^1.2.1
 
 dev_dependencies:
   flutter_test:
@@ -38,3 +39,4 @@ flutter:
     - assets/data/pro_baseline_db.json
     - assets/models/disc_detector.tflite
     - assets/images/disc_golf_basket.svg
+    - assets/data/knowledge_base.json

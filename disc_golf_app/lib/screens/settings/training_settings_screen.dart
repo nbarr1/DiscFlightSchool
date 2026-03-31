@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../services/knowledge_base_service.dart';
 import '../../services/training_data_service.dart';
 
 class TrainingSettingsScreen extends StatefulWidget {
@@ -205,6 +206,92 @@ class _TrainingSettingsScreenState extends State<TrainingSettingsScreen> {
               ),
               const SizedBox(height: 24),
 
+              // AI API Key
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.auto_awesome,
+                              size: 20, color: Colors.teal.shade300),
+                          const SizedBox(width: 8),
+                          Text(
+                            'AI Search (Knowledge Base)',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Enter your Anthropic API key to enable AI-powered '
+                        'research search in the Knowledge Base.',
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Consumer<KnowledgeBaseService>(
+                        builder: (context, kbService, _) {
+                          return Row(
+                            children: [
+                              Icon(
+                                kbService.hasApiKey
+                                    ? Icons.check_circle
+                                    : Icons.warning_amber,
+                                size: 18,
+                                color: kbService.hasApiKey
+                                    ? Colors.green
+                                    : Colors.orange,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                kbService.hasApiKey
+                                    ? 'API key saved'
+                                    : 'No API key set',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: kbService.hasApiKey
+                                      ? Colors.green
+                                      : Colors.orange,
+                                ),
+                              ),
+                              const Spacer(),
+                              if (kbService.hasApiKey)
+                                TextButton(
+                                  onPressed: () async {
+                                    await kbService.clearApiKey();
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                            content:
+                                                Text('API key removed')),
+                                      );
+                                    }
+                                  },
+                                  child: const Text('Remove',
+                                      style: TextStyle(color: Colors.red)),
+                                )
+                              else
+                                ElevatedButton(
+                                  onPressed: () =>
+                                      _showApiKeyDialog(context, kbService),
+                                  child: const Text('Add Key'),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
               // Advanced: Custom server URL
               ExpansionTile(
                 title: const Text('Advanced'),
@@ -261,6 +348,56 @@ class _TrainingSettingsScreenState extends State<TrainingSettingsScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  void _showApiKeyDialog(
+      BuildContext context, KnowledgeBaseService kbService) {
+    final keyController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Anthropic API Key'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Your key is stored locally on this device and is only '
+              'used to query the Claude API for research answers.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: keyController,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'sk-ant-...',
+                labelText: 'API Key',
+              ),
+              obscureText: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (keyController.text.trim().isNotEmpty) {
+                await kbService.setApiKey(keyController.text);
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('API key saved')),
+                  );
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
       ),
     );
   }

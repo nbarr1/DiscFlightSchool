@@ -5,6 +5,7 @@ import 'services/video_service.dart';
 import 'services/posture_analysis_service.dart';
 import 'services/scoring_service.dart';
 import 'services/disc_detection_service.dart';
+import 'services/knowledge_base_service.dart';
 import 'services/training_data_service.dart';
 import 'screens/home_screen.dart';
 
@@ -40,6 +41,7 @@ class _DiscGolfAppState extends State<DiscGolfApp> {
         ChangeNotifierProvider(create: (_) => ScoringService()),
         ChangeNotifierProvider.value(value: _discDetectionService),
         ChangeNotifierProvider(create: (_) => TrainingDataService()..init()),
+        ChangeNotifierProvider(create: (_) => KnowledgeBaseService()),
       ],
       child: MaterialApp(
         title: 'Disc Flight School',

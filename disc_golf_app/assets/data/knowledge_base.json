@@ -1,0 +1,497 @@
+{
+  "categories": [
+    {
+      "id": "biomechanics",
+      "name": "Biomechanics & Form",
+      "iconName": "accessibility_new",
+      "colorValue": 4294940672,
+      "description": "Research-backed insights on throwing mechanics, muscle activation, and injury prevention"
+    },
+    {
+      "id": "flight",
+      "name": "Disc Selection & Flight Physics",
+      "iconName": "album",
+      "colorValue": 4282557941,
+      "description": "How disc design, aerodynamics, and throw parameters shape flight paths"
+    },
+    {
+      "id": "strategy",
+      "name": "Course Management & Strategy",
+      "iconName": "map",
+      "colorValue": 4283215696,
+      "description": "Data-driven approaches to disc selection, shot planning, and scoring"
+    },
+    {
+      "id": "mental",
+      "name": "Mental Game & Performance",
+      "iconName": "psychology",
+      "colorValue": 4278228616,
+      "description": "Focus, gaze control, and psychological techniques backed by research"
+    }
+  ],
+  "studies": [
+    {
+      "id": "holcomb_2023",
+      "title": "EMG Activation of the Upper Extremity During a Standing Backhand Disc Golf Throw",
+      "authors": "Holcomb, L.",
+      "year": 2023,
+      "filename": "EMG Activation of the Upper Extremity During a Standing Backhand.pdf",
+      "summary": "Measured muscle activation timing during backhand throws using electromyography. Found that the triceps activate first (at 15.6% through the throw), followed by the forearm extensors (21.3%), and finally the posterior deltoid (50.3%). High individual variability in activation patterns suggests personalized coaching is important."
+    },
+    {
+      "id": "greenway_2007",
+      "title": "A Biomechanical Analysis of the Backhand Disc Golf Drive for Distance",
+      "authors": "Greenway, T.",
+      "year": 2007,
+      "filename": "Greenway_okstate_0664M_2255.pdf",
+      "summary": "Identified eight distinct phases in the backhand drive: Approach, Preload, Transition, Load, Cross Over, Pull, Plant, and Release. Video analysis of 15 advanced male disc golfers established the first standardized kinematic framework for disc golf throwing. Proper phase sequencing is critical for distance."
+    },
+    {
+      "id": "attias_2024",
+      "title": "Biomechanical Analysis of Disc Golf Throws to Improve Performance",
+      "authors": "Attias, C.E., Webster, K., Dickerson, C., McPhee, J.",
+      "year": 2024,
+      "filename": "ISEA_2024_paper_108.pdf",
+      "summary": "Compared kinematics of players at different skill levels. Higher-rated players exhibited faster shoulder horizontal abduction, greater trunk rotation range and velocity, and faster wrist snap during forehand release. Seamless kinetic chain transitions differentiate skilled from recreational players."
+    },
+    {
+      "id": "turner_2024",
+      "title": "Launch Speed and Spin versus Player Skill Level for Disc Golf Throws",
+      "authors": "Turner, A., Caldwell, A., Webster, K., Dickerson, C., McPhee, J.",
+      "year": 2024,
+      "filename": "ISEA_2024_paper_131.pdf",
+      "summary": "Measured launch speed and spin rate across PDGA skill levels. Backhand speeds ranged from 22.84 m/s (under 900 rating) to 30.16 m/s (elite). Spin ranged from 920 to 1332 rpm. Spin correlation with skill (r=0.77) was stronger than speed correlation (r=0.72), making spin the more consistent performance differentiator."
+    },
+    {
+      "id": "tervonen_2025",
+      "title": "Lead Leg Ground Reaction Forces and Knee Kinematics in the Disc Golf Backhand Throw",
+      "authors": "Tervonen, J.",
+      "year": 2025,
+      "filename": "URN_NBN_fi_jyu-202506024718.pdf",
+      "summary": "Studied ground reaction forces and knee mechanics during backhand throws. Higher launch speed correlated with lower peak braking force (r=-0.748) and greater peak knee extension velocity (r=0.781). Players who push through rather than brake with the plant foot generate more disc speed."
+    },
+    {
+      "id": "giles_2024",
+      "title": "Physiological and Biomechanical Perspectives on Elbow Function During Forehand and Backhand Disc Golf Throws",
+      "authors": "Giles, L.R.",
+      "year": 2024,
+      "filename": "fulltext.pdf",
+      "summary": "PhD dissertation studying elbow stress in disc golf. Found that 81% of disc golf players report overuse injuries. Elbow torque during throws can exceed safe limits established in other throwing sports. Critically, handgrip strength, lean body mass, and torque showed no significant correlation to throwing distance — technique matters more than strength."
+    },
+    {
+      "id": "kannankunni_2025",
+      "title": "Balance Assessment of Disc Golf Players by a Smartphone",
+      "authors": "Kannankunni, J.P.",
+      "year": 2025,
+      "filename": "Balance Assessment of Disc Golf Players by a Smartphone.pdf",
+      "summary": "Compared balance and gait metrics between disc golfers and non-players using smartphone sensors. Disc golf players showed significantly improved gait speed and stride length (p<0.05) but no improvement in static balance. The sport improves dynamic movement quality but should be supplemented with targeted balance training."
+    },
+    {
+      "id": "immonen_2021",
+      "title": "Optimal Design for Disc Golf by Computational Fluid Dynamics and Machine Learning",
+      "authors": "Immonen, E.",
+      "year": 2021,
+      "filename": "s00158-021-03107-7.pdf",
+      "summary": "Used CFD simulations and machine learning to optimize disc golf disc shapes. Achieved optimal drag coefficients of 0.52 (PDGA-legal) and lift coefficients of 0.19. Demonstrated clear aerodynamic tradeoffs between drivers (minimizing drag) and putters (maximizing lift), with midranges as a compromise."
+    },
+    {
+      "id": "giljarhus_2022",
+      "title": "Disc Golf Trajectory Modelling Combining Computational Fluid Dynamics and Rigid Body Dynamics",
+      "authors": "Giljarhus, K.E.T., Gooding, M.T., Njaerheim, J.",
+      "year": 2022,
+      "filename": "s12283-022-00390-5.pdf",
+      "summary": "Built a validated trajectory simulation for disc golf using CFD and rigid body dynamics. Tested on Innova Wraith, Firebird, and Roadrunner. Found that manufacturing variance of approximately 3 mm in disc height significantly affects flight characteristics. Confirmed that release angle, spin rate, and velocity critically determine trajectory."
+    },
+    {
+      "id": "koch_2024",
+      "title": "The Effects of Thumb Position on Backhand Disc Golf Throws of a Mid-Range Disc",
+      "authors": "Koch, N., McGuire, H., Cole, C., Lindsey, Z.",
+      "year": 2024,
+      "filename": "105125_1_5.0229599.pdf",
+      "summary": "Studied how thumb placement affects throw performance. Positioning the thumb approximately 3 cm inward from the outer rim edge produced the best balance of translational speed and spin rate. Outer edge thumb placement maximized spin but reduced distance, while too far inward reduced both."
+    },
+    {
+      "id": "hirvonen_2025",
+      "title": "Disc Golfer's Gaze Control During Putting: Professional versus Amateur",
+      "authors": "Hirvonen, M.",
+      "year": 2025,
+      "filename": "URN_NBN_fi_jyu-202506064959.pdf",
+      "summary": "Compared gaze behavior between professional and amateur disc golfers during putting at 5-20 meters. Both groups averaged over 2000 ms of quiet eye duration. The key differentiator was fixation count: fewer eye movements between release and landing correlated with better results. Quiet eye control became statistically significant at distances beyond 15 meters."
+    }
+  ],
+  "articles": [
+    {
+      "id": "bio_faq_1",
+      "category": "biomechanics",
+      "type": "faq",
+      "question": "What muscles are most important for a backhand throw?",
+      "answer": "EMG research shows the backhand throw relies on a precise sequential activation pattern rather than any single dominant muscle. The triceps activate first (peaking at about 15.6% through the throw sequence), initiating the arm extension. The forearm extensors, particularly the extensor carpi ulnaris, fire next (at 21.3%) to generate wrist snap. The posterior deltoid peaks last (at 50.3%), driving the follow-through. This sequential \"kinetic chain\" — from core to shoulder to elbow to wrist — is how power transfers efficiently to the disc. Training should focus on coordination and timing of this chain rather than raw strength in any one muscle group.",
+      "keyFindings": [
+        "Triceps activate first at 15.6% through the throw sequence",
+        "Forearm extensors (ECU) peak at 21.3% for wrist snap",
+        "Posterior deltoid peaks at 50.3% for follow-through",
+        "High individual variability (ICC 0.03-0.35) means personalized coaching matters"
+      ],
+      "sourceIds": ["holcomb_2023", "attias_2024"]
+    },
+    {
+      "id": "bio_faq_2",
+      "category": "biomechanics",
+      "type": "faq",
+      "question": "What are the phases of a disc golf backhand throw?",
+      "answer": "Biomechanical research has identified eight distinct phases in the backhand drive, divided between four lower body and four upper body movements. The sequence is: (1) Approach — the run-up or walk-up, (2) Preload — weight shifts to the rear, (3) Transition — hips begin rotating forward, (4) Load — upper body coils against the hips, (5) Cross Over — the throwing arm crosses the chest, (6) Pull — the arm accelerates forward, (7) Plant — the lead foot plants and braces, (8) Release — the disc leaves the hand. Skipping or rushing any phase — especially the lower body phases — significantly reduces distance. Many amateurs rush the upper body before the lower body is ready, breaking the kinetic chain.",
+      "keyFindings": [
+        "Eight distinct phases identified in the backhand drive",
+        "Four lower body phases must sync with four upper body phases",
+        "Skipping or shortcutting phases directly reduces distance",
+        "First standardized kinematic framework for disc golf (2007)"
+      ],
+      "sourceIds": ["greenway_2007"]
+    },
+    {
+      "id": "bio_faq_3",
+      "category": "biomechanics",
+      "type": "faq",
+      "question": "What distinguishes elite disc golfers from recreational players?",
+      "answer": "Research comparing players across PDGA skill levels reveals several measurable differences. Elite players (>999 PDGA rating) achieve backhand speeds of 30.16 m/s with 1332 rpm spin, compared to 22.84 m/s and 920 rpm for sub-900 rated players — roughly 32% more speed and 45% more spin. Biomechanically, higher-rated players show faster shoulder horizontal abduction, greater trunk rotation range and velocity, and faster wrist snap on forehands. Critically, the differences are about movement quality, not muscle size: seamless kinetic chain transitions and coordinated timing separate the elite from the rest.",
+      "keyFindings": [
+        "Elite backhand: 30.16 m/s speed, 1332 rpm spin",
+        "Beginner backhand: 22.84 m/s speed, 920 rpm spin",
+        "32% speed gap and 45% spin gap between skill extremes",
+        "Spin correlation with skill (r=0.77) stronger than speed (r=0.72)"
+      ],
+      "sourceIds": ["turner_2024", "attias_2024"]
+    },
+    {
+      "id": "bio_faq_4",
+      "category": "biomechanics",
+      "type": "faq",
+      "question": "How does lower body mechanics affect throwing distance?",
+      "answer": "The plant (lead) leg plays a critical role in generating disc speed. Research measuring ground reaction forces found that higher launch speed correlates with lower peak braking force (r=-0.748) — meaning better players don't slam the brakes with their front leg. Instead, they push through. Peak knee extension velocity shows a strong positive correlation with disc speed (r=0.781), and greater horizontal ground reaction forces also link to faster throws (r=0.732). The practical takeaway: your plant foot should drive energy forward through explosive knee extension, not absorb it through hard braking.",
+      "keyFindings": [
+        "Lower braking force correlates with higher disc speed (r=-0.748)",
+        "Faster knee extension = faster disc (r=0.781)",
+        "Greater horizontal ground reaction forces = more speed (r=0.732)",
+        "Mean launch speed of 30.7 m/s across tested players"
+      ],
+      "sourceIds": ["tervonen_2025"]
+    },
+    {
+      "id": "bio_faq_5",
+      "category": "biomechanics",
+      "type": "faq",
+      "question": "Where should I position my thumb for a backhand throw?",
+      "answer": "A study testing multiple thumb positions on backhand mid-range throws found that positioning the thumb approximately 3 cm (about 1.2 inches) inward from the outer rim edge produced the best balance of translational speed and spin rate. Placing the thumb on the very outer edge maximized angular speed (spin) but sacrificed forward velocity. Moving too far inward reduced both metrics. The optimal position works because it balances the torque applied to the disc — enough radial distance for good spin, but enough leverage for forward acceleration. This pattern held across both beginners (PDGA <900) and advanced players (900+).",
+      "keyFindings": [
+        "Thumb ~3 cm from rim edge optimizes both speed and spin",
+        "Outer edge placement maximizes spin but reduces distance",
+        "Too far inward reduces both spin and speed",
+        "Pattern consistent across beginner and advanced players"
+      ],
+      "sourceIds": ["koch_2024"]
+    },
+    {
+      "id": "bio_faq_6",
+      "category": "biomechanics",
+      "type": "faq",
+      "question": "How common are disc golf injuries and how can I prevent them?",
+      "answer": "Research shows that 81% of disc golf players report injuries linked to the sport, predominantly from overuse rather than acute trauma. Elbow stress is a particular concern — torque measurements during throws can exceed upper limits established in other throwing sports like baseball. However, the same study found that handgrip strength, lean body mass, and raw torque showed no significant correlation with throwing distance. This means pushing for more power through strength alone increases injury risk without improving performance. Prevention focuses on proper technique, gradual volume increases, adequate warm-up, and listening to persistent joint pain as a signal to improve form rather than push through.",
+      "keyFindings": [
+        "81% of disc golf players report overuse injuries",
+        "Elbow torque can exceed safe limits from other throwing sports",
+        "Grip strength and muscle mass do NOT correlate with distance",
+        "Form and technique are more protective than strength training"
+      ],
+      "sourceIds": ["giles_2024"]
+    },
+    {
+      "id": "bio_faq_7",
+      "category": "biomechanics",
+      "type": "faq",
+      "question": "Does disc golf improve overall fitness and balance?",
+      "answer": "A smartphone-based balance study found that disc golf players showed significantly improved gait speed and stride length compared to non-players (p<0.05). Step lengths were measurably longer on both sides. However, static balance (standing still) showed no significant improvement. This means disc golf effectively improves dynamic movement quality — the lunges, rotations, and weight transfers strengthen walking mechanics — but should be supplemented with dedicated balance exercises if fall prevention or postural stability is a goal. The study also noted that younger players gained more balance benefit than older players.",
+      "keyFindings": [
+        "Disc golfers have significantly better gait speed and stride length",
+        "Right step length (p=0.0028) and left step length (p=0.0094) both improved",
+        "Static balance showed no significant difference from non-players",
+        "Older players gain less balance benefit — supplement with targeted training"
+      ],
+      "sourceIds": ["kannankunni_2025"]
+    },
+    {
+      "id": "bio_tip_1",
+      "category": "biomechanics",
+      "type": "tip",
+      "question": "Sequential Muscle Activation",
+      "answer": "The backhand throw follows a precise activation order: triceps first, forearm extensors second, posterior deltoid last. Practice smooth, sequential engagement rather than trying to fire everything at once.",
+      "keyFindings": [],
+      "sourceIds": ["holcomb_2023"]
+    },
+    {
+      "id": "bio_tip_2",
+      "category": "biomechanics",
+      "type": "tip",
+      "question": "Spin Beats Speed",
+      "answer": "Spin rate correlates more strongly with skill level (r=0.77) than launch speed (r=0.72). Prioritize clean releases that generate consistent spin over raw arm speed.",
+      "keyFindings": [],
+      "sourceIds": ["turner_2024"]
+    },
+    {
+      "id": "bio_tip_3",
+      "category": "biomechanics",
+      "type": "tip",
+      "question": "Push Through, Don't Brake",
+      "answer": "Players who generate lower braking force on their plant foot throw faster (r=-0.748). Focus on explosive knee extension through the plant step rather than slamming the brakes.",
+      "keyFindings": [],
+      "sourceIds": ["tervonen_2025"]
+    },
+    {
+      "id": "bio_tip_4",
+      "category": "biomechanics",
+      "type": "tip",
+      "question": "Form Over Strength",
+      "answer": "Grip strength, lean body mass, and raw torque show no significant correlation with throwing distance. Technique and kinetic chain efficiency matter far more than time in the gym.",
+      "keyFindings": [],
+      "sourceIds": ["giles_2024"]
+    },
+    {
+      "id": "bio_tip_5",
+      "category": "biomechanics",
+      "type": "tip",
+      "question": "Maximize Trunk Rotation",
+      "answer": "Higher-rated players generate greater trunk rotation range and velocity. Core mobility and rotational power are primary differentiators between beginners and advanced throwers.",
+      "keyFindings": [],
+      "sourceIds": ["attias_2024"]
+    },
+    {
+      "id": "flight_faq_1",
+      "category": "flight",
+      "type": "faq",
+      "question": "Why do drivers, midranges, and putters fly so differently?",
+      "answer": "Computational fluid dynamics research reveals that each disc category is optimized for different aerodynamic properties. Drivers are designed to minimize drag (optimal drag coefficient ~0.52 within PDGA rules), allowing them to cut through the air for maximum distance at high speeds. Putters are designed to maximize lift (lift coefficient up to 0.19), providing more stability and glide at slower speeds for precision. Midranges occupy the compromise zone between these extremes. The shape differences — rim width, dome height, edge profile — directly determine these aerodynamic coefficients, which is why you can't simply throw a putter like a driver and expect similar distance.",
+      "keyFindings": [
+        "Optimal PDGA-legal drag coefficient: 0.52 for drivers",
+        "Optimal lift coefficient: 0.19 for putters",
+        "Clear inverse relationship between drag minimization and lift maximization",
+        "Disc shape directly determines lift, drag, and moment coefficients"
+      ],
+      "sourceIds": ["immonen_2021"]
+    },
+    {
+      "id": "flight_faq_2",
+      "category": "flight",
+      "type": "faq",
+      "question": "Why does my disc fly differently than an identical model?",
+      "answer": "Trajectory modelling research found that manufacturing variations of approximately 3 mm in disc height can significantly alter flight characteristics. Even discs of the same model from the same production run may have subtle shape differences that affect lift, drag, and moment coefficients. Additionally, wear patterns (dents, scratches, warping from heat or impact) change the aerodynamic profile over time. This is why experienced players often cycle through multiple copies of the same mold — each one flies slightly differently. If you find a disc that flies perfectly for your throw, treat it well.",
+      "keyFindings": [
+        "3 mm manufacturing variance in disc height significantly changes flight",
+        "Validated through CFD simulation on Innova Wraith, Firebird, and Roadrunner",
+        "Wear and warping further alter aerodynamic profiles",
+        "Release angle, spin, and velocity variations amplify these differences"
+      ],
+      "sourceIds": ["giljarhus_2022"]
+    },
+    {
+      "id": "flight_faq_3",
+      "category": "flight",
+      "type": "faq",
+      "question": "How do release angle and spin affect the flight path?",
+      "answer": "Research combining CFD simulations with rigid body dynamics confirms that small changes in release parameters produce dramatically different trajectories. Spin rate determines gyroscopic stability — higher spin keeps the disc on its intended line longer before fade. Release angle (hyzer, flat, or anhyzer) sets the initial flight direction and interacts with the disc's moment coefficients to produce turn and fade. Velocity determines how long aerodynamic forces act on the disc. The key insight: consistency in these three parameters (angle, spin, velocity) matters as much as disc selection. A consistent release with a mid-range disc will outperform an inconsistent release with a premium driver.",
+      "keyFindings": [
+        "Spin rate controls gyroscopic stability and resistance to fade",
+        "Release angle interacts with moment coefficients for turn/fade behavior",
+        "Small parameter variations produce dramatically different trajectories",
+        "Tested at Reynolds number 3.78x10^5 (typical throwing speeds of ~27 m/s)"
+      ],
+      "sourceIds": ["giljarhus_2022", "koch_2024"]
+    },
+    {
+      "id": "flight_faq_4",
+      "category": "flight",
+      "type": "faq",
+      "question": "How does grip affect spin rate and distance?",
+      "answer": "A study on thumb positioning during backhand throws found a direct relationship between grip placement and the balance of spin versus forward speed. Placing the thumb at the outer edge of the disc maximizes angular speed (spin) due to the larger radial distance from the disc center, but sacrifices translational speed. Moving the thumb approximately 3 cm inward from the rim provides the optimal balance — simultaneously high spin and forward velocity. The torque applied to the disc depends on this radial displacement, so maintaining consistent thumb positioning across throws is one of the simplest ways to improve shot predictability.",
+      "keyFindings": [
+        "Outer thumb = maximum spin but reduced forward speed",
+        "3 cm from rim = best balance of spin and speed",
+        "Linear correlation confirmed between angular and translational speeds",
+        "Results held across both beginner and advanced skill levels"
+      ],
+      "sourceIds": ["koch_2024"]
+    },
+    {
+      "id": "flight_tip_1",
+      "category": "flight",
+      "type": "tip",
+      "question": "Match Disc to Arm Speed",
+      "answer": "If you lack the arm speed for high-speed drivers (>25 m/s), a midrange or fairway driver may actually fly farther. Drivers need high velocity to engage their low-drag design — thrown slowly, they just fade out.",
+      "keyFindings": [],
+      "sourceIds": ["immonen_2021"]
+    },
+    {
+      "id": "flight_tip_2",
+      "category": "flight",
+      "type": "tip",
+      "question": "Disc Condition Matters",
+      "answer": "Manufacturing variations of just 3 mm in disc height change flight characteristics significantly. Worn, dented, or warped discs don't fly like new ones. Test your discs periodically and retire those that have changed.",
+      "keyFindings": [],
+      "sourceIds": ["giljarhus_2022"]
+    },
+    {
+      "id": "flight_tip_3",
+      "category": "flight",
+      "type": "tip",
+      "question": "Consistency Beats Selection",
+      "answer": "Small variations in release angle, spin rate, and velocity produce dramatically different trajectories. A consistent release with a midrange will beat an inconsistent release with a driver every time.",
+      "keyFindings": [],
+      "sourceIds": ["giljarhus_2022", "koch_2024"]
+    },
+    {
+      "id": "strategy_faq_1",
+      "category": "strategy",
+      "type": "faq",
+      "question": "How should I select a disc for a specific hole?",
+      "answer": "Research on disc aerodynamics and player skill levels suggests a data-driven approach. First, consider the distance: drivers are optimized for minimum drag at high speeds, but only generate their intended flight at launch speeds above ~25 m/s. If the hole is within your midrange distance, a midrange's higher lift coefficient provides more control and predictability. Second, consider the line: overstable discs (high moment coefficients) fight wind and fade reliably, while understable discs turn more. Third, match to your actual arm speed — not your aspirational arm speed. Data shows sub-900 rated players average 22.84 m/s, which means many popular high-speed drivers won't perform as designed for the majority of players.",
+      "keyFindings": [
+        "Drivers need high speed to engage low-drag design",
+        "Sub-900 players average 22.84 m/s — below most driver design speeds",
+        "Overstable vs understable determined by moment coefficients",
+        "Midranges offer better lift-to-drag ratio at moderate speeds"
+      ],
+      "sourceIds": ["immonen_2021", "turner_2024"]
+    },
+    {
+      "id": "strategy_faq_2",
+      "category": "strategy",
+      "type": "faq",
+      "question": "Should I focus on backhand or forehand development?",
+      "answer": "Data from skill-level research suggests prioritizing backhand development. Backhand launch speed (r=0.72) and spin (r=0.77) both show stronger correlations with PDGA rating than forehand speed (r=0.63) and spin (r=0.43). This means improvements in your backhand translate more directly to competitive success. That said, having a reliable forehand gives you shot-shaping options that backhand alone can't cover. The research suggests getting your backhand to a high level first, then developing forehand as a complementary tool — not splitting development time equally between both.",
+      "keyFindings": [
+        "Backhand speed correlation with rating: r=0.72",
+        "Backhand spin correlation: r=0.77 (strongest metric)",
+        "Forehand speed correlation: r=0.63 (weaker)",
+        "Forehand spin correlation: r=0.43 (much weaker)"
+      ],
+      "sourceIds": ["turner_2024"]
+    },
+    {
+      "id": "strategy_faq_3",
+      "category": "strategy",
+      "type": "faq",
+      "question": "What's a realistic distance goal for my skill level?",
+      "answer": "Research measuring launch parameters across PDGA rating groups provides concrete benchmarks. Players rated under 900 averaged 22.84 m/s launch speed (roughly 250-300 feet of distance). Players rated 950-999 averaged 26.87 m/s (roughly 350-400 feet). Elite players above 999 averaged 30.16 m/s (400+ feet). Spin rates followed a similar progression: 920 rpm, 1252 rpm, and 1332 rpm respectively. Rather than chasing arbitrary distance goals, use these benchmarks relative to your current rating and focus on incremental improvement in both speed and especially spin.",
+      "keyFindings": [
+        "Under 900 PDGA: 22.84 m/s speed, 920 rpm spin",
+        "950-999 PDGA: 26.87 m/s speed, 1252 rpm spin",
+        "Elite (>999 PDGA): 30.16 m/s speed, 1332 rpm spin",
+        "~32% speed difference between bottom and top tier"
+      ],
+      "sourceIds": ["turner_2024"]
+    },
+    {
+      "id": "strategy_tip_1",
+      "category": "strategy",
+      "type": "tip",
+      "question": "Speed Benchmarks by Rating",
+      "answer": "Under 900 PDGA: aim for 23+ m/s. 900-950: aim for 24-26 m/s. 950-999: aim for 27+ m/s. Use these as tangible goals for your fieldwork sessions.",
+      "keyFindings": [],
+      "sourceIds": ["turner_2024"]
+    },
+    {
+      "id": "strategy_tip_2",
+      "category": "strategy",
+      "type": "tip",
+      "question": "Disc Down for Accuracy",
+      "answer": "When accuracy matters more than distance, use a disc one category slower than you think you need. The higher lift coefficient of midranges and putters provides more predictable flight at moderate arm speeds.",
+      "keyFindings": [],
+      "sourceIds": ["immonen_2021"]
+    },
+    {
+      "id": "strategy_tip_3",
+      "category": "strategy",
+      "type": "tip",
+      "question": "Prioritize Backhand Mastery",
+      "answer": "Backhand metrics correlate more strongly with PDGA rating (spin r=0.77) than forehand (spin r=0.43). Build a reliable backhand before splitting practice time with forehand development.",
+      "keyFindings": [],
+      "sourceIds": ["turner_2024"]
+    },
+    {
+      "id": "strategy_tip_4",
+      "category": "strategy",
+      "type": "tip",
+      "question": "Wind Strategy by Disc Design",
+      "answer": "Overstable discs have higher moment coefficients, making them fight headwinds and maintain their line. In strong wind, disc up in stability rather than disc up in speed.",
+      "keyFindings": [],
+      "sourceIds": ["giljarhus_2022"]
+    },
+    {
+      "id": "mental_faq_1",
+      "category": "mental",
+      "type": "faq",
+      "question": "Where should I look when putting?",
+      "answer": "Eye-tracking research comparing professional and amateur disc golfers during putting found that both groups maintained over 2000 milliseconds of quiet eye duration (sustained final fixation on the target). The critical difference wasn't where or how long players looked — it was how often their eyes moved. Fewer fixations (eye shifts) between putter release and landing correlated with better putting results across all skill levels. The practical advice: pick your target, lock your gaze on it, and resist the urge to track the disc or glance around during your putt. Train yourself to maintain a single, steady fixation point.",
+      "keyFindings": [
+        "Both pros and amateurs average >2000 ms quiet eye duration",
+        "Fewer fixations between release and landing = better results",
+        "Fixation count is more predictive than quiet eye duration",
+        "Quiet eye control becomes statistically significant beyond 15 meters"
+      ],
+      "sourceIds": ["hirvonen_2025"]
+    },
+    {
+      "id": "mental_faq_2",
+      "category": "mental",
+      "type": "faq",
+      "question": "How do professionals putt differently than amateurs?",
+      "answer": "Surprisingly, research found minimal differences between professional and amateur disc golfers in gaze targeting and quiet eye duration during putting. Both groups fixated on the target for similar lengths of time. The meaningful difference was in fixation efficiency: professionals made fewer unnecessary eye movements overall. This suggests that putting skill isn't about looking at the target harder or longer — it's about visual discipline. Professionals have trained their gaze to stay locked and avoid distracting shifts in focus, especially on pressure putts. This is a trainable skill that doesn't require physical athleticism.",
+      "keyFindings": [
+        "Minimal difference in quiet eye duration between pros and amateurs",
+        "Professionals execute with fewer total fixations",
+        "Visual discipline, not visual duration, separates skill levels",
+        "Gaze control is a trainable skill independent of physical ability"
+      ],
+      "sourceIds": ["hirvonen_2025"]
+    },
+    {
+      "id": "mental_faq_3",
+      "category": "mental",
+      "type": "faq",
+      "question": "Why do my long putts miss more often?",
+      "answer": "Gaze control research found that quiet eye duration naturally decreases as putting distance increases from 5 to 20 meters — even for professionals. At short distances, maintaining focus is easy. Beyond 15 meters, quiet eye success (maintaining steady gaze through the critical release moment) becomes statistically significant for putt outcomes. This means your long putts may miss not because of physical limitations, but because your visual focus degrades at distance. Deliberate practice at 15-20 meter distances with emphasis on maintaining gaze discipline can directly improve your circle-two putting percentage.",
+      "keyFindings": [
+        "Quiet eye duration decreases with putting distance for most players",
+        "Statistical significance of gaze control begins at 15+ meters",
+        "Visual focus naturally degrades at longer distances",
+        "Targeted practice at 15-20m with gaze focus improves performance"
+      ],
+      "sourceIds": ["hirvonen_2025"]
+    },
+    {
+      "id": "mental_tip_1",
+      "category": "mental",
+      "type": "tip",
+      "question": "Lock Your Gaze",
+      "answer": "Fewer eye movements between release and landing correlate with better putting results. Pick your target, lock on, and resist the urge to track the disc or scan the chains.",
+      "keyFindings": [],
+      "sourceIds": ["hirvonen_2025"]
+    },
+    {
+      "id": "mental_tip_2",
+      "category": "mental",
+      "type": "tip",
+      "question": "Long Putt Focus Drill",
+      "answer": "Quiet eye control becomes critical beyond 15 meters. Practice circle-two putts specifically focusing on maintaining your gaze on the target through the entire release motion.",
+      "keyFindings": [],
+      "sourceIds": ["hirvonen_2025"]
+    },
+    {
+      "id": "mental_tip_3",
+      "category": "mental",
+      "type": "tip",
+      "question": "Gaze Discipline Is Trainable",
+      "answer": "Research shows minimal difference in how long pros vs amateurs look at the target. The difference is fixation efficiency — fewer unnecessary eye shifts. This is a skill you can train without physical athleticism.",
+      "keyFindings": [],
+      "sourceIds": ["hirvonen_2025"]
+    }
+  ]
+}
