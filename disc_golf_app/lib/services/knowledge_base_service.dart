@@ -98,6 +98,75 @@ class KnowledgeBaseService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ---- Local keyword search ----
+
+  static final _punctuation = RegExp(r'[^\w\s]');
+
+  List<String> _tokenize(String text) {
+    return text
+        .toLowerCase()
+        .replaceAll(_punctuation, '')
+        .split(RegExp(r'\s+'))
+        .where((w) => w.length > 2)
+        .toList();
+  }
+
+  int _countMatches(List<String> keywords, String text) {
+    final lower = text.toLowerCase();
+    return keywords.where((k) => lower.contains(k)).length;
+  }
+
+  String searchLocal(String query) {
+    final keywords = _tokenize(query);
+    if (keywords.isEmpty) return 'Please enter a more specific question.';
+
+    // Score each article
+    final scored = <MapEntry<KBArticle, int>>[];
+    for (final article in _articles) {
+      final qScore = _countMatches(keywords, article.question) * 3;
+      final aScore = _countMatches(keywords, article.answer);
+      final fScore = article.keyFindings
+              .map((f) => _countMatches(keywords, f))
+              .fold<int>(0, (a, b) => a + b) *
+          2;
+      final total = qScore + aScore + fScore;
+      if (total > 0) scored.add(MapEntry(article, total));
+    }
+
+    scored.sort((a, b) => b.value.compareTo(a.value));
+
+    if (scored.isEmpty) {
+      return 'No matching research found for your question. Try different '
+          'keywords, or browse the categories for tips and FAQs.';
+    }
+
+    // Take top results (up to 3 for a readable answer)
+    final top = scored.take(3).toList();
+    final buf = StringBuffer();
+
+    for (var i = 0; i < top.length; i++) {
+      final article = top[i].key;
+      if (i > 0) buf.writeln('\n---\n');
+
+      buf.writeln(article.question);
+      buf.writeln();
+      buf.writeln(article.answer);
+
+      // Add source citations
+      final sources = article.sourceIds
+          .map((id) => getStudy(id))
+          .where((s) => s != null)
+          .toList();
+      if (sources.isNotEmpty) {
+        buf.writeln();
+        buf.write('Sources: ');
+        buf.writeln(sources.map((s) => s!.citation).join(', '));
+      }
+    }
+
+    return buf.toString().trim();
+  }
+
   // ---- Claude API ----
 
   Future<String> askQuestion(String question) async {

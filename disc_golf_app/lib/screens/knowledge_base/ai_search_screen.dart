@@ -14,6 +14,7 @@ class _AISearchScreenState extends State<AISearchScreen> {
   final _scrollController = ScrollController();
   final List<_QAPair> _history = [];
   bool _isLoading = false;
+  bool _useAI = false;
 
   @override
   void dispose() {
@@ -29,23 +30,27 @@ class _AISearchScreenState extends State<AISearchScreen> {
     final service =
         Provider.of<KnowledgeBaseService>(context, listen: false);
 
-    if (!service.hasApiKey) {
-      _showApiKeyPrompt();
-      return;
-    }
-
     setState(() {
       _history.add(_QAPair(question: question));
-      _isLoading = true;
+      _isLoading = _useAI && service.hasApiKey;
     });
     _controller.clear();
-    _scrollToBottom();
 
-    final answer = await service.askQuestion(question);
+    String answer;
+    if (_useAI && service.hasApiKey) {
+      _scrollToBottom();
+      answer = await service.askQuestion(question);
+    } else {
+      answer = service.searchLocal(question);
+    }
 
     if (mounted) {
       setState(() {
-        _history.last = _QAPair(question: question, answer: answer);
+        _history.last = _QAPair(
+          question: question,
+          answer: answer,
+          isAI: _useAI && service.hasApiKey,
+        );
         _isLoading = false;
       });
       _scrollToBottom();
@@ -62,53 +67,6 @@ class _AISearchScreenState extends State<AISearchScreen> {
         );
       }
     });
-  }
-
-  void _showApiKeyPrompt() {
-    final keyController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('API Key Required'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Enter your Anthropic API key to use AI-powered search. '
-              'You can also set this in Settings.',
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: keyController,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'sk-ant-...',
-                labelText: 'API Key',
-              ),
-              obscureText: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (keyController.text.trim().isNotEmpty) {
-                final service = Provider.of<KnowledgeBaseService>(context,
-                    listen: false);
-                await service.setApiKey(keyController.text);
-                if (ctx.mounted) Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    keyController.dispose;
   }
 
   @override
@@ -134,7 +92,7 @@ class _AISearchScreenState extends State<AISearchScreen> {
                   ),
           ),
 
-          // Loading indicator
+          // Loading indicator (only for AI calls)
           if (_isLoading)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -150,7 +108,7 @@ class _AISearchScreenState extends State<AISearchScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Searching research...',
+                    'Asking AI...',
                     style: TextStyle(
                       color: Colors.teal.shade300,
                       fontSize: 13,
@@ -174,10 +132,10 @@ class _AISearchScreenState extends State<AISearchScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.auto_awesome, size: 48, color: Colors.teal.shade300),
+            Icon(Icons.search, size: 48, color: Colors.teal.shade300),
             const SizedBox(height: 16),
             const Text(
-              'Ask a Question',
+              'Search the Research',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -234,7 +192,7 @@ class _AISearchScreenState extends State<AISearchScreen> {
           ),
         ),
 
-        // AI answer
+        // Answer
         if (qa.answer != null)
           Container(
             margin: const EdgeInsets.only(bottom: 16, right: 48),
@@ -249,11 +207,14 @@ class _AISearchScreenState extends State<AISearchScreen> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.auto_awesome,
-                        size: 16, color: Colors.teal.shade300),
+                    Icon(
+                      qa.isAI ? Icons.auto_awesome : Icons.menu_book,
+                      size: 16,
+                      color: Colors.teal.shade300,
+                    ),
                     const SizedBox(width: 6),
                     Text(
-                      'Research Says',
+                      qa.isAI ? 'AI Answer' : 'Research Says',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.teal.shade300,
@@ -275,6 +236,8 @@ class _AISearchScreenState extends State<AISearchScreen> {
   }
 
   Widget _buildInputBar() {
+    final service = Provider.of<KnowledgeBaseService>(context);
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -284,28 +247,84 @@ class _AISearchScreenState extends State<AISearchScreen> {
         ),
       ),
       child: SafeArea(
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                decoration: InputDecoration(
-                  hintText: 'Ask a question...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  isDense: true,
+            // AI toggle (only shown when API key is set)
+            if (service.hasApiKey)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Local',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: !_useAI
+                            ? Colors.teal.shade300
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    SizedBox(
+                      height: 24,
+                      child: Switch(
+                        value: _useAI,
+                        onChanged: (v) => setState(() => _useAI = v),
+                        activeThumbColor: Colors.purple.shade300,
+                        inactiveTrackColor: Colors.teal.withAlpha(60),
+                        inactiveThumbColor: Colors.teal.shade300,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.auto_awesome,
+                            size: 12,
+                            color: _useAI
+                                ? Colors.purple.shade300
+                                : Colors.grey.shade600),
+                        const SizedBox(width: 3),
+                        Text(
+                          'AI',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: _useAI
+                                ? Colors.purple.shade300
+                                : Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _askQuestion(),
               ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              onPressed: _isLoading ? null : _askQuestion,
-              icon: Icon(Icons.send, color: Colors.teal.shade300),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    decoration: InputDecoration(
+                      hintText: 'Ask a question...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      isDense: true,
+                    ),
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _askQuestion(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: _isLoading ? null : _askQuestion,
+                  icon: Icon(Icons.send, color: Colors.teal.shade300),
+                ),
+              ],
             ),
           ],
         ),
@@ -317,6 +336,7 @@ class _AISearchScreenState extends State<AISearchScreen> {
 class _QAPair {
   final String question;
   final String? answer;
+  final bool isAI;
 
-  _QAPair({required this.question, this.answer});
+  _QAPair({required this.question, this.answer, this.isAI = false});
 }
