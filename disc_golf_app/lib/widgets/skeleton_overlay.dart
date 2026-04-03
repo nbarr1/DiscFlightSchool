@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import '../models/form_analysis.dart';
 
 /// Clean skeleton overlay — color-coded limbs, minimal labels.
-/// In interactive mode, adjustable joints are highlighted for drag-to-correct.
+/// In interactive mode, adjustable joints are highlighted for drag-to-correct,
+/// and their border color reflects ML Kit detection confidence:
+///   cyan   → confident (≥ 0.7)
+///   orange → uncertain (0.5–0.7)
+///   red    → unreliable (< 0.5) or unknown
 class SkeletonOverlay extends CustomPainter {
   final FormAnalysis analysis;
   final int currentFrame;
@@ -54,13 +58,8 @@ class SkeletonOverlay extends CustomPainter {
 
     if (frame.keyPoints.isEmpty) return;
 
-    // Draw color-coded skeleton limbs
     _drawSkeleton(canvas, size, frame);
-
-    // Draw small joint dots
     _drawJoints(canvas, size, frame);
-
-    // Show angle values at key joints only (elbow, shoulder, knee)
     _drawKeyAngleLabels(canvas, size, frame);
   }
 
@@ -69,19 +68,16 @@ class SkeletonOverlay extends CustomPainter {
     final imgH = frame.imageHeight;
 
     if (imgW != null && imgH != null && imgW > 0 && imgH > 0) {
-      // Scale from image pixel coordinates to canvas
       return Offset(
         point.dx * canvasSize.width / imgW,
         point.dy * canvasSize.height / imgH,
       );
     }
 
-    // Fallback: if coordinates are normalized (0-1), scale to canvas
     if (point.dx <= 1.0 && point.dy <= 1.0) {
       return Offset(point.dx * canvasSize.width, point.dy * canvasSize.height);
     }
 
-    // Fallback: assume 640-wide frame
     return Offset(
       point.dx * canvasSize.width / 640,
       point.dy * canvasSize.height / 640,
@@ -89,7 +85,6 @@ class SkeletonOverlay extends CustomPainter {
   }
 
   void _drawSkeleton(Canvas canvas, Size size, FormFrame frame) {
-    // Limb groups with their associated angle for color-coding
     const limbGroups = [
       _LimbGroup(
         joints: [
@@ -168,9 +163,8 @@ class SkeletonOverlay extends CustomPainter {
       final scaled = _scalePoint(entry.value, size, frame);
 
       if (interactive && adjustableLandmarks.contains(entry.key)) {
-        // Adjustable joint — larger, with distinct styling
         if (entry.key == selectedLandmark) {
-          // Selected joint — yellow, largest
+          // Selected joint — yellow with halo
           canvas.drawCircle(
               scaled, 12, Paint()..color = Colors.yellow.withAlpha(60));
           canvas.drawCircle(scaled, 8, Paint()..color = Colors.yellow);
@@ -182,22 +176,38 @@ class SkeletonOverlay extends CustomPainter {
                 ..style = PaintingStyle.stroke
                 ..strokeWidth = 2);
         } else {
-          // Adjustable but not selected — cyan border
+          // Adjustable but not selected — border color reflects confidence
+          final borderColor = _getConfidenceColor(
+              entry.key, frame.landmarkConf);
           canvas.drawCircle(scaled, 6, Paint()..color = Colors.white);
           canvas.drawCircle(
               scaled,
               6,
               Paint()
-                ..color = Colors.cyanAccent
+                ..color = borderColor
                 ..style = PaintingStyle.stroke
                 ..strokeWidth = 2);
         }
       } else {
-        // Normal joint dot
+        // Non-interactive joint dot
         canvas.drawCircle(scaled, 3.5, defaultPaint);
         canvas.drawCircle(scaled, 3.5, borderPaint);
       }
     }
+  }
+
+  /// Returns the confidence-indicating border color for an interactive joint.
+  ///   cyan   → high confidence (≥ 0.7)
+  ///   orange → medium confidence (0.5 – 0.7)
+  ///   red    → low confidence (< 0.5) or no data (manually corrected = trusted)
+  Color _getConfidenceColor(String key, Map<String, double> conf) {
+    // Manually corrected frames have empty landmarkConf — treat as trusted.
+    if (conf.isEmpty) return Colors.cyanAccent;
+    final c = conf[key];
+    if (c == null) return Colors.redAccent;
+    if (c >= 0.7) return Colors.cyanAccent;
+    if (c >= 0.5) return Colors.orange;
+    return Colors.redAccent;
   }
 
   /// Show angle labels at 3 key joints only: throwing elbow, shoulder, lead knee.
@@ -228,7 +238,6 @@ class SkeletonOverlay extends CustomPainter {
       final pos = _scalePoint(vertex, size, frame) + label.offset;
       final color = _getAngleColor(label.angleKey, angle);
 
-      // Draw pill background
       final text = '${angle.toStringAsFixed(0)}°';
       final textPainter = TextPainter(
         text: TextSpan(
@@ -296,7 +305,6 @@ class SkeletonOverlay extends CustomPainter {
       final point = frame.keyPoints[key];
       if (point == null) continue;
 
-      // Scale to canvas coords
       final imgW = frame.imageWidth;
       final imgH = frame.imageHeight;
       Offset scaled;
@@ -336,7 +344,6 @@ class SkeletonOverlay extends CustomPainter {
         canvasPoint.dy * imgH / canvasSize.height,
       );
     }
-    // Fallback: normalized
     return Offset(
       canvasPoint.dx / canvasSize.width,
       canvasPoint.dy / canvasSize.height,

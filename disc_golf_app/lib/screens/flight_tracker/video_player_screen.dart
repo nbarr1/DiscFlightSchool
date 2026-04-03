@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../services/disc_detection_service.dart';
 import '../../services/feedback_service.dart';
 import '../../services/training_data_service.dart';
+import '../../services/video_service.dart';
 import '../../widgets/follow_flight_overlay.dart';
 import '../gallery/video_gallery_screen.dart';
 import 'dart:io';
@@ -71,6 +72,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   bool _boxMode = false;
   Offset? _firstBoxCorner; // Normalized 0-1, first corner of bounding box
 
+  // Stabilization state
+  bool _stabilizeEnabled = false;
+  String? _stabilizedVideoPath; // Path to FFmpeg-stabilized temp file
+  bool _isStabilizing = false;
+
   // Frame rate used for frame indexing (10fps = 1 frame per 100ms)
   static const double _frameFps = 10.0;
 
@@ -80,8 +86,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _initializeVideo();
   }
 
-  Future<void> _initializeVideo() async {
-    _controller = VideoPlayerController.file(File(widget.videoPath));
+  Future<void> _initializeVideo([String? overridePath]) async {
+    final path = overridePath ?? widget.videoPath;
+    _controller = VideoPlayerController.file(File(path));
     await _controller.initialize();
     if (widget.trimStartMs != null) {
       await _controller.seekTo(Duration(milliseconds: widget.trimStartMs!));
@@ -116,6 +123,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _controller.removeListener(_onVideoProgress);
     _controller.dispose();
     _capturedFrame?.dispose();
+    // Clean up stabilized temp file when leaving the screen
+    if (_stabilizedVideoPath != null) {
+      final videoService = Provider.of<VideoService>(context, listen: false);
+      videoService.deleteStabilizedVideo(_stabilizedVideoPath!);
+    }
     super.dispose();
   }
 
@@ -387,6 +399,75 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
   }
 
+  // --- Stabilization ---
+
+  /// Toggle video stabilization on or off.
+  ///
+  /// When enabling: runs the two-pass FFmpeg vidstab pipeline via [VideoService],
+  /// then re-initializes the video player with the stabilized output.  Keyframes
+  /// placed after stabilization are frame-relative to the locked background, so
+  /// the rendered trail stays anchored to the environment even when the camera
+  /// panned during filming.
+  ///
+  /// When disabling: reverts to the original video and cleans up the temp file.
+  Future<void> _toggleStabilization() async {
+    if (_isStabilizing) return;
+
+    if (_stabilizeEnabled) {
+      // Turn off — revert to original
+      setState(() {
+        _stabilizeEnabled = false;
+        _isInitialized = false;
+        _keyframes.clear();
+        _trackingResult = null;
+      });
+      _controller.removeListener(_onVideoProgress);
+      await _controller.dispose();
+
+      final videoService = Provider.of<VideoService>(context, listen: false);
+      if (_stabilizedVideoPath != null) {
+        await videoService.deleteStabilizedVideo(_stabilizedVideoPath!);
+        _stabilizedVideoPath = null;
+      }
+
+      await _initializeVideo();
+      return;
+    }
+
+    // Turn on — stabilize then reload
+    setState(() => _isStabilizing = true);
+
+    try {
+      final videoService = Provider.of<VideoService>(context, listen: false);
+      final stabilized = await videoService.stabilizeVideo(
+        widget.videoPath,
+        onStatus: (msg) => debugPrint('[stabilization] $msg'),
+      );
+
+      _controller.removeListener(_onVideoProgress);
+      await _controller.dispose();
+
+      setState(() {
+        _stabilizedVideoPath = stabilized;
+        _stabilizeEnabled = true;
+        _isInitialized = false;
+        _keyframes.clear();
+        _trackingResult = null;
+      });
+
+      await _initializeVideo(stabilized);
+    } catch (e) {
+      debugPrint('Stabilization failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Stabilization failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isStabilizing = false);
+    }
+  }
+
   double _catmullRom(
       double p0, double p1, double p2, double p3, double t) {
     final t2 = t * t;
@@ -622,6 +703,30 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       style:
                           TextStyle(color: Colors.white70, fontSize: 12),
                       textAlign: TextAlign.center,
+                    ),
+                  ),
+
+                // Stabilization active banner
+                if (_stabilizeEnabled)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 6),
+                    color: Colors.teal.shade900,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.check_circle,
+                            color: Colors.tealAccent, size: 14),
+                        const SizedBox(width: 6),
+                        const Expanded(
+                          child: Text(
+                            'Showing stabilized video — flight path will be '
+                            'anchored to the environment.',
+                            style: TextStyle(
+                                color: Colors.tealAccent, fontSize: 12),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
@@ -1013,6 +1118,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         spacing: 8,
         runSpacing: 6,
         children: [
+          _buildStabilizeToggle(),
           if (trainingService.isOptedIn)
             _buildBoxModeToggle(),
           ElevatedButton.icon(
@@ -1046,6 +1152,60 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStabilizeToggle() {
+    return GestureDetector(
+      onTap: _isStabilizing ? null : _toggleStabilization,
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: _stabilizeEnabled
+              ? Colors.teal.shade800
+              : Colors.grey.shade800,
+          borderRadius: BorderRadius.circular(8),
+          border: _stabilizeEnabled
+              ? Border.all(color: Colors.tealAccent, width: 1.5)
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_isStabilizing)
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+              )
+            else
+              Icon(
+                Icons.videocam_outlined,
+                size: 16,
+                color: _stabilizeEnabled
+                    ? Colors.tealAccent
+                    : Colors.grey,
+              ),
+            const SizedBox(width: 4),
+            Text(
+              _isStabilizing
+                  ? 'Stabilizing…'
+                  : (_stabilizeEnabled ? 'Stabilized' : 'Stabilize'),
+              style: TextStyle(
+                fontSize: 12,
+                color: _stabilizeEnabled
+                    ? Colors.tealAccent
+                    : Colors.grey,
+                fontWeight: _stabilizeEnabled
+                    ? FontWeight.bold
+                    : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

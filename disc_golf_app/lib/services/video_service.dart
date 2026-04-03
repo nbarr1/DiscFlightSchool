@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'dart:io';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/return_code.dart';
+import 'package:path_provider/path_provider.dart';
 
 class VideoService extends ChangeNotifier {
   final ImagePicker _picker = ImagePicker();
@@ -151,6 +154,91 @@ class VideoService extends ChangeNotifier {
       return false;
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Video stabilization
+  // ---------------------------------------------------------------------------
+
+  /// Stabilize a video using FFmpeg's two-pass vidstab pipeline.
+  ///
+  /// Pass 1 (`vidstabdetect`) analyses frame-to-frame motion and writes a
+  /// transforms file.  Pass 2 (`vidstabtransform`) warps each frame to cancel
+  /// that motion, producing a video whose background is locked to the first
+  /// frame.  When disc detection is run on the stabilized output, all resulting
+  /// coordinates are environment-relative rather than camera-relative.
+  ///
+  /// Both temp files are written to [getTemporaryDirectory()] and are
+  /// automatically cleaned up by the OS on the next app restart.
+  ///
+  /// Returns the path of the stabilized output file, or throws on failure.
+  Future<String> stabilizeVideo(
+    String inputPath, {
+    /// 1–10: sensitivity to camera shake. 8 covers handheld panning shots.
+    int shakiness = 8,
+    /// Smoothing window in frames. 20 ≈ 2 s at 10 fps.
+    int smoothing = 20,
+    /// Percentage zoom to crop stabilization black borders.
+    int zoom = 3,
+    void Function(String)? onStatus,
+  }) async {
+    final tmp = await getTemporaryDirectory();
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final transformsPath = '${tmp.path}/vidstab_$ts.trf';
+    final outputPath = '${tmp.path}/stabilized_$ts.mp4';
+
+    // Pass 1 — detect motion and write transforms
+    onStatus?.call('Analysing camera motion…');
+    debugPrint('vidstab pass 1: $inputPath → $transformsPath');
+    final pass1 = await FFmpegKit.execute(
+      '-y -i "$inputPath"'
+      ' -vf "vidstabdetect=shakiness=$shakiness:accuracy=9:result=$transformsPath"'
+      ' -f null -',
+    );
+    final rc1 = await pass1.getReturnCode();
+    if (!ReturnCode.isSuccess(rc1)) {
+      final log = await pass1.getAllLogsAsString();
+      throw Exception('vidstabdetect failed (rc=${rc1?.getValue()}): $log');
+    }
+
+    // Pass 2 — apply stabilization transforms
+    onStatus?.call('Stabilizing video…');
+    debugPrint('vidstab pass 2: → $outputPath');
+    final pass2 = await FFmpegKit.execute(
+      '-y -i "$inputPath"'
+      ' -vf "vidstabtransform=input=$transformsPath:smoothing=$smoothing:crop=black:zoom=$zoom"'
+      ' -c:v libx264 -preset fast -crf 23'
+      ' -c:a copy'
+      ' "$outputPath"',
+    );
+    final rc2 = await pass2.getReturnCode();
+
+    // Clean up transforms file regardless of pass-2 outcome
+    try {
+      final trf = File(transformsPath);
+      if (await trf.exists()) await trf.delete();
+    } catch (_) {}
+
+    if (!ReturnCode.isSuccess(rc2)) {
+      final log = await pass2.getAllLogsAsString();
+      throw Exception('vidstabtransform failed (rc=${rc2?.getValue()}): $log');
+    }
+
+    onStatus?.call('Stabilization complete');
+    debugPrint('Stabilized video written to $outputPath');
+    return outputPath;
+  }
+
+  /// Delete a previously stabilized temp file produced by [stabilizeVideo].
+  Future<void> deleteStabilizedVideo(String path) async {
+    try {
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+    } catch (e) {
+      debugPrint('Could not delete stabilized video $path: $e');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
 
   /// Validate video file
   bool isValidVideoFile(String path) {

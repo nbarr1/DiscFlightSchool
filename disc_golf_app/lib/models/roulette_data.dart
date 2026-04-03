@@ -185,16 +185,35 @@ class RouletteResult {
     required this.timestamp,
   });
 
+  /// Power modifiers that are physically impossible with a given hindrance.
+  /// Hindrance is picked first; incompatible powers are removed before sampling.
+  static const Map<Hindrance, List<PowerModifier>> _incompatiblePower = {
+    // Can't run or x-step from the ground
+    Hindrance.kneeling: [PowerModifier.runUp, PowerModifier.xStep],
+    Hindrance.sitting:  [PowerModifier.runUp, PowerModifier.xStep],
+    // Can't plant both feet for an x-step, and can't run on one leg
+    Hindrance.oneLeg:   [PowerModifier.runUp, PowerModifier.xStep],
+  };
+
   static RouletteResult generate(List<String> availableDiscs) {
     final random = Random();
+
+    // Pick hindrance first so we can filter incompatible power options
+    final hindrance =
+        Hindrance.values[random.nextInt(Hindrance.values.length)];
+
+    final blocked = _incompatiblePower[hindrance] ?? const [];
+    final validPowers = PowerModifier.values
+        .where((p) => !blocked.contains(p))
+        .toList();
 
     return RouletteResult(
       shotType: ShotType.values[random.nextInt(ShotType.values.length)],
       discName: availableDiscs.isNotEmpty
           ? availableDiscs[random.nextInt(availableDiscs.length)]
           : null,
-      powerModifier: PowerModifier.values[random.nextInt(PowerModifier.values.length)],
-      hindrance: Hindrance.values[random.nextInt(Hindrance.values.length)],
+      powerModifier: validPowers[random.nextInt(validPowers.length)],
+      hindrance: hindrance,
       timestamp: DateTime.now(),
     );
   }
