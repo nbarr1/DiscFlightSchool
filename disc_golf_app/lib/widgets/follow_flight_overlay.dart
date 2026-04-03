@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'dart:math';
+import 'package:flutter/material.dart';
 import '../services/disc_detection_service.dart';
 
 /// Renders a follow-flight overlay on top of a video player.
@@ -132,33 +132,21 @@ class FollowFlightPainter extends CustomPainter {
 
     final cx = detection.x * size.width;
     final cy = detection.y * size.height;
-    final radius = max(detection.width, detection.height) * size.width * 0.5;
-    final discRadius = max(radius, 8.0);
+    final center = Offset(cx, cy);
 
-    // Glow
-    final glowPaint = Paint()
-      ..color = Colors.red.withAlpha(60)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(Offset(cx, cy), discRadius * 1.5, glowPaint);
+    // Soft glow
+    canvas.drawCircle(
+        center, 14, Paint()..color = Colors.orange.withAlpha(50));
 
-    // Ring
-    final ringPaint = Paint()
-      ..color = Colors.red
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
-    canvas.drawCircle(Offset(cx, cy), discRadius, ringPaint);
-
-    // Crosshair
-    final crossPaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-
-    const crossSize = 6.0;
-    canvas.drawLine(
-        Offset(cx - crossSize, cy), Offset(cx + crossSize, cy), crossPaint);
-    canvas.drawLine(
-        Offset(cx, cy - crossSize), Offset(cx, cy + crossSize), crossPaint);
+    // Solid dot
+    canvas.drawCircle(center, 6, Paint()..color = Colors.white);
+    canvas.drawCircle(
+        center,
+        6,
+        Paint()
+          ..color = Colors.orange
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2);
   }
 
   void _drawStartMarker(Canvas canvas, Offset start, double fade) {
