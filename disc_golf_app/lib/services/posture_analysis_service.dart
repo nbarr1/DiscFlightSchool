@@ -8,11 +8,17 @@ import 'video_frame_extractor.dart';
 import 'dart:io';
 import 'dart:math';
 
+/// Minimum ML Kit likelihood a landmark must have before its position is
+/// trusted for angle calculation. Landmarks below this are excluded and the
+/// angle that depends on them is omitted for that frame; the smoothing pass
+/// then interpolates from neighbouring confident frames.
+const double _kConfidenceThreshold = 0.5;
+
 class PostureAnalysisService extends ChangeNotifier {
   final List<FormAnalysis> _analyses = [];
   FormAnalysis? _currentAnalysis;
   FormAnalysis? _proAnalysis;
-  
+
   final PoseDetector _poseDetector = PoseDetector(
     options: PoseDetectorOptions(
       mode: PoseDetectionMode.single,
@@ -31,11 +37,9 @@ class PostureAnalysisService extends ChangeNotifier {
     try {
       debugPrint('Starting form analysis for: $videoPath (start: ${startMs}ms, frames: $frameCount)');
 
-      // Extract frames from video
       framePaths = await _frameExtractor.extractFrames(videoPath, frameCount: frameCount, startMs: startMs);
       debugPrint('Extracted ${framePaths.length} frames');
-      
-      // Read image dimensions from first frame
+
       double? imgWidth;
       double? imgHeight;
       if (framePaths.isNotEmpty) {
@@ -47,7 +51,6 @@ class PostureAnalysisService extends ChangeNotifier {
         debugPrint('Frame dimensions: ${imgWidth}x$imgHeight');
       }
 
-      // Analyze each frame
       final frames = <FormFrame>[];
       const intervalMs = VideoFrameExtractor.defaultIntervalMs;
 
@@ -62,18 +65,23 @@ class PostureAnalysisService extends ChangeNotifier {
 
         if (poses.isNotEmpty) {
           final pose = poses.first;
-          final angles = _calculateAngles(pose);
+          final landmarkConf = _extractConfidence(pose);
+          final landmarkZ = _extractDepth(pose);
           final keyPoints = _extractKeyPoints(pose);
+          // Use 3D angles when depth data is meaningful; fall back to 2D if not
+          final angles = _calculateAngles3D(pose, landmarkConf) ??
+              _calculateAngles2D(pose, landmarkConf);
 
           frames.add(FormFrame(
             timestamp: Duration(milliseconds: i * intervalMs),
             angles: angles,
             keyPoints: keyPoints,
+            landmarkZ: landmarkZ,
+            landmarkConf: landmarkConf,
             imageWidth: imgWidth,
             imageHeight: imgHeight,
           ));
         } else {
-          // Add empty frame so skeleton hides when person not visible
           frames.add(FormFrame(
             timestamp: Duration(milliseconds: i * intervalMs),
             angles: {},
@@ -83,7 +91,7 @@ class PostureAnalysisService extends ChangeNotifier {
           ));
         }
       }
-      
+
       if (frames.isEmpty) {
         debugPrint('WARNING: No poses detected in any frame — returning mock data');
         final mock = _generateMockAnalysis(videoPath);
@@ -91,10 +99,7 @@ class PostureAnalysisService extends ChangeNotifier {
         return mock;
       }
 
-      // Smooth angles across frames to reduce pose estimation noise
       _smoothFrameAngles(frames);
-
-      // Smooth keypoint positions to reduce skeleton overlay jitter
       _smoothKeyPoints(frames);
 
       final analysis = FormAnalysis(
@@ -116,132 +121,233 @@ class PostureAnalysisService extends ChangeNotifier {
       mock.isMock = true;
       return mock;
     } finally {
-      // Cleanup extracted frames
       if (framePaths != null) {
         await _frameExtractor.cleanupFrames(framePaths);
       }
     }
   }
 
-  Map<String, double> _calculateAngles(Pose pose) {
-    final landmarks = pose.landmarks;
+  // ---------------------------------------------------------------------------
+  // Landmark extraction
+  // ---------------------------------------------------------------------------
+
+  /// Extract 2D keypoints (x, y in image-pixel space).
+  Map<String, Offset> _extractKeyPoints(Pose pose) {
+    final keyPoints = <String, Offset>{};
+    for (var entry in pose.landmarks.entries) {
+      keyPoints[entry.key.toString()] = Offset(
+        entry.value.x.toDouble(),
+        entry.value.y.toDouble(),
+      );
+    }
+    return keyPoints;
+  }
+
+  /// Extract per-landmark ML Kit likelihood (0–1).
+  Map<String, double> _extractConfidence(Pose pose) {
+    final conf = <String, double>{};
+    for (var entry in pose.landmarks.entries) {
+      conf[entry.key.toString()] = entry.value.likelihood.toDouble();
+    }
+    return conf;
+  }
+
+  /// Extract per-landmark z-depth from ML Kit.
+  /// Values are in the same scale as the x-coordinate; positive = closer to camera.
+  Map<String, double> _extractDepth(Pose pose) {
+    final depth = <String, double>{};
+    for (var entry in pose.landmarks.entries) {
+      depth[entry.key.toString()] = entry.value.z.toDouble();
+    }
+    return depth;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Angle calculation — 2D fallback
+  // ---------------------------------------------------------------------------
+
+  /// Calculate angles using only 2D (x, y) coordinates.
+  /// Landmarks below [_kConfidenceThreshold] are skipped; their angles are
+  /// omitted so the smoothing pass can interpolate from confident neighbours.
+  Map<String, double> _calculateAngles2D(
+      Pose pose, Map<String, double> conf) {
+    final lm = pose.landmarks;
     final angles = <String, double>{};
 
-    // Helper function to calculate angle between three points
-    double calculateAngle(PoseLandmark? a, PoseLandmark? b, PoseLandmark? c) {
-      if (a == null || b == null || c == null) return 0.0;
-      
-      final ba = Point(a.x - b.x, a.y - b.y);
-      final bc = Point(c.x - b.x, c.y - b.y);
-      
-      final dotProduct = ba.x * bc.x + ba.y * bc.y;
-      final magnitudeBA = sqrt(ba.x * ba.x + ba.y * ba.y);
-      final magnitudeBC = sqrt(bc.x * bc.x + bc.y * bc.y);
-      
-      if (magnitudeBA == 0 || magnitudeBC == 0) return 0.0;
-      
-      final cosAngle = dotProduct / (magnitudeBA * magnitudeBC);
-      final angle = acos(cosAngle.clamp(-1.0, 1.0)) * (180 / pi);
-      
-      return angle;
+    // Returns null if the landmark is missing OR below confidence threshold.
+    PoseLandmark? trusted(PoseLandmarkType type) {
+      final l = lm[type];
+      if (l == null) return null;
+      final c = conf[type.toString()] ?? 0.0;
+      return c >= _kConfidenceThreshold ? l : null;
     }
 
-    // Right arm angles
-    final rightShoulder = landmarks[PoseLandmarkType.rightShoulder];
-    final rightElbow = landmarks[PoseLandmarkType.rightElbow];
-    final rightWrist = landmarks[PoseLandmarkType.rightWrist];
-    final rightHip = landmarks[PoseLandmarkType.rightHip];
-    
-    // Left arm angles
-    final leftShoulder = landmarks[PoseLandmarkType.leftShoulder];
-    final leftElbow = landmarks[PoseLandmarkType.leftElbow];
-    final leftWrist = landmarks[PoseLandmarkType.leftWrist];
-    final leftHip = landmarks[PoseLandmarkType.leftHip];
-    
-    // Leg angles
-    final rightKnee = landmarks[PoseLandmarkType.rightKnee];
-    final rightAnkle = landmarks[PoseLandmarkType.rightAnkle];
-    final leftKnee = landmarks[PoseLandmarkType.leftKnee];
-    final leftAnkle = landmarks[PoseLandmarkType.leftAnkle];
+    double calcAngle(PoseLandmark? a, PoseLandmark? b, PoseLandmark? c) {
+      if (a == null || b == null || c == null) return double.nan;
+      final ba = Point(a.x - b.x, a.y - b.y);
+      final bc = Point(c.x - b.x, c.y - b.y);
+      final dot = ba.x * bc.x + ba.y * bc.y;
+      final magBA = sqrt(ba.x * ba.x + ba.y * ba.y);
+      final magBC = sqrt(bc.x * bc.x + bc.y * bc.y);
+      if (magBA == 0 || magBC == 0) return double.nan;
+      return acos((dot / (magBA * magBC)).clamp(-1.0, 1.0)) * (180 / pi);
+    }
 
-    // Calculate key angles for disc golf form
-    angles['rightElbowAngle'] = calculateAngle(rightShoulder, rightElbow, rightWrist);
-    angles['leftElbowAngle'] = calculateAngle(leftShoulder, leftElbow, leftWrist);
-    angles['rightShoulderAngle'] = calculateAngle(rightElbow, rightShoulder, rightHip);
-    angles['leftShoulderAngle'] = calculateAngle(leftElbow, leftShoulder, leftHip);
-    angles['rightKneeAngle'] = calculateAngle(rightHip, rightKnee, rightAnkle);
-    angles['leftKneeAngle'] = calculateAngle(leftHip, leftKnee, leftAnkle);
-    
-    // Hip angle (using shoulders and hips)
-    if (rightShoulder != null && leftShoulder != null && rightHip != null && leftHip != null) {
-      final shoulderMid = Point(
-        (rightShoulder.x + leftShoulder.x) / 2,
-        (rightShoulder.y + leftShoulder.y) / 2,
-      );
-      final hipMid = Point(
-        (rightHip.x + leftHip.x) / 2,
-        (rightHip.y + leftHip.y) / 2,
-      );
-      
-      // Spine angle relative to vertical
-      final spineAngle = atan2(
-        shoulderMid.x - hipMid.x,
-        hipMid.y - shoulderMid.y, // Flip y: image coords are y-down
-      ) * (180 / pi);
-      angles['spineAngle'] = 90 - spineAngle.abs();
+    final rShoulder = trusted(PoseLandmarkType.rightShoulder);
+    final rElbow    = trusted(PoseLandmarkType.rightElbow);
+    final rWrist    = trusted(PoseLandmarkType.rightWrist);
+    final rHip      = trusted(PoseLandmarkType.rightHip);
+    final lShoulder = trusted(PoseLandmarkType.leftShoulder);
+    final lElbow    = trusted(PoseLandmarkType.leftElbow);
+    final lWrist    = trusted(PoseLandmarkType.leftWrist);
+    final lHip      = trusted(PoseLandmarkType.leftHip);
+    final rKnee     = trusted(PoseLandmarkType.rightKnee);
+    final rAnkle    = trusted(PoseLandmarkType.rightAnkle);
+    final lKnee     = trusted(PoseLandmarkType.leftKnee);
+    final lAnkle    = trusted(PoseLandmarkType.leftAnkle);
+
+    void set(String key, double val) {
+      if (!val.isNaN) angles[key] = val;
+    }
+
+    set('rightElbowAngle',    calcAngle(rShoulder, rElbow, rWrist));
+    set('leftElbowAngle',     calcAngle(lShoulder, lElbow, lWrist));
+    set('rightShoulderAngle', calcAngle(rElbow, rShoulder, rHip));
+    set('leftShoulderAngle',  calcAngle(lElbow, lShoulder, lHip));
+    set('rightKneeAngle',     calcAngle(rHip, rKnee, rAnkle));
+    set('leftKneeAngle',      calcAngle(lHip, lKnee, lAnkle));
+
+    if (rShoulder != null && lShoulder != null &&
+        rHip != null && lHip != null) {
+      final smX = (rShoulder.x + lShoulder.x) / 2;
+      final smY = (rShoulder.y + lShoulder.y) / 2;
+      final hmX = (rHip.x + lHip.x) / 2;
+      final hmY = (rHip.y + lHip.y) / 2;
+      final spine = atan2(smX - hmX, hmY - smY) * (180 / pi);
+      angles['spineAngle'] = 90 - spine.abs();
     }
 
     return angles;
   }
 
-  Map<String, Offset> _extractKeyPoints(Pose pose) {
-    final keyPoints = <String, Offset>{};
-    
-    for (var landmark in pose.landmarks.entries) {
-      keyPoints[landmark.key.toString()] = Offset(
-        landmark.value.x.toDouble(),
-        landmark.value.y.toDouble(),
-      );
+  // ---------------------------------------------------------------------------
+  // Angle calculation — 3D (uses ML Kit z-depth)
+  // ---------------------------------------------------------------------------
+
+  /// Calculate angles using 3D (x, y, z) coordinates from ML Kit.
+  ///
+  /// Returns null if z-depth values are degenerate (all near zero, which can
+  /// happen when the model is uncertain about depth), so the caller can fall
+  /// back to 2D angles.
+  Map<String, double>? _calculateAngles3D(
+      Pose pose, Map<String, double> conf) {
+    final lm = pose.landmarks;
+
+    // Check whether depth data looks meaningful: at least some z values should
+    // differ. If all z-values are ~0 the model didn't produce useful depth.
+    double maxAbsZ = 0;
+    for (final l in lm.values) {
+      final az = l.z.abs();
+      if (az > maxAbsZ) maxAbsZ = az;
     }
-    
-    return keyPoints;
+    if (maxAbsZ < 0.01) return null; // depth not reliable this frame
+
+    // Returns null if missing or low-confidence.
+    ({double x, double y, double z})? trusted(PoseLandmarkType type) {
+      final l = lm[type];
+      if (l == null) return null;
+      final c = conf[type.toString()] ?? 0.0;
+      if (c < _kConfidenceThreshold) return null;
+      return (x: l.x.toDouble(), y: l.y.toDouble(), z: l.z.toDouble());
+    }
+
+    final rShoulder = trusted(PoseLandmarkType.rightShoulder);
+    final rElbow    = trusted(PoseLandmarkType.rightElbow);
+    final rWrist    = trusted(PoseLandmarkType.rightWrist);
+    final rHip      = trusted(PoseLandmarkType.rightHip);
+    final lShoulder = trusted(PoseLandmarkType.leftShoulder);
+    final lElbow    = trusted(PoseLandmarkType.leftElbow);
+    final lWrist    = trusted(PoseLandmarkType.leftWrist);
+    final lHip      = trusted(PoseLandmarkType.leftHip);
+    final rKnee     = trusted(PoseLandmarkType.rightKnee);
+    final rAnkle    = trusted(PoseLandmarkType.rightAnkle);
+    final lKnee     = trusted(PoseLandmarkType.leftKnee);
+    final lAnkle    = trusted(PoseLandmarkType.leftAnkle);
+
+    final angles = <String, double>{};
+
+    void set3D(String key,
+        ({double x, double y, double z})? a,
+        ({double x, double y, double z})? b,
+        ({double x, double y, double z})? c) {
+      if (a == null || b == null || c == null) return;
+      final val = AngleCalculator.angleBetween3D(a, b, c);
+      if (!val.isNaN) angles[key] = val;
+    }
+
+    set3D('rightElbowAngle',    rShoulder, rElbow, rWrist);
+    set3D('leftElbowAngle',     lShoulder, lElbow, lWrist);
+    set3D('rightShoulderAngle', rElbow, rShoulder, rHip);
+    set3D('leftShoulderAngle',  lElbow, lShoulder, lHip);
+    set3D('rightKneeAngle',     rHip, rKnee, rAnkle);
+    set3D('leftKneeAngle',      lHip, lKnee, lAnkle);
+
+    // X-factor: rotation between shoulder plane normal and hip plane normal.
+    // A positive value means the shoulders are rotated further than the hips
+    // (desirable in the pull phase).
+    if (rShoulder != null && lShoulder != null &&
+        rHip != null && lHip != null) {
+      final xFactor = AngleCalculator.xFactor3D(
+          rShoulder, lShoulder, rHip, lHip);
+      if (!xFactor.isNaN) angles['xFactor'] = xFactor;
+
+      // Spine angle — use midpoints in 3D then project onto the vertical plane
+      final smX = (rShoulder.x + lShoulder.x) / 2;
+      final smY = (rShoulder.y + lShoulder.y) / 2;
+      final hmX = (rHip.x + lHip.x) / 2;
+      final hmY = (rHip.y + lHip.y) / 2;
+      final spine = atan2(smX - hmX, hmY - smY) * (180 / pi);
+      angles['spineAngle'] = 90 - spine.abs();
+    }
+
+    // Return null if we got no angles at all (all landmarks low-confidence)
+    return angles.isEmpty ? null : angles;
   }
 
-  /// Apply multi-pass smoothing to reduce pose estimation noise and spikes.
-  /// Pass 1: 3-point median filter to remove outlier spikes.
-  /// Pass 2-3: 9-point moving average for overall smoothness.
+  // ---------------------------------------------------------------------------
+  // Smoothing
+  // ---------------------------------------------------------------------------
+
+  /// Multi-pass smoothing to reduce pose estimation noise and spikes.
+  /// Frames where an angle was omitted due to low confidence are treated as
+  /// 0.0 for the median filter but then restored to their smoothed neighbours.
   void _smoothFrameAngles(List<FormFrame> frames) {
     if (frames.length < 3) return;
 
-    // Collect all angle names present
     final angleNames = <String>{};
     for (final f in frames) {
       angleNames.addAll(f.angles.keys);
     }
 
-    // Smooth each angle channel independently
     for (final name in angleNames) {
       var data = frames.map((f) => f.angles[name] ?? 0.0).toList();
 
-      // Pass 1: Median filter (window 3) to remove spike outliers
       data = _medianFilter(data, 3);
-
-      // Pass 2-3: Moving average (window 9) for smoothness
       data = _movingAverage(data, 9);
       data = _movingAverage(data, 7);
 
       for (int i = 0; i < frames.length; i++) {
+        // Write smoothed value regardless — smoothing fills gaps from neighbours
         frames[i].angles[name] = data[i];
+        // If this frame never had a confident detection, the smoothed value
+        // from neighbouring frames is still written above (no extra action needed).
       }
     }
   }
 
-  /// Smooth keypoint positions (x, y) across frames to reduce skeleton jitter.
-  /// Uses a 5-point moving average on each coordinate independently.
   void _smoothKeyPoints(List<FormFrame> frames) {
     if (frames.length < 3) return;
 
-    // Collect all keypoint names present
     final pointNames = <String>{};
     for (final f in frames) {
       pointNames.addAll(f.keyPoints.keys);
@@ -289,6 +395,10 @@ class PostureAnalysisService extends ChangeNotifier {
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Scoring & suggestions
+  // ---------------------------------------------------------------------------
+
   double _calculateScore(List<FormFrame> frames) {
     if (frames.isEmpty) return 0.0;
 
@@ -296,7 +406,6 @@ class PostureAnalysisService extends ChangeNotifier {
     int count = 0;
 
     for (var frame in frames) {
-      // Ideal angles for disc golf form
       final idealAngles = {
         'rightElbowAngle': 120.0,
         'leftElbowAngle': 140.0,
@@ -319,6 +428,10 @@ class PostureAnalysisService extends ChangeNotifier {
 
     return count > 0 ? totalScore / count : 0.0;
   }
+
+  // ---------------------------------------------------------------------------
+  // Mock fallback
+  // ---------------------------------------------------------------------------
 
   FormAnalysis _generateMockAnalysis(String videoPath) {
     final frames = List.generate(30, (index) {
@@ -357,6 +470,10 @@ class PostureAnalysisService extends ChangeNotifier {
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // Pro data
+  // ---------------------------------------------------------------------------
+
   Future<void> loadProFormData(String proName, {String throwType = 'BH'}) async {
     final proFormAnalysis = await ProBaselineParser.generateProAnalysis(
       proName,
@@ -378,18 +495,14 @@ class PostureAnalysisService extends ChangeNotifier {
     }
 
     final suggestions = <String>[];
-
-    // Analyze average angles
     final avgAngles = <String, double>{};
     for (var frame in _currentAnalysis!.frames) {
       for (var entry in frame.angles.entries) {
         avgAngles[entry.key] = (avgAngles[entry.key] ?? 0) + entry.value;
       }
     }
-
     avgAngles.updateAll((key, value) => value / _currentAnalysis!.frames.length);
 
-    // Generate suggestions based on angles
     if ((avgAngles['rightShoulderAngle'] ?? 0) < 80) {
       suggestions.add('Increase shoulder rotation for more power');
     }
@@ -405,6 +518,9 @@ class PostureAnalysisService extends ChangeNotifier {
     if ((avgAngles['leftKneeAngle'] ?? 0) < 140) {
       suggestions.add('Engage your legs more in the throw');
     }
+    if ((avgAngles['xFactor'] ?? 0) < 30) {
+      suggestions.add('Increase hip-shoulder separation (X-factor) in your backswing');
+    }
 
     if (suggestions.isEmpty) {
       suggestions.add('Great form! Keep practicing consistency');
@@ -415,7 +531,12 @@ class PostureAnalysisService extends ChangeNotifier {
     return suggestions;
   }
 
+  // ---------------------------------------------------------------------------
+  // Public helpers used by PoseCorrectionScreen
+  // ---------------------------------------------------------------------------
+
   /// Recalculate angles for a single frame from its current keyPoints.
+  /// Falls back to 2D since manually-corrected frames have no z-depth.
   void recalculateFrameAngles(FormFrame frame) {
     final newAngles = AngleCalculator.calculateFromKeyPoints(frame.keyPoints);
     frame.angles
@@ -423,7 +544,6 @@ class PostureAnalysisService extends ChangeNotifier {
       ..addAll(newAngles);
   }
 
-  /// Recalculate the overall form score from a list of frames.
   double recalculateScore(List<FormFrame> frames) => _calculateScore(frames);
 
   void clearAnalyses() {

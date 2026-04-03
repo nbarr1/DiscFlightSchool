@@ -4,6 +4,12 @@ class FormFrame {
   final Duration timestamp;
   final Map<String, double> angles;
   final Map<String, Offset> keyPoints;
+  /// Z-depth per landmark from ML Kit (relative, same scale as x).
+  /// Positive = in front of camera. Empty for manually-corrected frames.
+  final Map<String, double> landmarkZ;
+  /// Per-landmark detection confidence (0–1) from ML Kit likelihood.
+  /// Empty for manually-corrected frames (treat as fully trusted).
+  final Map<String, double> landmarkConf;
   final double? imageWidth;
   final double? imageHeight;
 
@@ -11,9 +17,12 @@ class FormFrame {
     required this.timestamp,
     required this.angles,
     required this.keyPoints,
+    Map<String, double>? landmarkZ,
+    Map<String, double>? landmarkConf,
     this.imageWidth,
     this.imageHeight,
-  });
+  })  : landmarkZ = landmarkZ ?? {},
+        landmarkConf = landmarkConf ?? {};
 
   Map<String, dynamic> toJson() {
     return {
@@ -22,6 +31,8 @@ class FormFrame {
       'keyPoints': keyPoints.map(
         (key, value) => MapEntry(key, {'dx': value.dx, 'dy': value.dy}),
       ),
+      if (landmarkZ.isNotEmpty) 'landmarkZ': landmarkZ,
+      if (landmarkConf.isNotEmpty) 'landmarkConf': landmarkConf,
       if (imageWidth != null) 'imageWidth': imageWidth,
       if (imageHeight != null) 'imageHeight': imageHeight,
     };
@@ -37,6 +48,12 @@ class FormFrame {
           Offset(value['dx'] as double, value['dy'] as double),
         ),
       ),
+      landmarkZ: json['landmarkZ'] != null
+          ? Map<String, double>.from(json['landmarkZ'] as Map)
+          : {},
+      landmarkConf: json['landmarkConf'] != null
+          ? Map<String, double>.from(json['landmarkConf'] as Map)
+          : {},
       imageWidth: json['imageWidth'] as double?,
       imageHeight: json['imageHeight'] as double?,
     );
