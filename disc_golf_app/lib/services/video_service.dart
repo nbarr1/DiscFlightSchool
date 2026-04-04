@@ -186,13 +186,19 @@ class VideoService extends ChangeNotifier {
     final transformsPath = '${tmp.path}/vidstab_$ts.trf';
     final outputPath = '${tmp.path}/stabilized_$ts.mp4';
 
+    // Scale down to max 1280px wide before stabilization to prevent OOM on
+    // high-resolution (1080p/4K) video. Both passes must use the same scale so
+    // the transforms file stays aligned with the output frames.
+    // Disc golf videos are landscape, so capping width is sufficient.
+    const maxWidth = 1280;
+
     // Pass 1 — detect motion and write transforms
     onStatus?.call('Analysing camera motion…');
     debugPrint('vidstab pass 1: $inputPath → $transformsPath');
     final pass1 = await FFmpegKit.execute(
       '-y -i "$inputPath"'
-      ' -vf "vidstabdetect=shakiness=$shakiness:accuracy=9:result=$transformsPath"'
-      ' -f null -',
+      ' -vf "scale=$maxWidth:-2,vidstabdetect=shakiness=$shakiness:accuracy=5:result=$transformsPath"'
+      ' -f null /dev/null',
     );
     final rc1 = await pass1.getReturnCode();
     if (!ReturnCode.isSuccess(rc1)) {
@@ -205,8 +211,8 @@ class VideoService extends ChangeNotifier {
     debugPrint('vidstab pass 2: → $outputPath');
     final pass2 = await FFmpegKit.execute(
       '-y -i "$inputPath"'
-      ' -vf "vidstabtransform=input=$transformsPath:smoothing=$smoothing:crop=black:zoom=$zoom"'
-      ' -c:v libx264 -preset fast -crf 23'
+      ' -vf "scale=$maxWidth:-2,vidstabtransform=input=$transformsPath:smoothing=$smoothing:crop=black:zoom=$zoom"'
+      ' -c:v libx264 -preset ultrafast -crf 23'
       ' -c:a copy'
       ' "$outputPath"',
     );
@@ -221,6 +227,10 @@ class VideoService extends ChangeNotifier {
     if (!ReturnCode.isSuccess(rc2)) {
       final log = await pass2.getAllLogsAsString();
       throw Exception('vidstabtransform failed (rc=${rc2?.getValue()}): $log');
+    }
+
+    if (!await File(outputPath).exists()) {
+      throw Exception('Stabilization completed but output file was not created');
     }
 
     onStatus?.call('Stabilization complete');

@@ -77,6 +77,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   String? _stabilizedVideoPath; // Path to FFmpeg-stabilized temp file
   bool _isStabilizing = false;
 
+  // Cached service references so dispose() doesn't need context
+  VideoService? _videoService;
+  ScaffoldMessengerState? _scaffoldMessenger;
+
   // Frame rate used for frame indexing (10fps = 1 frame per 100ms)
   static const double _frameFps = 10.0;
 
@@ -86,6 +90,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _initializeVideo();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _videoService ??= Provider.of<VideoService>(context, listen: false);
+    _scaffoldMessenger = ScaffoldMessenger.of(context);
+  }
+
   Future<void> _initializeVideo([String? overridePath]) async {
     final path = overridePath ?? widget.videoPath;
     _controller = VideoPlayerController.file(File(path));
@@ -93,6 +104,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     if (widget.trimStartMs != null) {
       await _controller.seekTo(Duration(milliseconds: widget.trimStartMs!));
     }
+    if (!mounted) return;
     setState(() {
       _isInitialized = true;
     });
@@ -120,13 +132,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   @override
   void dispose() {
+    _scaffoldMessenger?.removeCurrentMaterialBanner();
     _controller.removeListener(_onVideoProgress);
     _controller.dispose();
     _capturedFrame?.dispose();
     // Clean up stabilized temp file when leaving the screen
     if (_stabilizedVideoPath != null) {
-      final videoService = Provider.of<VideoService>(context, listen: false);
-      videoService.deleteStabilizedVideo(_stabilizedVideoPath!);
+      _videoService?.deleteStabilizedVideo(_stabilizedVideoPath!);
     }
     super.dispose();
   }
@@ -423,10 +435,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       });
       _controller.removeListener(_onVideoProgress);
       await _controller.dispose();
+      if (!mounted) return;
 
-      final videoService = Provider.of<VideoService>(context, listen: false);
       if (_stabilizedVideoPath != null) {
-        await videoService.deleteStabilizedVideo(_stabilizedVideoPath!);
+        await _videoService?.deleteStabilizedVideo(_stabilizedVideoPath!);
         _stabilizedVideoPath = null;
       }
 
@@ -438,14 +450,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     setState(() => _isStabilizing = true);
 
     try {
-      final videoService = Provider.of<VideoService>(context, listen: false);
-      final stabilized = await videoService.stabilizeVideo(
+      final stabilized = await _videoService!.stabilizeVideo(
         widget.videoPath,
         onStatus: (msg) => debugPrint('[stabilization] $msg'),
       );
+      if (!mounted) return;
 
       _controller.removeListener(_onVideoProgress);
       await _controller.dispose();
+      if (!mounted) return;
 
       setState(() {
         _stabilizedVideoPath = stabilized;
