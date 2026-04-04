@@ -81,7 +81,7 @@ class ScorecardScreen extends StatelessWidget {
     final totalWeighted = round.getTotalWeightedScore(playerName);
 
     return Card(
-      color: Colors.deepPurple.shade50,
+      color: Colors.deepPurple.withAlpha(40),
       margin: const EdgeInsets.only(bottom: 16),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -95,7 +95,7 @@ class ScorecardScreen extends StatelessWidget {
                   playerName,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: Colors.purple,
+                        color: Colors.purple.shade300,
                       ),
                 ),
                 Container(
@@ -118,12 +118,12 @@ class ScorecardScreen extends StatelessWidget {
             ),
             const Divider(height: 24),
             if (playerScores.isNotEmpty) ...[
-              const Text(
+              Text(
                 'Hole-By-Hole',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: Colors.grey.shade400,
                 ),
               ),
               const SizedBox(height: 12),
@@ -176,7 +176,7 @@ class ScorecardScreen extends StatelessWidget {
               children: [
                 Text(
                   '${score.holeNumber}',
-                  style: const TextStyle(fontSize: 10, color: Colors.black87),
+                  style: TextStyle(fontSize: 10, color: Colors.grey.shade400),
                 ),
                 Text(
                   '${score.strokes}',
@@ -188,7 +188,7 @@ class ScorecardScreen extends StatelessWidget {
                 ),
                 Text(
                   '${score.averageMultiplier.toStringAsFixed(1)}x',
-                  style: const TextStyle(fontSize: 9, color: Colors.black87),
+                  style: TextStyle(fontSize: 9, color: Colors.grey.shade400),
                 ),
               ],
             ),
@@ -230,8 +230,8 @@ class ScorecardScreen extends StatelessWidget {
                       height: 28,
                       decoration: BoxDecoration(
                         color: t.isPutt
-                            ? Colors.teal.shade100
-                            : Colors.purple.shade100,
+                            ? Colors.teal.withAlpha(60)
+                            : Colors.purple.withAlpha(60),
                         shape: BoxShape.circle,
                       ),
                       child: Center(
@@ -252,7 +252,7 @@ class ScorecardScreen extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'Average Multiplier: ${score.averageMultiplier.toStringAsFixed(2)}x',
-              style: TextStyle(color: Colors.grey.shade600),
+              style: TextStyle(color: Colors.grey.shade400),
             ),
             const SizedBox(height: 16),
           ],
@@ -265,13 +265,13 @@ class ScorecardScreen extends StatelessWidget {
     return Column(
       children: [
         Text(label,
-            style: const TextStyle(fontSize: 12, color: Colors.black87)),
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
         const SizedBox(height: 4),
         Text(value,
             style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.black)),
+                color: Colors.white)),
       ],
     );
   }
@@ -295,7 +295,7 @@ class ScorecardScreen extends StatelessWidget {
     });
 
     return Card(
-      color: Colors.amber.shade50,
+      color: Colors.amber.withAlpha(40),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -311,7 +311,7 @@ class ScorecardScreen extends StatelessWidget {
                   style: Theme.of(context)
                       .textTheme
                       .titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                      ?.copyWith(fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ],
             ),
@@ -325,11 +325,13 @@ class ScorecardScreen extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isWinner ? Colors.amber.shade100 : Colors.white,
+                  color: isWinner
+                      ? Colors.amber.withAlpha(40)
+                      : Colors.white.withAlpha(10),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color:
-                        isWinner ? Colors.amber : Colors.grey.shade300,
+                        isWinner ? Colors.amber : Colors.grey.shade700,
                     width: isWinner ? 2 : 1,
                   ),
                 ),
@@ -341,16 +343,15 @@ class ScorecardScreen extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: isWinner
                             ? Colors.amber
-                            : Colors.grey.shade300,
+                            : Colors.grey.shade700,
                         shape: BoxShape.circle,
                       ),
                       child: Center(
                         child: Text(
                           '${index + 1}',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontWeight: FontWeight.bold,
-                            color:
-                                isWinner ? Colors.white : Colors.black,
+                            color: Colors.white,
                           ),
                         ),
                       ),
@@ -364,6 +365,7 @@ class ScorecardScreen extends StatelessWidget {
                           fontWeight: isWinner
                               ? FontWeight.bold
                               : FontWeight.normal,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -375,14 +377,15 @@ class ScorecardScreen extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
+                            color: Colors.white,
                           ),
                         ),
                         if (round.useWeighting)
                           Text(
                             'Weighted: ${(stats['weightedScore'] as double).toStringAsFixed(1)}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
-                              color: Colors.black87,
+                              color: Colors.grey.shade400,
                             ),
                           ),
                       ],

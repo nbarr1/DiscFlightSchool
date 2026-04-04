@@ -60,19 +60,19 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
         child: Column(
           children: [
             Card(
-              color: Colors.purple.shade50,
+              color: Colors.purple.withAlpha(40),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
                     Text(
                       'Spin for Your Challenge!',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.black),
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Add Excitement To Your Round With Random Shot Challenges',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black87),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade400),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -108,20 +108,20 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
 
   Widget _buildPuttingToggle() {
     return Card(
-      color: _isPutting ? Colors.teal.shade50 : Colors.purple.shade50,
+      color: _isPutting ? Colors.teal.withAlpha(40) : Colors.purple.withAlpha(40),
       child: SwitchListTile(
         title: Text(
           _isPutting ? 'Putting Mode' : 'Throwing Mode',
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: _isPutting ? Colors.teal.shade800 : Colors.purple.shade800,
+            color: _isPutting ? Colors.teal.shade300 : Colors.purple.shade300,
           ),
         ),
         subtitle: Text(
           _isPutting
               ? 'Challenges: Putt Style (Putter Only)'
               : 'Challenges: Shot Type, Disc, Power, Hindrance',
-          style: const TextStyle(color: Colors.black54),
+          style: TextStyle(color: Colors.grey.shade400),
         ),
         secondary: Icon(
           _isPutting ? Icons.gps_fixed : Icons.album,
@@ -145,7 +145,7 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
     if (_currentResult == null) return const SizedBox.shrink();
 
     return Card(
-      color: Colors.purple.shade50,
+      color: Colors.purple.withAlpha(40),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
@@ -154,7 +154,7 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
               'Your Challenge',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Colors.black,
+                    color: Colors.white,
                   ),
             ),
             const Divider(height: 24),
@@ -210,7 +210,7 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
   Widget _buildResultRow(String label, String value, IconData icon, {Color? color}) {
     return Row(
       children: [
-        Icon(icon, color: color ?? Colors.purple),
+        Icon(icon, color: color ?? Colors.purple.shade300),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -218,9 +218,9 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
             children: [
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: Colors.black87,
+                  color: Colors.grey.shade400,
                 ),
               ),
               Text(
@@ -228,7 +228,7 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black,
+                  color: Colors.white,
                 ),
               ),
             ],

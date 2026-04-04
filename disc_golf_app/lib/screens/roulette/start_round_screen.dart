@@ -52,7 +52,7 @@ class _StartRoundScreenState extends State<StartRoundScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Card(
-              color: Colors.deepPurple.shade50,
+              color: Colors.deepPurple.withAlpha(40),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -63,7 +63,7 @@ class _StartRoundScreenState extends State<StartRoundScreen> {
                       children: [
                         Text(
                           'Players',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.black),
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
                         ),
                         ElevatedButton.icon(
                           onPressed: _addPlayer,
@@ -107,7 +107,7 @@ class _StartRoundScreenState extends State<StartRoundScreen> {
             ),
             const SizedBox(height: 16),
             Card(
-              color: Colors.deepPurple.shade50,
+              color: Colors.deepPurple.withAlpha(40),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -115,7 +115,7 @@ class _StartRoundScreenState extends State<StartRoundScreen> {
                   children: [
                     Text(
                       'Scoring Options',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.black),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
                     ),
                     const SizedBox(height: 16),
                     SwitchListTile(
@@ -146,7 +146,7 @@ class _StartRoundScreenState extends State<StartRoundScreen> {
             if (_customPars) ...[
               const SizedBox(height: 16),
               Card(
-                color: Colors.deepPurple.shade50,
+                color: Colors.deepPurple.withAlpha(40),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -157,7 +157,7 @@ class _StartRoundScreenState extends State<StartRoundScreen> {
                         children: [
                           Text(
                             'Course Setup',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.black),
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
                           ),
                           TextButton(
                             onPressed: () {
@@ -205,7 +205,7 @@ class _StartRoundScreenState extends State<StartRoundScreen> {
       itemCount: 18,
       itemBuilder: (context, index) {
         return Card(
-          color: Colors.deepPurple.shade50,
+          color: Colors.deepPurple.withAlpha(40),
           child: InkWell(
             onTap: () => _showParPicker(index),
             child: Column(
@@ -213,9 +213,9 @@ class _StartRoundScreenState extends State<StartRoundScreen> {
               children: [
                 Text(
                   '${index + 1}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: Colors.black87,
+                    color: Colors.grey.shade400,
                   ),
                 ),
                 Text(
@@ -223,6 +223,7 @@ class _StartRoundScreenState extends State<StartRoundScreen> {
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
                 ),
               ],

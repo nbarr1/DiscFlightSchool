@@ -221,7 +221,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
           children: [
             // Hole info card
             Card(
-              color: Colors.blue.shade50,
+              color: Colors.blue.withAlpha(40),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -282,18 +282,18 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
     return Column(
       children: [
         Text(label,
-            style: const TextStyle(fontSize: 14, color: Colors.black87)),
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade400)),
         const SizedBox(height: 4),
         Text(value,
             style: const TextStyle(
-                fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black)),
+                fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
       ],
     );
   }
 
   Widget _buildCompletedPlayersCard(int holePar) {
     return Card(
-      color: Colors.green.shade50,
+      color: Colors.green.withAlpha(40),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -303,7 +303,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
                 style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
-                    color: Colors.black)),
+                    color: Colors.white)),
             const SizedBox(height: 8),
             ..._completedPlayers.map((player) {
               final strokes = _playerStrokes[player] ?? 0;
@@ -320,7 +320,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
                   children: [
                     Text(player,
                         style: const TextStyle(
-                            fontSize: 14, color: Colors.black)),
+                            fontSize: 14, color: Colors.white70)),
                     Text(
                       '$strokes (${_formatScore(scoreToPar)}) ${avgMult.toStringAsFixed(1)}x',
                       style: TextStyle(
@@ -342,19 +342,20 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
   Widget _buildPlayerSelector(ScoringService scoringService,
       ScoredRound round, String currentPlayer, List<String> remainingPlayers) {
     return Card(
-      color: Colors.amber.shade50,
+      color: Colors.amber.withAlpha(40),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
             Text('Current Player',
-                style: const TextStyle(fontSize: 14, color: Colors.black87)),
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade400)),
             const SizedBox(height: 8),
             DropdownButton<String>(
               value: remainingPlayers.contains(currentPlayer)
                   ? currentPlayer
                   : remainingPlayers.first,
               isExpanded: true,
+              dropdownColor: const Color(0xFF16213e),
               items: remainingPlayers
                   .map((player) => DropdownMenuItem(
                         value: player,
@@ -362,7 +363,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
                             style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.black)),
+                                color: Colors.white)),
                       ))
                   .toList(),
               onChanged: (newPlayer) {
@@ -386,7 +387,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
 
   Widget _buildThrowHistory() {
     return Card(
-      color: Colors.purple.shade50,
+      color: Colors.purple.withAlpha(40),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -400,7 +401,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
                   style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black),
+                      color: Colors.white),
                 ),
                 if (_currentThrows.isNotEmpty)
                   TextButton.icon(
@@ -431,8 +432,8 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
                       height: 28,
                       decoration: BoxDecoration(
                         color: t.isPutt
-                            ? Colors.teal.shade100
-                            : Colors.purple.shade100,
+                            ? Colors.teal.withAlpha(60)
+                            : Colors.purple.withAlpha(60),
                         shape: BoxShape.circle,
                       ),
                       child: Center(
@@ -440,13 +441,13 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12,
-                                  color: Colors.black))),
+                                  color: Colors.white))),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(label,
                           style: const TextStyle(
-                              fontSize: 13, color: Colors.black),
+                              fontSize: 13, color: Colors.white70),
                           overflow: TextOverflow.ellipsis),
                     ),
                     Text('${t.multiplier.toStringAsFixed(1)}x',
@@ -465,20 +466,20 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
 
   Widget _buildPuttingToggle() {
     return Card(
-      color: _isPutting ? Colors.teal.shade50 : Colors.purple.shade50,
+      color: _isPutting ? Colors.teal.withAlpha(40) : Colors.purple.withAlpha(40),
       child: SwitchListTile(
         title: Text(
           _isPutting ? 'Putting Mode' : 'Throwing Mode',
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: _isPutting ? Colors.teal.shade800 : Colors.purple.shade800,
+            color: _isPutting ? Colors.teal.shade300 : Colors.purple.shade300,
           ),
         ),
         subtitle: Text(
           _isPutting
               ? 'Challenges: Putt Style (Putter Only)'
               : 'Challenges: Shot Type, Disc, Power, Hindrance',
-          style: const TextStyle(color: Colors.black54),
+          style: TextStyle(color: Colors.grey.shade400),
         ),
         secondary: Icon(
           _isPutting ? Icons.gps_fixed : Icons.sports_golf,
@@ -535,7 +536,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
     final difficulty = challenge.difficultyMultiplier;
 
     return Card(
-      color: _isPutting ? Colors.teal.shade50 : Colors.purple.shade50,
+      color: _isPutting ? Colors.teal.withAlpha(40) : Colors.purple.withAlpha(40),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -548,7 +549,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
                   style: Theme.of(context)
                       .textTheme
                       .titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold, color: Colors.black),
+                      ?.copyWith(fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 Container(
                   padding:
@@ -619,19 +620,19 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
       {Color? color}) {
     return Row(
       children: [
-        Icon(icon, color: color ?? Colors.purple),
+        Icon(icon, color: color ?? Colors.purple.shade300),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label,
-                  style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
               Text(value,
                   style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black)),
+                      color: Colors.white)),
             ],
           ),
         ),
@@ -695,7 +696,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
 
   Widget _buildHoleCompleteCard(ScoredRound round) {
     return Card(
-      color: Colors.purple.shade50,
+      color: Colors.purple.withAlpha(40),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -706,7 +707,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
                 style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black)),
+                    color: Colors.white)),
             const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: _moveToNextHole,
