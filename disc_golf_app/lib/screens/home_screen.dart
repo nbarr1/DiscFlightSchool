@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'flight_tracker/flight_tracker_screen.dart';
 import 'form_coach/form_coach_screen.dart';
 import 'roulette/roulette_screen.dart';
-import 'roulette/start_round_screen.dart';
+// import 'roulette/start_round_screen.dart'; // ARCHIVED
 import 'package:flutter_svg/flutter_svg.dart';
 import 'knowledge_base/knowledge_base_screen.dart';
 import 'settings/training_settings_screen.dart';
@@ -100,20 +100,6 @@ class HomeScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (context) => const RouletteScreen(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _buildFeatureButton(
-                  context,
-                  'Start Scoring Round',
-                  'Play a scored round with challenges',
-                  Icons.score,
-                  Colors.green,
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const StartRoundScreen(),
                     ),
                   ),
                 ),

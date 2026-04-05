@@ -14,6 +14,17 @@ import 'dart:math';
 /// then interpolates from neighbouring confident frames.
 const double _kConfidenceThreshold = 0.5;
 
+/// A form coaching suggestion paired with an optional Knowledge Base article
+/// ID that the user can tap to learn more.
+class FormSuggestion {
+  final String text;
+  /// Knowledge Base article ID (see `assets/data/knowledge_base.json`).
+  /// Null when no directly-relevant article is mapped.
+  final String? kbArticleId;
+
+  const FormSuggestion(this.text, {this.kbArticleId});
+}
+
 class PostureAnalysisService extends ChangeNotifier {
   final List<FormAnalysis> _analyses = [];
   FormAnalysis? _currentAnalysis;
@@ -31,7 +42,24 @@ class PostureAnalysisService extends ChangeNotifier {
   FormAnalysis? get currentAnalysis => _currentAnalysis;
   FormAnalysis? get proAnalysis => _proAnalysis;
 
-  Future<FormAnalysis> analyzeForm(String videoPath, {int startMs = 0, int frameCount = 30}) async {
+  /// Swap right↔left angle keys so the throwing arm is always "right*".
+  /// Applied when [isLeftHanded] is true so all downstream scoring and
+  /// comparison logic can treat "right" as the throwing arm.
+  static Map<String, double> _mirrorAngles(Map<String, double> angles) {
+    final result = <String, double>{};
+    for (final e in angles.entries) {
+      String key = e.key;
+      if (key.startsWith('right')) {
+        key = 'left${key.substring(5)}';
+      } else if (key.startsWith('left')) {
+        key = 'right${key.substring(4)}';
+      }
+      result[key] = e.value;
+    }
+    return result;
+  }
+
+  Future<FormAnalysis> analyzeForm(String videoPath, {int startMs = 0, int frameCount = 30, bool isLeftHanded = false, String throwType = 'BH'}) async {
     List<String>? framePaths;
 
     try {
@@ -68,9 +96,13 @@ class PostureAnalysisService extends ChangeNotifier {
           final landmarkConf = _extractConfidence(pose);
           final landmarkZ = _extractDepth(pose);
           final keyPoints = _extractKeyPoints(pose);
-          // Use 3D angles when depth data is meaningful; fall back to 2D if not
-          final angles = _calculateAngles3D(pose, landmarkConf) ??
+          // Use 3D angles when depth data is meaningful; fall back to 2D if not.
+          // Mirror right↔left for left-handed throwers so the throwing arm is
+          // always represented as "right*" throughout the pipeline.
+          final rawAngles = _calculateAngles3D(pose, landmarkConf) ??
               _calculateAngles2D(pose, landmarkConf);
+          final angles =
+              isLeftHanded ? _mirrorAngles(rawAngles) : rawAngles;
 
           frames.add(FormFrame(
             timestamp: Duration(milliseconds: i * intervalMs),
@@ -107,7 +139,7 @@ class PostureAnalysisService extends ChangeNotifier {
         date: DateTime.now(),
         videoPath: videoPath,
         frames: frames,
-        score: _calculateScore(frames),
+        score: _calculateScore(frames, throwType: throwType),
       );
 
       _analyses.add(analysis);
@@ -319,8 +351,9 @@ class PostureAnalysisService extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   /// Multi-pass smoothing to reduce pose estimation noise and spikes.
-  /// Frames where an angle was omitted due to low confidence are treated as
-  /// 0.0 for the median filter but then restored to their smoothed neighbours.
+  /// Frames where an angle was omitted due to low confidence are represented as
+  /// NaN so they are excluded from the average rather than pulling neighbours
+  /// toward 0°.  After smoothing, frames that remain NaN keep no angle entry.
   void _smoothFrameAngles(List<FormFrame> frames) {
     if (frames.length < 3) return;
 
@@ -330,17 +363,17 @@ class PostureAnalysisService extends ChangeNotifier {
     }
 
     for (final name in angleNames) {
-      var data = frames.map((f) => f.angles[name] ?? 0.0).toList();
+      var data = frames.map((f) => f.angles[name] ?? double.nan).toList();
 
-      data = _medianFilter(data, 3);
-      data = _movingAverage(data, 9);
-      data = _movingAverage(data, 7);
+      data = _sparseMedianFilter(data, 3);
+      data = _sparseMovingAverage(data, 9);
+      data = _sparseMovingAverage(data, 7);
 
       for (int i = 0; i < frames.length; i++) {
-        // Write smoothed value regardless — smoothing fills gaps from neighbours
-        frames[i].angles[name] = data[i];
-        // If this frame never had a confident detection, the smoothed value
-        // from neighbouring frames is still written above (no extra action needed).
+        if (!data[i].isNaN) {
+          frames[i].angles[name] = data[i];
+        }
+        // Frames that remain NaN keep no angle entry — omit rather than corrupt.
       }
     }
   }
@@ -354,33 +387,43 @@ class PostureAnalysisService extends ChangeNotifier {
     }
 
     for (final name in pointNames) {
-      var xData = frames.map((f) => f.keyPoints[name]?.dx ?? 0.0).toList();
-      var yData = frames.map((f) => f.keyPoints[name]?.dy ?? 0.0).toList();
+      // Use NaN for frames that lack this landmark so they don't pull
+      // neighbouring detected positions toward (0, 0).
+      final xData = frames.map((f) => f.keyPoints[name]?.dx ?? double.nan).toList();
+      final yData = frames.map((f) => f.keyPoints[name]?.dy ?? double.nan).toList();
 
-      xData = _movingAverage(xData, 5);
-      yData = _movingAverage(yData, 5);
+      final smoothedX = _sparseMovingAverage(xData, 5);
+      final smoothedY = _sparseMovingAverage(yData, 5);
 
       for (int i = 0; i < frames.length; i++) {
-        if (frames[i].keyPoints.containsKey(name)) {
-          frames[i].keyPoints[name] = Offset(xData[i], yData[i]);
+        if (frames[i].keyPoints.containsKey(name) && !smoothedX[i].isNaN) {
+          frames[i].keyPoints[name] = Offset(smoothedX[i], smoothedY[i]);
         }
       }
     }
   }
 
-  List<double> _medianFilter(List<double> data, int window) {
-    if (data.length < window) return data;
+  /// Median filter that ignores NaN entries.  Each output position is the
+  /// median of the non-NaN values within the window; output is NaN when the
+  /// window contains no valid values.
+  List<double> _sparseMedianFilter(List<double> data, int window) {
     final half = window ~/ 2;
     return List.generate(data.length, (i) {
       final start = (i - half).clamp(0, data.length - 1);
       final end = (i + half).clamp(0, data.length - 1);
-      final segment = data.sublist(start, end + 1)..sort();
+      final segment = data.sublist(start, end + 1)
+          .where((v) => !v.isNaN)
+          .toList()
+        ..sort();
+      if (segment.isEmpty) return double.nan;
       return segment[segment.length ~/ 2];
     });
   }
 
-  List<double> _movingAverage(List<double> data, int window) {
-    if (data.length < window) return data;
+  /// Moving average that ignores NaN entries.  Output is NaN when no valid
+  /// values exist in the window, preserving gaps rather than filling them
+  /// with 0 or an incorrect interpolated value.
+  List<double> _sparseMovingAverage(List<double> data, int window) {
     final half = window ~/ 2;
     return List.generate(data.length, (i) {
       final start = (i - half).clamp(0, data.length - 1);
@@ -388,10 +431,12 @@ class PostureAnalysisService extends ChangeNotifier {
       double sum = 0;
       int count = 0;
       for (int j = start; j <= end; j++) {
-        sum += data[j];
-        count++;
+        if (!data[j].isNaN) {
+          sum += data[j];
+          count++;
+        }
       }
-      return sum / count;
+      return count > 0 ? sum / count : double.nan;
     });
   }
 
@@ -399,30 +444,140 @@ class PostureAnalysisService extends ChangeNotifier {
   // Scoring & suggestions
   // ---------------------------------------------------------------------------
 
-  double _calculateScore(List<FormFrame> frames) {
+  /// Phase-aware ideal angles for a RHFH throw.
+  /// Forehand uses a sidearm motion: throwing elbow stays lower and more bent,
+  /// shoulder rotation is forward-facing rather than reaching back.
+  static const _phaseIdealsFH = [
+    // wind_up
+    {
+      'rightElbowAngle': 100.0,
+      'leftElbowAngle': 150.0,
+      'rightShoulderAngle': 60.0,
+      'leftShoulderAngle': 95.0,
+      'rightKneeAngle': 145.0,
+      'leftKneeAngle': 155.0,
+      'spineAngle': 82.0,
+    },
+    // power_pocket
+    {
+      'rightElbowAngle': 85.0,
+      'leftElbowAngle': 135.0,
+      'rightShoulderAngle': 90.0,
+      'leftShoulderAngle': 100.0,
+      'rightKneeAngle': 140.0,
+      'leftKneeAngle': 155.0,
+      'spineAngle': 83.0,
+    },
+    // release
+    {
+      'rightElbowAngle': 145.0,
+      'leftElbowAngle': 140.0,
+      'rightShoulderAngle': 120.0,
+      'leftShoulderAngle': 95.0,
+      'rightKneeAngle': 158.0,
+      'leftKneeAngle': 163.0,
+      'spineAngle': 86.0,
+    },
+    // follow_through
+    {
+      'rightElbowAngle': 130.0,
+      'leftElbowAngle': 145.0,
+      'rightShoulderAngle': 105.0,
+      'leftShoulderAngle': 100.0,
+      'rightKneeAngle': 168.0,
+      'leftKneeAngle': 170.0,
+      'spineAngle': 88.0,
+    },
+  ];
+
+  /// Phase-aware ideal angles for a RHBH throw.
+  /// Four rows correspond to: reach-back, power-pocket, release, follow-through.
+  /// Values are interpolated across the frame range so each frame is scored
+  /// against the ideal for its phase of the throw rather than a single
+  /// fixed target, which was inaccurate (e.g. elbow must be extended at
+  /// reach-back, tucked at power-pocket, extending again at release).
+  static const _phaseIdeals = [
+    // reach_back
+    {
+      'rightElbowAngle': 165.0,
+      'leftElbowAngle': 155.0,
+      'rightShoulderAngle': 70.0,
+      'leftShoulderAngle': 90.0,
+      'rightKneeAngle': 145.0,
+      'leftKneeAngle': 155.0,
+      'spineAngle': 80.0,
+    },
+    // power_pocket
+    {
+      'rightElbowAngle': 90.0,
+      'leftElbowAngle': 130.0,
+      'rightShoulderAngle': 110.0,
+      'leftShoulderAngle': 100.0,
+      'rightKneeAngle': 135.0,
+      'leftKneeAngle': 150.0,
+      'spineAngle': 82.0,
+    },
+    // release
+    {
+      'rightElbowAngle': 155.0,
+      'leftElbowAngle': 145.0,
+      'rightShoulderAngle': 130.0,
+      'leftShoulderAngle': 95.0,
+      'rightKneeAngle': 160.0,
+      'leftKneeAngle': 165.0,
+      'spineAngle': 87.0,
+    },
+    // follow_through
+    {
+      'rightElbowAngle': 140.0,
+      'leftElbowAngle': 150.0,
+      'rightShoulderAngle': 100.0,
+      'leftShoulderAngle': 100.0,
+      'rightKneeAngle': 170.0,
+      'leftKneeAngle': 170.0,
+      'spineAngle': 88.0,
+    },
+  ];
+
+  /// Interpolate the ideal angle for [angleName] at fractional throw progress
+  /// [t] (0 = first frame, 1 = last frame). Uses linear interpolation across
+  /// the four phase snapshots, each occupying equal time.
+  /// [throwType] selects between BH ('BH') and FH ('FH') phase tables.
+  static double _phaseIdealAt(String angleName, double t,
+      {String throwType = 'BH'}) {
+    final table =
+        throwType == 'FH' ? _phaseIdealsFH : _phaseIdeals;
+    // t in [0,1] → phases each span equal width
+    final scaled = t * (table.length - 1);
+    final lo = scaled.floor().clamp(0, table.length - 1);
+    final hi = (lo + 1).clamp(0, table.length - 1);
+    final frac = scaled - lo;
+    final loVal = table[lo][angleName];
+    final hiVal = table[hi][angleName];
+    if (loVal == null || hiVal == null) return double.nan;
+    return loVal + (hiVal - loVal) * frac;
+  }
+
+  double _calculateScore(List<FormFrame> frames, {String throwType = 'BH'}) {
     if (frames.isEmpty) return 0.0;
 
     double totalScore = 0.0;
     int count = 0;
+    final total = frames.length;
 
-    for (var frame in frames) {
-      final idealAngles = {
-        'rightElbowAngle': 120.0,
-        'leftElbowAngle': 140.0,
-        'rightShoulderAngle': 100.0,
-        'leftShoulderAngle': 100.0,
-        'rightKneeAngle': 160.0,
-        'leftKneeAngle': 160.0,
-        'spineAngle': 85.0,
-      };
+    for (int i = 0; i < total; i++) {
+      final t = total > 1 ? i / (total - 1) : 0.0;
+      final frame = frames[i];
 
-      for (var entry in frame.angles.entries) {
-        if (idealAngles.containsKey(entry.key)) {
-          final diff = (entry.value - idealAngles[entry.key]!).abs();
-          final score = max(0, 100 - diff);
-          totalScore += score;
-          count++;
-        }
+      for (final entry in frame.angles.entries) {
+        final ideal =
+            _phaseIdealAt(entry.key, t, throwType: throwType);
+        if (ideal.isNaN) continue;
+        final diff = (entry.value - ideal).abs();
+        // Score decays linearly: 100 at 0° diff, 0 at 50° diff
+        final score = (100 - diff * 2.0).clamp(0.0, 100.0);
+        totalScore += score;
+        count++;
       }
     }
 
@@ -485,47 +640,111 @@ class PostureAnalysisService extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<String> generateSuggestions() {
+  List<FormSuggestion> generateSuggestions({String throwType = 'BH'}) {
     if (_currentAnalysis == null || _currentAnalysis!.frames.isEmpty) {
       return [
-        'Upload a video to get personalized form suggestions',
-        'Focus on maintaining balance throughout your throw',
-        'Practice your reach-back motion',
+        const FormSuggestion(
+            'Upload a video to get personalized form suggestions'),
+        const FormSuggestion(
+            'Focus on maintaining balance throughout your throw'),
+        FormSuggestion(
+          throwType == 'FH'
+              ? 'Practice your forehand sidearm snap'
+              : 'Practice your reach-back motion',
+          kbArticleId: 'bio_faq_2',
+        ),
       ];
     }
 
-    final suggestions = <String>[];
+    final suggestions = <FormSuggestion>[];
     final avgAngles = <String, double>{};
     for (var frame in _currentAnalysis!.frames) {
       for (var entry in frame.angles.entries) {
         avgAngles[entry.key] = (avgAngles[entry.key] ?? 0) + entry.value;
       }
     }
-    avgAngles.updateAll((key, value) => value / _currentAnalysis!.frames.length);
+    avgAngles.updateAll(
+        (key, value) => value / _currentAnalysis!.frames.length);
 
-    if ((avgAngles['rightShoulderAngle'] ?? 0) < 80) {
-      suggestions.add('Increase shoulder rotation for more power');
-    }
-    if ((avgAngles['rightElbowAngle'] ?? 0) > 140) {
-      suggestions.add('Keep your elbow at 90-120 degrees during pull-through');
-    }
-    if ((avgAngles['rightKneeAngle'] ?? 0) < 140) {
-      suggestions.add('Keep your knees less bent for better balance');
-    }
-    if ((avgAngles['spineAngle'] ?? 0) < 75) {
-      suggestions.add('Maintain a more upright spine position');
-    }
-    if ((avgAngles['leftKneeAngle'] ?? 0) < 140) {
-      suggestions.add('Engage your legs more in the throw');
-    }
-    if ((avgAngles['xFactor'] ?? 0) < 30) {
-      suggestions.add('Increase hip-shoulder separation (X-factor) in your backswing');
+    if (throwType == 'FH') {
+      // ---- Forehand-specific cues ----
+      if ((avgAngles['rightElbowAngle'] ?? 180) > 120) {
+        suggestions.add(const FormSuggestion(
+          'Keep your throwing elbow bent (~90°) — a straight arm loses snap on forehand',
+          kbArticleId: 'bio_tip_1',
+        ));
+      }
+      if ((avgAngles['rightShoulderAngle'] ?? 0) < 70) {
+        suggestions.add(const FormSuggestion(
+          'Open your throwing shoulder toward the target through release',
+          kbArticleId: 'bio_tip_3',
+        ));
+      }
+      if ((avgAngles['rightKneeAngle'] ?? 0) < 140) {
+        suggestions.add(const FormSuggestion(
+          'Drive off your back foot to add power to your forehand',
+          kbArticleId: 'bio_faq_4',
+        ));
+      }
+      if ((avgAngles['spineAngle'] ?? 0) < 78) {
+        suggestions.add(const FormSuggestion(
+          'Stay tall — excessive forward lean reduces forehand accuracy',
+          kbArticleId: 'bio_tip_4',
+        ));
+      }
+      if ((avgAngles['leftShoulderAngle'] ?? 0) < 85) {
+        suggestions.add(const FormSuggestion(
+          'Keep your off-arm close to your body to prevent premature shoulder opening',
+          kbArticleId: 'bio_faq_2',
+        ));
+      }
+    } else {
+      // ---- Backhand-specific cues ----
+      if ((avgAngles['rightShoulderAngle'] ?? 0) < 80) {
+        suggestions.add(const FormSuggestion(
+          'Increase shoulder rotation for more power',
+          kbArticleId: 'bio_tip_5',
+        ));
+      }
+      if ((avgAngles['rightElbowAngle'] ?? 0) > 140) {
+        suggestions.add(const FormSuggestion(
+          'Keep your elbow at 90-120° during pull-through',
+          kbArticleId: 'bio_tip_1',
+        ));
+      }
+      if ((avgAngles['rightKneeAngle'] ?? 0) < 140) {
+        suggestions.add(const FormSuggestion(
+          'Keep your knees less bent for better balance',
+          kbArticleId: 'bio_faq_4',
+        ));
+      }
+      if ((avgAngles['spineAngle'] ?? 0) < 75) {
+        suggestions.add(const FormSuggestion(
+          'Maintain a more upright spine position',
+          kbArticleId: 'bio_tip_4',
+        ));
+      }
+      if ((avgAngles['leftKneeAngle'] ?? 0) < 140) {
+        suggestions.add(const FormSuggestion(
+          'Engage your legs more in the throw',
+          kbArticleId: 'bio_faq_4',
+        ));
+      }
+      if ((avgAngles['xFactor'] ?? 0) < 30) {
+        suggestions.add(const FormSuggestion(
+          'Increase hip-shoulder separation (X-factor) in your backswing',
+          kbArticleId: 'bio_tip_5',
+        ));
+      }
     }
 
     if (suggestions.isEmpty) {
-      suggestions.add('Great form! Keep practicing consistency');
-      suggestions.add('Focus on smooth, controlled movements');
-      suggestions.add('Try recording from different angles');
+      suggestions.add(const FormSuggestion(
+          'Great form! Keep practicing consistency'));
+      suggestions.add(const FormSuggestion(
+          'Focus on smooth, controlled movements'));
+      suggestions.add(const FormSuggestion(
+          'Try recording from different angles'));
     }
 
     return suggestions;
@@ -544,7 +763,8 @@ class PostureAnalysisService extends ChangeNotifier {
       ..addAll(newAngles);
   }
 
-  double recalculateScore(List<FormFrame> frames) => _calculateScore(frames);
+  double recalculateScore(List<FormFrame> frames, {String throwType = 'BH'}) =>
+      _calculateScore(frames, throwType: throwType);
 
   void clearAnalyses() {
     _analyses.clear();

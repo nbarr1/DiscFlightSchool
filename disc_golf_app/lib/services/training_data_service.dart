@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -303,8 +304,8 @@ class TrainingDataService extends ChangeNotifier {
   // Export
   // ---------------------------------------------------------------------------
 
-  /// Export all training data as a ZIP file to the given directory.
-  /// Returns the path to the created ZIP file, or null on failure.
+  /// Export all training data as a real ZIP file.
+  /// Returns the path to the created `.zip` file, or null on failure.
   Future<String?> exportTrainingData() async {
     if (_samples.isEmpty) return null;
 
@@ -313,51 +314,46 @@ class TrainingDataService extends ChangeNotifier {
       final exportDir = await getApplicationDocumentsDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
 
-      // Build a manifest JSON
+      final archive = Archive();
+
+      // Helper: add a file to the archive under the given entry path.
+      Future<void> addFile(File file, String entryPath) async {
+        if (!await file.exists()) return;
+        final bytes = await file.readAsBytes();
+        archive.addFile(ArchiveFile(entryPath, bytes.length, bytes));
+      }
+
+      // Add images and labels for every sample
+      for (final sample in _samples) {
+        await addFile(
+            File(sample.imagePath), 'images/${sample.id}_full.jpg');
+        await addFile(
+            File(sample.cropPath), 'images/${sample.id}_crop.jpg');
+        await addFile(
+            File('${dataDir.path}/labels/${sample.id}.txt'),
+            'labels/${sample.id}.txt');
+      }
+
+      // Add manifest JSON
       final manifest = {
         'exported_at': DateTime.now().toIso8601String(),
         'sample_count': _samples.length,
         'samples': _samples.map((s) => s.toJson()).toList(),
       };
+      final manifestBytes = utf8.encode(
+          const JsonEncoder.withIndent('  ').convert(manifest));
+      archive.addFile(
+          ArchiveFile('manifest.json', manifestBytes.length, manifestBytes));
 
-      // Use dart:io ZipEncoder via the archive package
-      // Since we want to avoid adding heavy dependencies, we'll create
-      // a directory structure and use gzip + tar approach
-      // Actually, let's create a simple directory export that can be zipped externally
-      // or shared as-is
+      // Encode to ZIP bytes and write to disk
+      final zipBytes = ZipEncoder().encode(archive);
+      if (zipBytes == null) return null;
 
-      final exportSubDir = Directory('${exportDir.path}/training_export_$timestamp');
-      await exportSubDir.create(recursive: true);
+      final zipPath =
+          '${exportDir.path}/disc_training_$timestamp.zip';
+      await File(zipPath).writeAsBytes(zipBytes);
 
-      final exportImages = Directory('${exportSubDir.path}/images');
-      final exportLabels = Directory('${exportSubDir.path}/labels');
-      await exportImages.create();
-      await exportLabels.create();
-
-      // Copy images and labels
-      for (final sample in _samples) {
-        final fullFile = File(sample.imagePath);
-        final cropFile = File(sample.cropPath);
-        final labelFile = File('${dataDir.path}/labels/${sample.id}.txt');
-
-        if (await fullFile.exists()) {
-          await fullFile.copy('${exportImages.path}/${sample.id}_full.jpg');
-        }
-        if (await cropFile.exists()) {
-          await cropFile.copy('${exportImages.path}/${sample.id}_crop.jpg');
-        }
-        if (await labelFile.exists()) {
-          await labelFile.copy('${exportLabels.path}/${sample.id}.txt');
-        }
-      }
-
-      // Write manifest
-      final manifestFile = File('${exportSubDir.path}/manifest.json');
-      await manifestFile.writeAsString(
-        const JsonEncoder.withIndent('  ').convert(manifest),
-      );
-
-      return exportSubDir.path;
+      return zipPath;
     } catch (e) {
       debugPrint('Failed to export training data: $e');
       return null;

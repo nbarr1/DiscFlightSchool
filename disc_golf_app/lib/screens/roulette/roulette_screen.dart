@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../models/roulette_data.dart';
+import '../../services/roulette_history_service.dart';
 import '../../widgets/roulette_wheel.dart';
 import 'dart:math';
+import 'roulette_history_screen.dart';
 
 class RouletteScreen extends StatefulWidget {
   const RouletteScreen({Key? key}) : super(key: key);
@@ -40,12 +43,14 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
     });
 
     _animationController.forward(from: 0).then((_) {
+      final result = _isPutting
+          ? RouletteResult.generatePutt(_availableDiscs)
+          : RouletteResult.generate(_availableDiscs);
       setState(() {
-        _currentResult = _isPutting
-            ? RouletteResult.generatePutt(_availableDiscs)
-            : RouletteResult.generate(_availableDiscs);
+        _currentResult = result;
         _isSpinning = false;
       });
+      context.read<RouletteHistoryService>().addResult(result);
     });
   }
 
@@ -54,6 +59,18 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
     return Scaffold(
       appBar: AppBar(
         title: const Text('Disc Golf Roulette'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'Spin History',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const RouletteHistoryScreen(),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),

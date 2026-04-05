@@ -13,6 +13,7 @@ import '../../services/video_service.dart';
 import '../../widgets/follow_flight_overlay.dart';
 import '../gallery/video_gallery_screen.dart';
 import 'dart:io';
+import 'dart:math' show sqrt, cos, sin;
 import 'dart:ui' as ui;
 
 /// A keyframe marked by the user — disc position at a specific frame.
@@ -64,6 +65,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   // Zoom/magnifier state
   bool _isZoomMode = false;
   Offset? _zoomPosition; // Touch position in video widget coords
+  Offset? _zoomPrevWidgetPos; // Previous keyframe position in widget coords, shown during zoom
   ui.Image? _capturedFrame;
   final _videoBoundaryKey = GlobalKey();
   bool _wasPlayingBeforeZoom = false;
@@ -71,6 +73,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   // Box mode state (two-tap bounding box for training)
   bool _boxMode = false;
   Offset? _firstBoxCorner; // Normalized 0-1, first corner of bounding box
+
+  // Target line state — user draws a reference line (e.g. throw direction to basket)
+  bool _targetLineMode = false;
+  Offset? _targetLineStart; // Normalized 0-1
+  Offset? _targetLineEnd;   // Normalized 0-1
 
   // Stabilization state
   bool _stabilizeEnabled = false;
@@ -154,9 +161,17 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
     // Set zoom position immediately so it's available even if the user
     // releases before the async frame capture completes.
+    // Also compute the previous keyframe position for the direction indicator.
+    final priorFrames = _keyframes.where((kf) => kf.frameIndex < _currentFrame).toList();
     setState(() {
       _isZoomMode = true;
       _zoomPosition = details.localPosition;
+      _zoomPrevWidgetPos = priorFrames.isNotEmpty
+          ? Offset(
+              priorFrames.last.x * _videoWidgetSize.width,
+              priorFrames.last.y * _videoWidgetSize.height,
+            )
+          : null;
     });
 
     // Capture current video frame for the magnifier
@@ -193,6 +208,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     setState(() {
       _isZoomMode = false;
       _zoomPosition = null;
+      _zoomPrevWidgetPos = null;
     });
     _capturedFrame?.dispose();
     _capturedFrame = null;
@@ -256,7 +272,25 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   void _addKeyframeFromTap(TapUpDetails details) {
+    if (_targetLineMode) {
+      _placeTargetLinePoint(details.localPosition);
+      return;
+    }
     _placeKeyframe(details.localPosition);
+  }
+
+  void _placeTargetLinePoint(Offset localPosition) {
+    if (_videoWidgetSize == Size.zero) return;
+    final nx = (localPosition.dx / _videoWidgetSize.width).clamp(0.0, 1.0);
+    final ny = (localPosition.dy / _videoWidgetSize.height).clamp(0.0, 1.0);
+    setState(() {
+      if (_targetLineStart == null) {
+        _targetLineStart = Offset(nx, ny);
+      } else {
+        _targetLineEnd = Offset(nx, ny);
+        _targetLineMode = false; // exit mode after second tap
+      }
+    });
   }
 
   void _undoLastKeyframe() {
@@ -817,6 +851,70 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                 if (_isZoomMode &&
                                     _zoomPosition != null)
                                   _buildTouchIndicator(),
+
+                                // Previous keyframe direction indicator during zoom
+                                if (_isZoomMode &&
+                                    _zoomPrevWidgetPos != null &&
+                                    _zoomPosition != null)
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: CustomPaint(
+                                        painter: _PrevPositionPainter(
+                                          prevPos: _zoomPrevWidgetPos!,
+                                          currentPos: _zoomPosition!,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+
+                                // Target line overlay
+                                if (_targetLineStart != null)
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: CustomPaint(
+                                        painter: _TargetLinePainter(
+                                          start: _targetLineStart!,
+                                          end: _targetLineEnd,
+                                          videoSize: constraints.biggest,
+                                          // Show partial line to first tap point
+                                          // while waiting for second tap
+                                          pendingMode: _targetLineMode &&
+                                              _targetLineEnd == null,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+
+                                // Target line mode banner
+                                if (_targetLineMode)
+                                  Positioned(
+                                    top: 8,
+                                    left: 0,
+                                    right: 0,
+                                    child: Center(
+                                      child: IgnorePointer(
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 14, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green.shade900
+                                                .withAlpha(220),
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                          ),
+                                          child: Text(
+                                            _targetLineStart == null
+                                                ? 'Tap to set line start'
+                                                : 'Tap to set line end',
+                                            style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                               ],
                             ),
                           );
@@ -1134,6 +1232,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           _buildStabilizeToggle(),
           if (trainingService.isOptedIn)
             _buildBoxModeToggle(),
+          _buildTargetLineButton(),
           ElevatedButton.icon(
             onPressed:
                 _keyframes.isEmpty ? null : _undoLastKeyframe,
@@ -1255,6 +1354,70 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 fontSize: 13,
                 color: _boxMode ? Colors.white : Colors.grey,
                 fontWeight: _boxMode ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTargetLineButton() {
+    final hasLine = _targetLineStart != null && _targetLineEnd != null;
+    final isActive = _targetLineMode;
+    final color = isActive
+        ? Colors.green
+        : hasLine
+            ? Colors.green.shade800
+            : Colors.grey.shade800;
+    final label = isActive
+        ? (_targetLineStart == null ? 'Set Start' : 'Set End')
+        : hasLine
+            ? 'Target ✓'
+            : 'Target Line';
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (isActive) {
+            // Cancel target line mode
+            _targetLineMode = false;
+            if (_targetLineEnd == null) _targetLineStart = null;
+          } else if (hasLine) {
+            // Clear existing line
+            _targetLineStart = null;
+            _targetLineEnd = null;
+          } else {
+            // Enter target line mode
+            _targetLineMode = true;
+            _targetLineStart = null;
+            _targetLineEnd = null;
+          }
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(8),
+          border: (isActive || hasLine)
+              ? Border.all(color: Colors.greenAccent, width: 1.5)
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.straighten, size: 18,
+                color: (isActive || hasLine) ? Colors.white : Colors.grey),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: (isActive || hasLine) ? Colors.white : Colors.grey,
+                fontWeight: (isActive || hasLine)
+                    ? FontWeight.bold
+                    : FontWeight.normal,
               ),
             ),
           ],
@@ -1426,4 +1589,165 @@ class _CrosshairPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Draws the user-defined reference target line on the video overlay.
+/// While [pendingMode] is true (only start set), draws a dot at start.
+/// Once [end] is also set, draws start dot → dashed line → end dot with an
+/// arrowhead, in green so it is visually distinct from the flight trail.
+class _TargetLinePainter extends CustomPainter {
+  final Offset start;   // Normalized 0-1
+  final Offset? end;    // Normalized 0-1, null while waiting for second tap
+  final Size videoSize;
+  final bool pendingMode;
+
+  const _TargetLinePainter({
+    required this.start,
+    required this.end,
+    required this.videoSize,
+    this.pendingMode = false,
+  });
+
+  Offset _toCanvas(Offset norm) =>
+      Offset(norm.dx * videoSize.width, norm.dy * videoSize.height);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final startPx = _toCanvas(start);
+    final dotPaint = Paint()
+      ..color = Colors.greenAccent.withAlpha(230)
+      ..style = PaintingStyle.fill;
+    final borderPaint = Paint()
+      ..color = Colors.white.withAlpha(200)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    // Start dot
+    canvas.drawCircle(startPx, 8, dotPaint);
+    canvas.drawCircle(startPx, 8, borderPaint);
+
+    if (end == null) return;
+    final endPx = _toCanvas(end!);
+
+    // Dashed line from start to end
+    final linePaint = Paint()
+      ..color = Colors.greenAccent.withAlpha(180)
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+    const dashLen = 12.0;
+    const gapLen = 6.0;
+    final dx = endPx.dx - startPx.dx;
+    final dy = endPx.dy - startPx.dy;
+    final dist = sqrt(dx * dx + dy * dy);
+    if (dist < 1) return;
+    final ux = dx / dist;
+    final uy = dy / dist;
+    double drawn = 0;
+    bool drawing = true;
+    Offset cursor = startPx;
+    while (drawn < dist) {
+      final segLen = drawing
+          ? dashLen.clamp(0, dist - drawn)
+          : gapLen.clamp(0, dist - drawn);
+      final next = Offset(cursor.dx + ux * segLen, cursor.dy + uy * segLen);
+      if (drawing) canvas.drawLine(cursor, next, linePaint);
+      cursor = next;
+      drawn += segLen;
+      drawing = !drawing;
+    }
+
+    // Arrowhead at end
+    const arrowLen = 12.0;
+    const arrowAngle = 0.45;
+    final x1 = endPx.dx - arrowLen * (ux * cos(arrowAngle) - uy * sin(arrowAngle));
+    final y1 = endPx.dy - arrowLen * (uy * cos(arrowAngle) + ux * sin(arrowAngle));
+    final x2 = endPx.dx - arrowLen * (ux * cos(arrowAngle) + uy * sin(arrowAngle));
+    final y2 = endPx.dy - arrowLen * (uy * cos(arrowAngle) - ux * sin(arrowAngle));
+    canvas.drawPath(
+      Path()
+        ..moveTo(endPx.dx, endPx.dy)
+        ..lineTo(x1, y1)
+        ..lineTo(x2, y2)
+        ..close(),
+      Paint()
+        ..color = Colors.greenAccent.withAlpha(220)
+        ..style = PaintingStyle.fill,
+    );
+
+    // End dot
+    canvas.drawCircle(endPx, 8, dotPaint);
+    canvas.drawCircle(endPx, 8, borderPaint);
+  }
+
+  @override
+  bool shouldRepaint(_TargetLinePainter old) =>
+      start != old.start || end != old.end || pendingMode != old.pendingMode;
+}
+
+/// Draws a ghost dot at [prevPos] and a cyan arrow toward [currentPos] so the
+/// user can see the previous disc position and direction during zoom placement.
+class _PrevPositionPainter extends CustomPainter {
+  final Offset prevPos;
+  final Offset currentPos;
+
+  const _PrevPositionPainter({required this.prevPos, required this.currentPos});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final dx = currentPos.dx - prevPos.dx;
+    final dy = currentPos.dy - prevPos.dy;
+    final dist = sqrt(dx * dx + dy * dy);
+    if (dist < 10) return; // Too close — don't draw
+
+    // Arrow line from previous position to current touch
+    canvas.drawLine(
+      prevPos,
+      currentPos,
+      Paint()
+        ..color = Colors.cyanAccent.withAlpha(180)
+        ..strokeWidth = 2.0
+        ..style = PaintingStyle.stroke,
+    );
+
+    // Arrowhead at currentPos
+    final ux = dx / dist;
+    final uy = dy / dist;
+    const arrowLen = 10.0;
+    const arrowAngle = 0.45; // radians (~26°)
+    final x1 = currentPos.dx - arrowLen * (ux * cos(arrowAngle) - uy * sin(arrowAngle));
+    final y1 = currentPos.dy - arrowLen * (uy * cos(arrowAngle) + ux * sin(arrowAngle));
+    final x2 = currentPos.dx - arrowLen * (ux * cos(arrowAngle) + uy * sin(arrowAngle));
+    final y2 = currentPos.dy - arrowLen * (uy * cos(arrowAngle) - ux * sin(arrowAngle));
+    canvas.drawPath(
+      Path()
+        ..moveTo(currentPos.dx, currentPos.dy)
+        ..lineTo(x1, y1)
+        ..lineTo(x2, y2)
+        ..close(),
+      Paint()
+        ..color = Colors.cyanAccent.withAlpha(200)
+        ..style = PaintingStyle.fill,
+    );
+
+    // Ghost dot at previous position
+    canvas.drawCircle(
+      prevPos,
+      9,
+      Paint()
+        ..color = Colors.cyanAccent.withAlpha(120)
+        ..style = PaintingStyle.fill,
+    );
+    canvas.drawCircle(
+      prevPos,
+      9,
+      Paint()
+        ..color = Colors.white.withAlpha(200)
+        ..strokeWidth = 1.5
+        ..style = PaintingStyle.stroke,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PrevPositionPainter old) =>
+      prevPos != old.prevPos || currentPos != old.currentPos;
 }

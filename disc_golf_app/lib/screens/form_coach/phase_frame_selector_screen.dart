@@ -17,6 +17,7 @@ class PhaseFrameSelectorScreen extends StatefulWidget {
   final int analysisEndMs;
   final int analysisFrameCount;
   final String throwType;
+  final bool isLeftHanded;
 
   const PhaseFrameSelectorScreen({
     super.key,
@@ -26,6 +27,7 @@ class PhaseFrameSelectorScreen extends StatefulWidget {
     required this.analysisEndMs,
     required this.analysisFrameCount,
     this.throwType = 'BH',
+    this.isLeftHanded = false,
   });
 
   @override
@@ -105,6 +107,7 @@ class _PhaseFrameSelectorScreenState extends State<PhaseFrameSelectorScreen> {
           analysisFrameCount: widget.analysisFrameCount,
           phaseTimestamps: Map.from(_phaseTimestamps),
           throwType: widget.throwType,
+          isLeftHanded: widget.isLeftHanded,
         ),
       ),
     );

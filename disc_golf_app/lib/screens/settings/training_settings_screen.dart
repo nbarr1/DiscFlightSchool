@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import '../../services/disc_detection_service.dart';
 import '../../services/knowledge_base_service.dart';
 import '../../services/training_data_service.dart';
 
@@ -63,6 +65,59 @@ class _TrainingSettingsScreenState extends State<TrainingSettingsScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // Disc detection confidence threshold
+              Consumer<DiscDetectionService>(
+                builder: (context, detectionService, _) {
+                  final threshold = detectionService.confidenceThreshold;
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Disc Detection Sensitivity',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15)),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Lower = detects more (may include false positives). '
+                            'Higher = more precise (may miss fast-moving disc).',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey.shade400),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Text('Low', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                              Expanded(
+                                child: Slider(
+                                  value: threshold,
+                                  min: 0.01,
+                                  max: 0.5,
+                                  divisions: 49,
+                                  label: '${(threshold * 100).toStringAsFixed(0)}%',
+                                  onChanged: (v) =>
+                                      detectionService.setConfidenceThreshold(v),
+                                ),
+                              ),
+                              const Text('High', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                            ],
+                          ),
+                          Center(
+                            child: Text(
+                              'Current: ${(threshold * 100).toStringAsFixed(0)}% confidence required',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+
               // Opt-in toggle
               Card(
                 child: SwitchListTile(
@@ -418,21 +473,21 @@ class _TrainingSettingsScreenState extends State<TrainingSettingsScreen> {
       ),
     );
 
-    final exportPath = await service.exportTrainingData();
+    final zipPath = await service.exportTrainingData();
 
     if (context.mounted) {
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(); // dismiss progress dialog
 
-      if (exportPath != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Exported to:\n$exportPath'),
-            duration: const Duration(seconds: 5),
-          ),
+      if (zipPath != null) {
+        // Open the OS share sheet so the user can send the ZIP wherever
+        // they like (email, cloud drive, AirDrop, etc.).
+        await Share.shareXFiles(
+          [XFile(zipPath, mimeType: 'application/zip')],
+          subject: 'Disc training data export',
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Export failed')),
+          const SnackBar(content: Text('Export failed — no samples to export')),
         );
       }
     }

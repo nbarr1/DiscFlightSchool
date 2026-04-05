@@ -3,11 +3,15 @@ import 'package:video_player/video_player.dart';
 import 'package:provider/provider.dart';
 import '../../services/feedback_service.dart';
 import '../../services/posture_analysis_service.dart';
+import '../../services/knowledge_base_service.dart';
+import '../knowledge_base/article_detail_screen.dart';
 import '../../services/video_frame_extractor.dart';
 import '../../models/form_analysis.dart';
 import '../../utils/constants.dart';
 import '../../utils/pro_data_parser.dart';
 import '../../widgets/skeleton_overlay.dart';
+import '../../services/form_history_service.dart';
+import 'comparison_screen.dart';
 import 'phase_comparison_screen.dart';
 import 'pose_correction_screen.dart';
 import 'dart:io';
@@ -23,6 +27,7 @@ class PostureAnalysisScreen extends StatefulWidget {
   /// When provided, guided per-phase verification runs after full analysis.
   final Map<String, int>? phaseTimestamps;
   final String throwType;
+  final bool isLeftHanded;
 
   const PostureAnalysisScreen({
     Key? key,
@@ -34,6 +39,7 @@ class PostureAnalysisScreen extends StatefulWidget {
     this.analysisFrameCount,
     this.phaseTimestamps,
     this.throwType = 'BH',
+    this.isLeftHanded = false,
   }) : super(key: key);
 
   @override
@@ -117,12 +123,37 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
       widget.videoPath!,
       startMs: widget.analysisStartMs ?? 0,
       frameCount: widget.analysisFrameCount ?? 30,
+      isLeftHanded: widget.isLeftHanded,
+      throwType: widget.throwType,
     );
 
     setState(() {
       _analysis = analysis;
       _isAnalyzing = false;
     });
+
+    // Persist this session to history
+    if (!analysis.isMock && mounted) {
+      final avgAngles = <String, double>{};
+      if (analysis.frames.isNotEmpty) {
+        for (final f in analysis.frames) {
+          for (final e in f.angles.entries) {
+            avgAngles[e.key] = (avgAngles[e.key] ?? 0) + e.value;
+          }
+        }
+        avgAngles.updateAll((k, v) => v / analysis.frames.length);
+      }
+      final record = FormSessionRecord(
+        id: analysis.id,
+        date: analysis.date,
+        score: analysis.score,
+        throwType: widget.throwType,
+        proPlayer: widget.proPlayer,
+        frameCount: analysis.frames.length,
+        avgAngles: avgAngles,
+      );
+      Provider.of<FormHistoryService>(context, listen: false).saveSession(record);
+    }
 
     if (widget.phaseTimestamps != null && widget.phaseTimestamps!.isNotEmpty) {
       // Guided per-phase verification after a short pause
@@ -463,6 +494,9 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
               : SingleChildScrollView(
                   child: Column(
                     children: [
+                      // Mock data warning — shown when pose detection failed
+                      if (_analysis!.isMock) _buildMockWarning(),
+
                       // Video player with skeleton overlay
                       if (_isInitialized && _controller != null)
                         _buildVideoWithOverlay(),
@@ -484,6 +518,12 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                       if (_selectedPro != null && _analysis != null)
                         _buildPhaseComparisonSection(),
 
+                      // Frame-by-frame angle comparison vs pro
+                      if (_selectedPro != null &&
+                          _analysis != null &&
+                          postureService.proAnalysis != null)
+                        _buildFrameByFrameButton(postureService),
+
                       // Angle charts
                       _buildAngleCharts(),
 
@@ -492,6 +532,49 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                     ],
                   ),
                 ),
+    );
+  }
+
+  Widget _buildMockWarning() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.red.shade900.withAlpha(180),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.red.shade400, width: 1.5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: Colors.amber, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Pose detection failed',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'No person was detected in this video. The scores and '
+                  'angles shown are simulated and do not reflect your form. '
+                  'Try recording from the side with good lighting.',
+                  style: TextStyle(
+                      color: Colors.red.shade100, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -876,6 +959,30 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
     );
   }
 
+  Widget _buildFrameByFrameButton(PostureAnalysisService postureService) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: OutlinedButton.icon(
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ComparisonScreen(
+              userAnalysis: _analysis!,
+              proAnalysis: postureService.proAnalysis!,
+              proName: _selectedPro!,
+            ),
+          ),
+        ),
+        icon: const Icon(Icons.swap_horiz),
+        label: const Text('Frame-by-Frame vs Pro'),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.all(14),
+          minimumSize: const Size(double.infinity, 48),
+        ),
+      ),
+    );
+  }
+
   String _formatPhaseName(String name) {
     return name
         .split('_')
@@ -993,7 +1100,8 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   }
 
   Widget _buildSuggestions(PostureAnalysisService postureService) {
-    final suggestions = postureService.generateSuggestions();
+    final suggestions =
+        postureService.generateSuggestions(throwType: _selectedThrowType);
 
     return Container(
       width: double.infinity,
@@ -1014,22 +1122,58 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                 ),
           ),
           const SizedBox(height: 8),
-          ...suggestions.map((suggestion) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.lightbulb_outline, size: 16, color: Colors.amber),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        suggestion,
-                        style: Theme.of(context).textTheme.bodySmall,
+          ...suggestions.map((suggestion) {
+                final kbService = Provider.of<KnowledgeBaseService>(
+                    context, listen: false);
+                final article = suggestion.kbArticleId != null
+                    ? kbService.articles
+                        .where((a) => a.id == suggestion.kbArticleId)
+                        .firstOrNull
+                    : null;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.lightbulb_outline,
+                              size: 16, color: Colors.amber),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              suggestion.text,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-              )),
+                      if (article != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 24, top: 2),
+                          child: GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ArticleDetailScreen(article: article),
+                              ),
+                            ),
+                            child: const Text(
+                              'Learn more →',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.lightBlueAccent,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              }),
         ],
       ),
     );

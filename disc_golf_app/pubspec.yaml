@@ -24,6 +24,8 @@ dependencies:
   gal: ^2.3.0
   flutter_svg: ^2.0.10
   http: ^1.2.1
+  archive: ^3.6.1
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:

@@ -6,6 +6,7 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Represents a detected disc position in a single frame.
 class DiscDetection {
@@ -86,12 +87,43 @@ class DiscDetectionService extends ChangeNotifier {
   FlightTrackingResult? get lastResult => _lastResult;
 
   static const int _inputSize = 320;
-  static const double _confidenceThreshold = 0.003;
+  /// Default confidence threshold — applied when no user override is set.
+  static const double defaultConfidenceThreshold = 0.1;
+  static const String _prefsKey = 'disc_confidence_threshold';
+
+  /// Runtime confidence threshold, loaded from SharedPreferences.
+  double _confidenceThreshold = defaultConfidenceThreshold;
+  double get confidenceThreshold => _confidenceThreshold;
+
   /// Maximum normalized distance a detection can jump per frame-step
   /// during spatial coherence filtering (8% of frame dimension).
   static const double _maxJumpPerFrame = 0.08;
   /// Maximum consecutive frames to skip when building a coherent chain.
   static const int _maxChainGap = 5;
+
+  DiscDetectionService() {
+    _loadThreshold();
+  }
+
+  Future<void> _loadThreshold() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stored = prefs.getDouble(_prefsKey);
+      if (stored != null) {
+        _confidenceThreshold = stored.clamp(0.01, 0.95);
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> setConfidenceThreshold(double value) async {
+    _confidenceThreshold = value.clamp(0.01, 0.95);
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_prefsKey, _confidenceThreshold);
+    } catch (_) {}
+  }
 
   /// Load the TFLite model. Uses a custom (retrained) model if available,
   /// otherwise falls back to the bundled asset model.

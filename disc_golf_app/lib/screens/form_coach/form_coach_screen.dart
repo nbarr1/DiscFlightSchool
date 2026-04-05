@@ -3,9 +3,9 @@ import 'package:provider/provider.dart';
 import '../../services/video_service.dart';
 import '../../services/posture_analysis_service.dart';
 import '../../utils/constants.dart';
+import 'form_history_screen.dart';
 import 'posture_analysis_screen.dart';
 import 'video_trim_screen.dart';
-// import 'comparison_screen.dart'; // Hidden for now — video comparison TBD
 
 class FormCoachScreen extends StatefulWidget {
   const FormCoachScreen({Key? key}) : super(key: key);
@@ -17,6 +17,7 @@ class FormCoachScreen extends StatefulWidget {
 class _FormCoachScreenState extends State<FormCoachScreen> {
   String? _selectedPro;
   String _throwType = 'BH';
+  bool _isLeftHanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +27,18 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Form Coach'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'Session History',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const FormHistoryScreen(),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -79,6 +92,17 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
                           postureService.loadProFormData(_selectedPro!, throwType: _throwType);
                         }
                       },
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Left-handed thrower'),
+                      subtitle: const Text(
+                        'Mirrors angle analysis so throwing arm is always scored as dominant',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                      value: _isLeftHanded,
+                      onChanged: (v) => setState(() => _isLeftHanded = v),
                     ),
                   ],
                 ),
@@ -177,6 +201,8 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
         builder: (context) => VideoTrimScreen(
           videoPath: path,
           proPlayer: _selectedPro,
+          throwType: _throwType,
+          isLeftHanded: _isLeftHanded,
         ),
       ),
     );

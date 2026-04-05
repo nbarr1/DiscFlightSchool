@@ -322,7 +322,7 @@ class _VideoCard extends StatelessWidget {
   }
 }
 
-/// Simple full-screen video playback.
+/// Full-screen video playback with seek bar, frame-step, and speed controls.
 class _VideoPlaybackScreen extends StatefulWidget {
   final String videoPath;
   const _VideoPlaybackScreen({required this.videoPath});
@@ -334,6 +334,9 @@ class _VideoPlaybackScreen extends StatefulWidget {
 class _VideoPlaybackScreenState extends State<_VideoPlaybackScreen> {
   late VideoPlayerController _controller;
   bool _initialized = false;
+  double _playbackSpeed = 1.0;
+  static const _speeds = [0.25, 0.5, 1.0];
+  static const _frameStepMs = 100; // ~10 fps step
 
   @override
   void initState() {
@@ -341,6 +344,7 @@ class _VideoPlaybackScreenState extends State<_VideoPlaybackScreen> {
     _controller = VideoPlayerController.file(File(widget.videoPath))
       ..initialize().then((_) {
         setState(() => _initialized = true);
+        _controller.addListener(() => setState(() {}));
         _controller.play();
       });
   }
@@ -351,45 +355,150 @@ class _VideoPlaybackScreenState extends State<_VideoPlaybackScreen> {
     super.dispose();
   }
 
+  void _stepFrame(int deltaMs) {
+    if (!_initialized) return;
+    final current = _controller.value.position.inMilliseconds;
+    final target = (current + deltaMs)
+        .clamp(0, _controller.value.duration.inMilliseconds);
+    _controller.pause();
+    _controller.seekTo(Duration(milliseconds: target));
+  }
+
+  void _cycleSpeed() {
+    final idx = _speeds.indexOf(_playbackSpeed);
+    final next = _speeds[(idx + 1) % _speeds.length];
+    setState(() => _playbackSpeed = next);
+    _controller.setPlaybackSpeed(next);
+  }
+
+  String _formatDuration(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final duration = _initialized ? _controller.value.duration : Duration.zero;
+    final position = _initialized ? _controller.value.position : Duration.zero;
+    final isPlaying = _initialized && _controller.value.isPlaying;
+
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Center(
-        child: !_initialized
-            ? const CircularProgressIndicator()
-            : GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _controller.value.isPlaying
-                        ? _controller.pause()
-                        : _controller.play();
-                  });
-                },
-                child: AspectRatio(
-                  aspectRatio: _controller.value.aspectRatio,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      VideoPlayer(_controller),
-                      if (!_controller.value.isPlaying)
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black45,
-                            shape: BoxShape.circle,
-                          ),
-                          padding: const EdgeInsets.all(12),
-                          child: const Icon(Icons.play_arrow,
-                              color: Colors.white, size: 48),
+      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
+      body: Column(
+        children: [
+          // Video
+          Expanded(
+            child: Center(
+              child: !_initialized
+                  ? const CircularProgressIndicator()
+                  : GestureDetector(
+                      onTap: () => isPlaying
+                          ? _controller.pause()
+                          : _controller.play(),
+                      child: AspectRatio(
+                        aspectRatio: _controller.value.aspectRatio,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            VideoPlayer(_controller),
+                            if (!isPlaying)
+                              Container(
+                                decoration: const BoxDecoration(
+                                  color: Colors.black45,
+                                  shape: BoxShape.circle,
+                                ),
+                                padding: const EdgeInsets.all(12),
+                                child: const Icon(Icons.play_arrow,
+                                    color: Colors.white, size: 48),
+                              ),
+                          ],
                         ),
+                      ),
+                    ),
+            ),
+          ),
+
+          // Controls
+          if (_initialized)
+            Container(
+              color: Colors.black87,
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+              child: Column(
+                children: [
+                  // Seek bar
+                  Row(
+                    children: [
+                      Text(_formatDuration(position),
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 11)),
+                      Expanded(
+                        child: Slider(
+                          value: position.inMilliseconds
+                              .toDouble()
+                              .clamp(0, duration.inMilliseconds.toDouble()),
+                          min: 0,
+                          max: duration.inMilliseconds.toDouble().clamp(1, double.infinity),
+                          onChanged: (v) => _controller
+                              .seekTo(Duration(milliseconds: v.toInt())),
+                        ),
+                      ),
+                      Text(_formatDuration(duration),
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 11)),
                     ],
                   ),
-                ),
+
+                  // Playback buttons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      // Step back
+                      IconButton(
+                        icon: const Icon(Icons.skip_previous,
+                            color: Colors.white, size: 28),
+                        tooltip: '−100ms',
+                        onPressed: () => _stepFrame(-_frameStepMs),
+                      ),
+
+                      // Play / Pause
+                      IconButton(
+                        icon: Icon(
+                          isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                          color: Colors.white,
+                          size: 48,
+                        ),
+                        onPressed: () => isPlaying
+                            ? _controller.pause()
+                            : _controller.play(),
+                      ),
+
+                      // Step forward
+                      IconButton(
+                        icon: const Icon(Icons.skip_next,
+                            color: Colors.white, size: 28),
+                        tooltip: '+100ms',
+                        onPressed: () => _stepFrame(_frameStepMs),
+                      ),
+
+                      // Speed toggle
+                      TextButton(
+                        onPressed: _cycleSpeed,
+                        child: Text(
+                          '${_playbackSpeed}x',
+                          style: const TextStyle(
+                              color: Colors.cyanAccent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
+            ),
+        ],
       ),
     );
   }

@@ -522,13 +522,13 @@ class _PoseCorrectionScreenState extends State<PoseCorrectionScreen> {
                 onPanUpdate: (_sequentialMode && !_sequentialReviewMode)
                     ? null
                     : _onPanUpdate,
-                onLongPressStart: (_moveAllMode || _sequentialMode)
+                onLongPressStart: (_moveAllMode || (_sequentialMode && !_sequentialReviewMode))
                     ? null
                     : _onLongPressStart,
-                onLongPressMoveUpdate: (_moveAllMode || _sequentialMode)
+                onLongPressMoveUpdate: (_moveAllMode || (_sequentialMode && !_sequentialReviewMode))
                     ? null
                     : _onLongPressMoveUpdate,
-                onLongPressEnd: (_moveAllMode || _sequentialMode)
+                onLongPressEnd: (_moveAllMode || (_sequentialMode && !_sequentialReviewMode))
                     ? null
                     : _onLongPressEnd,
                 child: Stack(

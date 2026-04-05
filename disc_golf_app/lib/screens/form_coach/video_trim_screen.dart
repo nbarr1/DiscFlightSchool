@@ -7,6 +7,8 @@ import 'phase_frame_selector_screen.dart';
 class VideoTrimScreen extends StatefulWidget {
   final String videoPath;
   final String? proPlayer;
+  final String throwType;
+  final bool isLeftHanded;
   /// Optional callback for generic trim usage (e.g., flight tracker).
   /// When provided, this is called instead of navigating to PostureAnalysisScreen.
   final void Function(int startMs, int endMs, int frameCount)? onTrimComplete;
@@ -15,6 +17,8 @@ class VideoTrimScreen extends StatefulWidget {
     Key? key,
     required this.videoPath,
     this.proPlayer,
+    this.throwType = 'BH',
+    this.isLeftHanded = false,
     this.onTrimComplete,
   }) : super(key: key);
 
@@ -103,6 +107,8 @@ class _VideoTrimScreenState extends State<VideoTrimScreen> {
             analysisStartMs: startMs,
             analysisEndMs: endMs,
             analysisFrameCount: frameCount,
+            throwType: widget.throwType,
+            isLeftHanded: widget.isLeftHanded,
           ),
         ),
       );
