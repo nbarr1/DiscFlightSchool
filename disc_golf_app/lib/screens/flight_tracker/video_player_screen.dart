@@ -13,6 +13,7 @@ import '../../services/video_service.dart';
 import '../../widgets/follow_flight_overlay.dart';
 import '../gallery/video_gallery_screen.dart';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 /// A keyframe marked by the user — disc position at a specific frame.
@@ -781,9 +782,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                     ),
                                   ),
 
-                                // Keyframe markers (before processing)
+                                // Keyframe markers (before processing).
+                                // Hidden during zoom mode — the magnifier's
+                                // direction arrow shows where the previous
+                                // disc was without the finger obscuring it.
                                 if (_showOverlay &&
-                                    _trackingResult == null)
+                                    _trackingResult == null &&
+                                    !_isZoomMode)
                                   ..._keyframes
                                       .asMap()
                                       .entries
@@ -795,7 +800,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                           )),
 
                                 // Bounding box overlays for keyframes with box data
-                                if (_showOverlay && _trackingResult == null)
+                                if (_showOverlay && _trackingResult == null && !_isZoomMode)
                                   ..._keyframes
                                       .where((kf) => kf.boxWidth != null)
                                       .map((kf) => _buildBoxOverlay(
@@ -839,25 +844,24 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
-  /// The magnifier bubble — shows a zoomed view of the video area
-  /// around the touch point, offset above the finger.
+  /// The magnifier bubble — shows a zoomed view of the video area around the
+  /// touch point, anchored to the top-right corner so it never flips.
   Widget _buildMagnifier(Size videoSize) {
     const magnifierDiameter = 150.0;
     const magnifierRadius = magnifierDiameter / 2;
-    const offsetAbove = 110.0;
 
-    final touchX = _zoomPosition!.dx;
-    final touchY = _zoomPosition!.dy;
-
-    // Position magnifier above the finger; flip below if near top
-    final magnifierTop = touchY - magnifierDiameter - offsetAbove;
-    final flipBelow = magnifierTop < -magnifierRadius;
-    final top = flipBelow
-        ? touchY + offsetAbove * 0.4
-        : touchY - magnifierDiameter - offsetAbove;
-
-    final left =
-        (touchX - magnifierRadius).clamp(-magnifierRadius, videoSize.width - magnifierRadius);
+    // Compute direction from current touch point toward the last keyframe.
+    // Shown as a cyan arrowhead on the magnifier rim so the user can find
+    // the previous disc position without the finger covering its marker.
+    double? arrowAngle;
+    if (_keyframes.isNotEmpty && _zoomPosition != null) {
+      final prev = _keyframes.last;
+      final dx = prev.x * videoSize.width - _zoomPosition!.dx;
+      final dy = prev.y * videoSize.height - _zoomPosition!.dy;
+      if (dx * dx + dy * dy > 1.0) {
+        arrowAngle = math.atan2(dy, dx);
+      }
+    }
 
     final isBoxActive = _boxMode;
     final cornerLabel = isBoxActive
@@ -865,48 +869,63 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         : null;
 
     return Positioned(
-      left: left,
-      top: top,
+      right: 8,
+      top: 8,
       child: IgnorePointer(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
+            SizedBox(
               width: magnifierDiameter,
               height: magnifierDiameter,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isBoxActive ? Colors.orange : Colors.white,
-                  width: 2.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(150),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: _capturedFrame != null
-                    ? CustomPaint(
-                        size: const Size(magnifierDiameter, magnifierDiameter),
-                        painter: _MagnifierPainter(
-                          image: _capturedFrame!,
-                          focusPoint: _zoomPosition!,
-                          sourceSize: videoSize,
-                          magnifierRadius: magnifierRadius,
-                          zoomFactor: 3.0,
-                        ),
-                      )
-                    : Container(
-                        color: Colors.black87,
-                        child: const Center(
-                          child: Icon(Icons.zoom_in,
-                              color: Colors.white54, size: 32),
-                        ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: magnifierDiameter,
+                    height: magnifierDiameter,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isBoxActive ? Colors.orange : Colors.white,
+                        width: 2.5,
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(150),
+                          blurRadius: 12,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: ClipOval(
+                      child: _capturedFrame != null
+                          ? CustomPaint(
+                              size: const Size(magnifierDiameter, magnifierDiameter),
+                              painter: _MagnifierPainter(
+                                image: _capturedFrame!,
+                                focusPoint: _zoomPosition!,
+                                sourceSize: videoSize,
+                                magnifierRadius: magnifierRadius,
+                                zoomFactor: 3.0,
+                              ),
+                            )
+                          : Container(
+                              color: Colors.black87,
+                              child: const Center(
+                                child: Icon(Icons.zoom_in,
+                                    color: Colors.white54, size: 32),
+                              ),
+                            ),
+                    ),
+                  ),
+                  if (arrowAngle != null)
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: _DirectionArrowPainter(angle: arrowAngle),
+                      ),
+                    ),
+                ],
               ),
             ),
             if (cornerLabel != null)
@@ -1397,6 +1416,52 @@ class _MagnifierPainter extends CustomPainter {
   bool shouldRepaint(_MagnifierPainter oldDelegate) {
     return oldDelegate.focusPoint != focusPoint;
   }
+}
+
+/// Draws a directional arrowhead on the rim of the magnifier circle,
+/// pointing from the current touch point toward the most recently placed
+/// keyframe so the user can find the previous disc position while zooming.
+class _DirectionArrowPainter extends CustomPainter {
+  final double angle;
+
+  _DirectionArrowPainter({required this.angle});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    const radius = 75.0;
+    // Tip protrudes 10px beyond the rim; base sits 12px inside it.
+    const tipDist = radius + 10.0;
+    const baseDist = radius - 12.0;
+    const halfBase = 8.0;
+
+    final tipX = center.dx + tipDist * math.cos(angle);
+    final tipY = center.dy + tipDist * math.sin(angle);
+
+    final perpAngle = angle + math.pi / 2;
+    final b1x = center.dx + baseDist * math.cos(angle) + halfBase * math.cos(perpAngle);
+    final b1y = center.dy + baseDist * math.sin(angle) + halfBase * math.sin(perpAngle);
+    final b2x = center.dx + baseDist * math.cos(angle) - halfBase * math.cos(perpAngle);
+    final b2y = center.dy + baseDist * math.sin(angle) - halfBase * math.sin(perpAngle);
+
+    final path = Path()
+      ..moveTo(tipX, tipY)
+      ..lineTo(b1x, b1y)
+      ..lineTo(b2x, b2y)
+      ..close();
+
+    canvas.drawPath(path, Paint()..color = Colors.cyan);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Colors.black54
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_DirectionArrowPainter old) => old.angle != angle;
 }
 
 /// Paints a crosshair at the touch point during zoom mode.
