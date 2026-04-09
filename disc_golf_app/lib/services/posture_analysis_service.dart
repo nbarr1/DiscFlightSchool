@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/form_analysis.dart';
 import '../utils/angle_calculator.dart';
-import '../utils/pro_data_parser.dart';
+// pro_data_parser.dart used directly from UI layer (PostureAnalysisScreen)
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'video_frame_extractor.dart';
 import 'dart:io';
@@ -28,7 +28,6 @@ class FormSuggestion {
 class PostureAnalysisService extends ChangeNotifier {
   final List<FormAnalysis> _analyses = [];
   FormAnalysis? _currentAnalysis;
-  FormAnalysis? _proAnalysis;
 
   final PoseDetector _poseDetector = PoseDetector(
     options: PoseDetectorOptions(
@@ -40,7 +39,6 @@ class PostureAnalysisService extends ChangeNotifier {
 
   List<FormAnalysis> get analyses => _analyses;
   FormAnalysis? get currentAnalysis => _currentAnalysis;
-  FormAnalysis? get proAnalysis => _proAnalysis;
 
   /// Swap right↔left angle keys so the throwing arm is always "right*".
   /// Applied when [isLeftHanded] is true so all downstream scoring and
@@ -101,8 +99,9 @@ class PostureAnalysisService extends ChangeNotifier {
           // always represented as "right*" throughout the pipeline.
           final rawAngles = _calculateAngles3D(pose, landmarkConf) ??
               _calculateAngles2D(pose, landmarkConf);
-          final angles =
+          final mirrored =
               isLeftHanded ? _mirrorAngles(rawAngles) : rawAngles;
+          final angles = _clampToPhysiologicalLimits(mirrored);
 
           frames.add(FormFrame(
             timestamp: Duration(milliseconds: i * intervalMs),
@@ -139,7 +138,7 @@ class PostureAnalysisService extends ChangeNotifier {
         date: DateTime.now(),
         videoPath: videoPath,
         frames: frames,
-        score: _calculateScore(frames, throwType: throwType),
+        score: 0.0, // Score is now computed on-demand via computeProDeviationScore
       );
 
       _analyses.add(analysis);
@@ -347,6 +346,59 @@ class PostureAnalysisService extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // Physiological ROM limits (Physiopedia normative values, converted to the
+  // app's vertex-angle convention where 180° = fully extended/straight limb)
+  // ---------------------------------------------------------------------------
+
+  /// Per-joint physiological range-of-motion limits.
+  ///
+  /// Source: Physiopedia "Range of Motion Normative Values" (Wem, 2021).
+  /// Conversion from ROM measurement to vertex angle:
+  ///   vertex = 180° − ROM_flexion  (because 180° = straight limb)
+  ///
+  ///   Elbow:   Flexion 140°, Extension 0°  → vertex [40°, 180°]
+  ///   Knee:    Flexion 150°, Extension 0°  → vertex [30°, 180°]
+  ///   Shoulder (elbow–shoulder–hip vertex): spans full 0°–180° per
+  ///            Flexion 180° + Hyperextension 50°; acos already bounds it.
+  ///   Spine:   Computed as 90° − |lean|; T-L flexion max ~50° → min ~40°;
+  ///            cannot exceed 90° by formula (abs value).
+  static const Map<String, ({double min, double max})> _romLimits = {
+    'rightElbowAngle':    (min: 40.0,  max: 180.0),
+    'leftElbowAngle':     (min: 40.0,  max: 180.0),
+    'rightShoulderAngle': (min: 0.0,   max: 180.0),
+    'leftShoulderAngle':  (min: 0.0,   max: 180.0),
+    'rightKneeAngle':     (min: 30.0,  max: 180.0),
+    'leftKneeAngle':      (min: 30.0,  max: 180.0),
+    'spineAngle':         (min: 40.0,  max: 90.0),
+  };
+
+  /// Drop any angle that is outside its physiological ROM by more than
+  /// [_kRomTolerance] degrees — these are detection artefacts, not valid poses.
+  /// Values within tolerance are clamped to the boundary so downstream scoring
+  /// never sees implausible numbers. Omitted entries become NaN in smoothing,
+  /// which interpolates from valid neighbouring frames.
+  static const double _kRomTolerance = 10.0;
+
+  static Map<String, double> _clampToPhysiologicalLimits(
+      Map<String, double> angles) {
+    final result = <String, double>{};
+    for (final e in angles.entries) {
+      final limits = _romLimits[e.key];
+      if (limits == null) {
+        result[e.key] = e.value; // unknown key — pass through unchanged
+        continue;
+      }
+      final clamped = e.value.clamp(limits.min, limits.max);
+      if ((e.value - clamped).abs() <= _kRomTolerance) {
+        // Within tolerance: keep the clamped value
+        result[e.key] = clamped;
+      }
+      // Else: implausible value — omit so smoothing interpolates from neighbours
+    }
+    return result;
+  }
+
+  // ---------------------------------------------------------------------------
   // Smoothing
   // ---------------------------------------------------------------------------
 
@@ -444,137 +496,67 @@ class PostureAnalysisService extends ChangeNotifier {
   // Scoring & suggestions
   // ---------------------------------------------------------------------------
 
-  /// Phase-aware ideal angles for a RHFH throw.
-  /// Forehand uses a sidearm motion: throwing elbow stays lower and more bent,
-  /// shoulder rotation is forward-facing rather than reaching back.
-  static const _phaseIdealsFH = [
-    // wind_up
-    {
-      'rightElbowAngle': 100.0,
-      'leftElbowAngle': 150.0,
-      'rightShoulderAngle': 60.0,
-      'leftShoulderAngle': 95.0,
-      'rightKneeAngle': 145.0,
-      'leftKneeAngle': 155.0,
-      'spineAngle': 82.0,
-    },
-    // power_pocket
-    {
-      'rightElbowAngle': 85.0,
-      'leftElbowAngle': 135.0,
-      'rightShoulderAngle': 90.0,
-      'leftShoulderAngle': 100.0,
-      'rightKneeAngle': 140.0,
-      'leftKneeAngle': 155.0,
-      'spineAngle': 83.0,
-    },
-    // release
-    {
-      'rightElbowAngle': 145.0,
-      'leftElbowAngle': 140.0,
-      'rightShoulderAngle': 120.0,
-      'leftShoulderAngle': 95.0,
-      'rightKneeAngle': 158.0,
-      'leftKneeAngle': 163.0,
-      'spineAngle': 86.0,
-    },
-    // follow_through
-    {
-      'rightElbowAngle': 130.0,
-      'leftElbowAngle': 145.0,
-      'rightShoulderAngle': 105.0,
-      'leftShoulderAngle': 100.0,
-      'rightKneeAngle': 168.0,
-      'leftKneeAngle': 170.0,
-      'spineAngle': 88.0,
-    },
-  ];
+  // ARCHIVED — _phaseIdealsFH and _phaseIdeals: hand-crafted angle tables with
+  // no measured basis. Replaced by computeProDeviationScore which uses the
+  // measured pro_baseline_db.json phase snapshots as the reference.
+  //
+  // static const _phaseIdealsFH = [ ... ];
+  // static const _phaseIdeals   = [ ... ];
+  // static double _phaseIdealAt(String angleName, double t, ...) { ... }
+  // double _calculateScore(List<FormFrame> frames, ...) { ... }
 
-  /// Phase-aware ideal angles for a RHBH throw.
-  /// Four rows correspond to: reach-back, power-pocket, release, follow-through.
-  /// Values are interpolated across the frame range so each frame is scored
-  /// against the ideal for its phase of the throw rather than a single
-  /// fixed target, which was inaccurate (e.g. elbow must be extended at
-  /// reach-back, tucked at power-pocket, extending again at release).
-  static const _phaseIdeals = [
-    // reach_back
-    {
-      'rightElbowAngle': 165.0,
-      'leftElbowAngle': 155.0,
-      'rightShoulderAngle': 70.0,
-      'leftShoulderAngle': 90.0,
-      'rightKneeAngle': 145.0,
-      'leftKneeAngle': 155.0,
-      'spineAngle': 80.0,
-    },
-    // power_pocket
-    {
-      'rightElbowAngle': 90.0,
-      'leftElbowAngle': 130.0,
-      'rightShoulderAngle': 110.0,
-      'leftShoulderAngle': 100.0,
-      'rightKneeAngle': 135.0,
-      'leftKneeAngle': 150.0,
-      'spineAngle': 82.0,
-    },
-    // release
-    {
-      'rightElbowAngle': 155.0,
-      'leftElbowAngle': 145.0,
-      'rightShoulderAngle': 130.0,
-      'leftShoulderAngle': 95.0,
-      'rightKneeAngle': 160.0,
-      'leftKneeAngle': 165.0,
-      'spineAngle': 87.0,
-    },
-    // follow_through
-    {
-      'rightElbowAngle': 140.0,
-      'leftElbowAngle': 150.0,
-      'rightShoulderAngle': 100.0,
-      'leftShoulderAngle': 100.0,
-      'rightKneeAngle': 170.0,
-      'leftKneeAngle': 170.0,
-      'spineAngle': 88.0,
-    },
-  ];
+  // ---------------------------------------------------------------------------
+  // Pro deviation score (measured data)
+  // ---------------------------------------------------------------------------
 
-  /// Interpolate the ideal angle for [angleName] at fractional throw progress
-  /// [t] (0 = first frame, 1 = last frame). Uses linear interpolation across
-  /// the four phase snapshots, each occupying equal time.
-  /// [throwType] selects between BH ('BH') and FH ('FH') phase tables.
-  static double _phaseIdealAt(String angleName, double t,
-      {String throwType = 'BH'}) {
-    final table =
-        throwType == 'FH' ? _phaseIdealsFH : _phaseIdeals;
-    // t in [0,1] → phases each span equal width
-    final scaled = t * (table.length - 1);
-    final lo = scaled.floor().clamp(0, table.length - 1);
-    final hi = (lo + 1).clamp(0, table.length - 1);
-    final frac = scaled - lo;
-    final loVal = table[lo][angleName];
-    final hiVal = table[hi][angleName];
-    if (loVal == null || hiVal == null) return double.nan;
-    return loVal + (hiVal - loVal) * frac;
-  }
+  /// Compute a 0–100 deviation score against measured pro phase snapshots.
+  ///
+  /// [phaseAngles] is from [ProBaselineParser.getPhaseAngles()]: a map of
+  /// phase name → {appAngleName → degrees} for the selected pro and throw type.
+  ///
+  /// For each user frame, the nearest phase snapshot is chosen (no
+  /// interpolation). The score decays linearly: 0° diff → 100, 50° diff → 0.
+  static double computeProDeviationScore(
+    List<FormFrame> frames,
+    Map<String, Map<String, double>> phaseAngles,
+    String throwType,
+  ) {
+    if (frames.isEmpty || phaseAngles.isEmpty) return 0.0;
 
-  double _calculateScore(List<FormFrame> frames, {String throwType = 'BH'}) {
-    if (frames.isEmpty) return 0.0;
+    // Ordered phase names matching the measured data
+    final phaseOrder = throwType == 'FH'
+        ? ['wind_up', 'power_pocket', 'release', 'follow_through']
+        : ['reach_back', 'power_pocket', 'release', 'follow_through'];
 
+    // Fractional positions of each phase (0, 0.33, 0.67, 1.0)
+    final phaseT = [0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0];
+
+    final total = frames.length;
     double totalScore = 0.0;
     int count = 0;
-    final total = frames.length;
 
     for (int i = 0; i < total; i++) {
       final t = total > 1 ? i / (total - 1) : 0.0;
-      final frame = frames[i];
 
-      for (final entry in frame.angles.entries) {
-        final ideal =
-            _phaseIdealAt(entry.key, t, throwType: throwType);
-        if (ideal.isNaN) continue;
-        final diff = (entry.value - ideal).abs();
-        // Score decays linearly: 100 at 0° diff, 0 at 50° diff
+      // Snap to nearest phase — no interpolation between snapshots
+      int nearestPhase = 0;
+      double minDist = (t - phaseT[0]).abs();
+      for (int p = 1; p < phaseT.length; p++) {
+        final d = (t - phaseT[p]).abs();
+        if (d < minDist) {
+          minDist = d;
+          nearestPhase = p;
+        }
+      }
+
+      final phaseName = phaseOrder[nearestPhase];
+      final proAngles = phaseAngles[phaseName];
+      if (proAngles == null) continue;
+
+      for (final entry in frames[i].angles.entries) {
+        final proAngle = proAngles[entry.key];
+        if (proAngle == null) continue;
+        final diff = (entry.value - proAngle).abs();
         final score = (100 - diff * 2.0).clamp(0.0, 100.0);
         totalScore += score;
         count++;
@@ -603,7 +585,7 @@ class PostureAnalysisService extends ChangeNotifier {
       date: DateTime.now(),
       videoPath: videoPath,
       frames: frames,
-      score: _calculateScore(frames),
+      score: 0.0,
     );
 
     _analyses.add(analysis);
@@ -625,20 +607,9 @@ class PostureAnalysisService extends ChangeNotifier {
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // Pro data
-  // ---------------------------------------------------------------------------
-
-  Future<void> loadProFormData(String proName, {String throwType = 'BH'}) async {
-    final proFormAnalysis = await ProBaselineParser.generateProAnalysis(
-      proName,
-      throwType,
-      frameCount: 30,
-    );
-
-    _proAnalysis = proFormAnalysis;
-    notifyListeners();
-  }
+  // loadProFormData removed — it called archived generateProAnalysis.
+  // Pro comparison now uses ProBaselineParser.getPhaseAngles() directly
+  // from the UI layer (PostureAnalysisScreen).
 
   List<FormSuggestion> generateSuggestions({String throwType = 'BH'}) {
     if (_currentAnalysis == null || _currentAnalysis!.frames.isEmpty) {
@@ -763,13 +734,9 @@ class PostureAnalysisService extends ChangeNotifier {
       ..addAll(newAngles);
   }
 
-  double recalculateScore(List<FormFrame> frames, {String throwType = 'BH'}) =>
-      _calculateScore(frames, throwType: throwType);
-
   void clearAnalyses() {
     _analyses.clear();
     _currentAnalysis = null;
-    _proAnalysis = null;
     notifyListeners();
   }
 

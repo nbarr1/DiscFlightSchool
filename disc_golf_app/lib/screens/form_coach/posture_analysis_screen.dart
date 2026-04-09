@@ -11,7 +11,7 @@ import '../../utils/constants.dart';
 import '../../utils/pro_data_parser.dart';
 import '../../widgets/skeleton_overlay.dart';
 import '../../services/form_history_service.dart';
-import 'comparison_screen.dart';
+// comparison_screen.dart is ARCHIVED (interpolated frames, not measured data)
 import 'phase_comparison_screen.dart';
 import 'pose_correction_screen.dart';
 import 'dart:io';
@@ -65,6 +65,10 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   // Pro selector state (allows switching pro after analysis)
   String? _selectedPro;
   String _selectedThrowType = 'BH';
+
+  // Pro deviation score — computed from measured phase snapshots, null when no pro selected
+  Map<String, Map<String, double>>? _proPhaseAngles;
+  double? _proDeviationScore;
 
   // Manual phase selection fallback (used when phaseTimestamps == null)
   bool _phaseSelectionMode = false;
@@ -518,12 +522,6 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                       if (_selectedPro != null && _analysis != null)
                         _buildPhaseComparisonSection(),
 
-                      // Frame-by-frame angle comparison vs pro
-                      if (_selectedPro != null &&
-                          _analysis != null &&
-                          postureService.proAnalysis != null)
-                        _buildFrameByFrameButton(postureService),
-
                       // Angle charts
                       _buildAngleCharts(),
 
@@ -681,8 +679,6 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   }
 
   Widget _buildProSelector() {
-    final postureService = Provider.of<PostureAnalysisService>(context, listen: false);
-
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
@@ -716,14 +712,23 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                   );
                 }),
               ],
-              onChanged: (pro) {
+              onChanged: (pro) async {
                 setState(() {
                   _selectedPro = pro;
+                  _proPhaseAngles = null;
+                  _proDeviationScore = null;
                   _phaseSelectionMode = false;
                   _phaseFrames.clear();
                 });
-                if (pro != null) {
-                  postureService.loadProFormData(pro, throwType: _selectedThrowType);
+                if (pro != null && _analysis != null) {
+                  final angles = await ProBaselineParser.getPhaseAngles(
+                      pro, _selectedThrowType);
+                  final score = PostureAnalysisService.computeProDeviationScore(
+                      _analysis!.frames, angles, _selectedThrowType);
+                  setState(() {
+                    _proPhaseAngles = angles;
+                    _proDeviationScore = score;
+                  });
                 }
               },
             ),
@@ -734,14 +739,23 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                 ButtonSegment(value: 'FH', label: Text('Forehand')),
               ],
               selected: {_selectedThrowType},
-              onSelectionChanged: (selection) {
+              onSelectionChanged: (selection) async {
                 setState(() {
                   _selectedThrowType = selection.first;
+                  _proPhaseAngles = null;
+                  _proDeviationScore = null;
                   _phaseSelectionMode = false;
                   _phaseFrames.clear();
                 });
-                if (_selectedPro != null) {
-                  postureService.loadProFormData(_selectedPro!, throwType: _selectedThrowType);
+                if (_selectedPro != null && _analysis != null) {
+                  final angles = await ProBaselineParser.getPhaseAngles(
+                      _selectedPro!, selection.first);
+                  final score = PostureAnalysisService.computeProDeviationScore(
+                      _analysis!.frames, angles, selection.first);
+                  setState(() {
+                    _proPhaseAngles = angles;
+                    _proDeviationScore = score;
+                  });
                 }
               },
             ),
@@ -752,9 +766,6 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   }
 
   Widget _buildScoreCard() {
-    final score = _analysis!.score;
-    final color = _getScoreColor(score);
-
     return Card(
       margin: const EdgeInsets.all(16),
       child: Padding(
@@ -762,42 +773,63 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
         child: Column(
           children: [
             Text(
-              'Form Score',
+              'Pro Deviation Score',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
             ),
             const SizedBox(height: 12),
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: 120,
-                  height: 120,
-                  child: CircularProgressIndicator(
-                    value: score / 100,
-                    strokeWidth: 10,
-                    backgroundColor: Colors.grey[800],
-                    valueColor: AlwaysStoppedAnimation<Color>(color),
+            if (_proDeviationScore != null) ...[
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 120,
+                    height: 120,
+                    child: CircularProgressIndicator(
+                      value: _proDeviationScore! / 100,
+                      strokeWidth: 10,
+                      backgroundColor: Colors.grey[800],
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                          _getScoreColor(_proDeviationScore!)),
+                    ),
                   ),
-                ),
-                Column(
-                  children: [
-                    Text(
-                      score.toStringAsFixed(1),
-                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                            color: color,
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                    Text(
-                      _getScoreLabel(score),
-                      style: TextStyle(color: color, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                  Column(
+                    children: [
+                      Text(
+                        _proDeviationScore!.toStringAsFixed(1),
+                        style:
+                            Theme.of(context).textTheme.displaySmall?.copyWith(
+                                  color: _getScoreColor(_proDeviationScore!),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                      ),
+                      Text(
+                        _getScoreLabel(_proDeviationScore!),
+                        style: TextStyle(
+                            color: _getScoreColor(_proDeviationScore!),
+                            fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'vs $_selectedPro · $_selectedThrowType',
+                style: const TextStyle(fontSize: 12, color: Colors.white54),
+              ),
+            ] else ...[
+              const SizedBox(height: 16),
+              const Icon(Icons.person_search, size: 48, color: Colors.white24),
+              const SizedBox(height: 8),
+              const Text(
+                'Select a pro above to score your form',
+                style: TextStyle(color: Colors.white54, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+            ],
           ],
         ),
       ),
@@ -959,30 +991,6 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
     );
   }
 
-  Widget _buildFrameByFrameButton(PostureAnalysisService postureService) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: OutlinedButton.icon(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ComparisonScreen(
-              userAnalysis: _analysis!,
-              proAnalysis: postureService.proAnalysis!,
-              proName: _selectedPro!,
-            ),
-          ),
-        ),
-        icon: const Icon(Icons.swap_horiz),
-        label: const Text('Frame-by-Frame vs Pro'),
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.all(14),
-          minimumSize: const Size(double.infinity, 48),
-        ),
-      ),
-    );
-  }
-
   String _formatPhaseName(String name) {
     return name
         .split('_')
@@ -998,25 +1006,34 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
       );
     }
 
-    final postureService = Provider.of<PostureAnalysisService>(context, listen: false);
-    final proFrames = postureService.proAnalysis?.frames;
-
     final angles = _analysis!.frames.first.angles.keys.toList();
+    final phaseOrder = _selectedThrowType == 'FH'
+        ? ['wind_up', 'power_pocket', 'release', 'follow_through']
+        : ['reach_back', 'power_pocket', 'release', 'follow_through'];
+    const phaseT = [0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0];
+    const phaseLabels = ['R', 'P', 'Rel', 'F'];
 
     return Column(
       children: angles.map((angleName) {
-        final referenceData = proFrames
-            ?.map((f) => f.angles[angleName] ?? 0.0)
-            .toList();
-        return _buildAngleChart(
-          angleName,
-          referenceData: referenceData,
-        );
+        // Build 4 measured phase marker dots when a pro is selected
+        List<({double t, double angle, String label})>? phaseMarkers;
+        if (_proPhaseAngles != null) {
+          phaseMarkers = [];
+          for (int i = 0; i < phaseOrder.length; i++) {
+            final a = _proPhaseAngles![phaseOrder[i]]?[angleName];
+            if (a != null) {
+              phaseMarkers.add((t: phaseT[i], angle: a, label: phaseLabels[i]));
+            }
+          }
+          if (phaseMarkers.isEmpty) phaseMarkers = null;
+        }
+        return _buildAngleChart(angleName, phaseMarkers: phaseMarkers);
       }).toList(),
     );
   }
 
-  Widget _buildAngleChart(String angleName, {List<double>? referenceData}) {
+  Widget _buildAngleChart(String angleName,
+      {List<({double t, double angle, String label})>? phaseMarkers}) {
     final angleData = _analysis!.frames.map((frame) {
       return frame.angles[angleName] ?? 0.0;
     }).toList();
@@ -1055,7 +1072,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                       painter: AngleWaveformPainter(
                         angleData: angleData,
                         currentFrame: _currentFrame,
-                        referenceData: referenceData,
+                        phaseMarkers: phaseMarkers,
                         showThreshold: _showThresholds,
                       ),
                     ),
@@ -1184,27 +1201,15 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
 class AngleWaveformPainter extends CustomPainter {
   final List<double> angleData;
   final int currentFrame;
-  final List<double>? referenceData;
+  final List<({double t, double angle, String label})>? phaseMarkers;
   final bool showThreshold;
 
   AngleWaveformPainter({
     required this.angleData,
     required this.currentFrame,
-    this.referenceData,
+    this.phaseMarkers,
     this.showThreshold = true,
   });
-
-  /// Resample reference data to match target length via linear interpolation.
-  List<double> _resampleReference(List<double> ref, int targetLength) {
-    if (ref.length == targetLength) return ref;
-    if (targetLength <= 1) return [ref.first];
-    return List.generate(targetLength, (i) {
-      final t = i / (targetLength - 1) * (ref.length - 1);
-      final lo = t.floor().clamp(0, ref.length - 2);
-      final frac = t - lo;
-      return ref[lo] * (1 - frac) + ref[lo + 1] * frac;
-    });
-  }
 
   /// Multi-pass smoothing: median filter to remove spikes, then moving average.
   List<double> _smooth(List<double> data) {
@@ -1263,19 +1268,14 @@ class AngleWaveformPainter extends CustomPainter {
       ..color = Colors.red
       ..strokeWidth = 2;
 
-    // Resample reference to match user frame count
-    final resampled = (showThreshold && referenceData != null && referenceData!.isNotEmpty)
-        ? _resampleReference(referenceData!, smoothed.length)
-        : null;
-
-    // Find min and max for scaling (expand to include reference if shown)
+    // Find min and max for scaling (expand to include phase marker angles if shown)
     var minAngle = smoothed.reduce((a, b) => a < b ? a : b);
     var maxAngle = smoothed.reduce((a, b) => a > b ? a : b);
-    if (resampled != null) {
-      final refMin = resampled.reduce((a, b) => a < b ? a : b);
-      final refMax = resampled.reduce((a, b) => a > b ? a : b);
-      if (refMin < minAngle) minAngle = refMin - 5;
-      if (refMax > maxAngle) maxAngle = refMax + 5;
+    if (phaseMarkers != null) {
+      for (final m in phaseMarkers!) {
+        if (m.angle < minAngle) minAngle = m.angle - 5;
+        if (m.angle > maxAngle) maxAngle = m.angle + 5;
+      }
     }
     final range = maxAngle - minAngle;
 
@@ -1325,66 +1325,37 @@ class AngleWaveformPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
 
-    // Draw pro reference curve
-    if (resampled != null) {
-      final refPaint = Paint()
-        ..color = Colors.green.withAlpha(150)
-        ..strokeWidth = 1.5
-        ..style = PaintingStyle.stroke;
+    // Draw measured phase marker dots (one per pro phase snapshot)
+    if (phaseMarkers != null) {
+      final dotPaint = Paint()
+        ..color = Colors.green
+        ..style = PaintingStyle.fill;
 
-      // Draw dashed curve
-      const dashLen = 6.0;
-      const gapLen = 4.0;
-      double accumulated = 0;
-      bool drawing = true;
+      for (final marker in phaseMarkers!) {
+        final x = marker.t * size.width;
+        final normalizedAngle = (marker.angle - minAngle) / range;
+        final y = size.height - normalizedAngle * size.height;
 
-      for (int i = 0; i < resampled.length - 1; i++) {
-        final x1 = (i / (resampled.length - 1)) * size.width;
-        final y1 = size.height - ((resampled[i] - minAngle) / range) * size.height;
-        final x2 = ((i + 1) / (resampled.length - 1)) * size.width;
-        final y2 = size.height - ((resampled[i + 1] - minAngle) / range) * size.height;
+        // Draw dot
+        canvas.drawCircle(Offset(x, y), 4.0, dotPaint);
 
-        final dx = x2 - x1;
-        final dy = y2 - y1;
-        final segLen = (dx * dx + dy * dy).abs();
-        final segDist = segLen > 0 ? segLen * 0.5 + (x2 - x1).abs() : 0.0; // approximate
-
-        if (drawing) {
-          canvas.drawLine(Offset(x1, y1), Offset(x2, y2), refPaint);
-        }
-
-        accumulated += segDist > 0 ? segDist : (x2 - x1).abs();
-        final threshold = drawing ? dashLen : gapLen;
-        if (accumulated >= threshold) {
-          accumulated = 0;
-          drawing = !drawing;
-        }
-      }
-
-      // "Pro" label at right end of curve
-      final lastY = size.height - ((resampled.last - minAngle) / range) * size.height;
-      final labelPainter = TextPainter(
-        text: TextSpan(
-          text: 'Pro',
-          style: TextStyle(
-            color: Colors.green.withAlpha(200),
-            fontSize: 9,
-            fontWeight: FontWeight.bold,
+        // Draw label below dot
+        final labelPainter = TextPainter(
+          text: TextSpan(
+            text: marker.label,
+            style: const TextStyle(
+              color: Colors.green,
+              fontSize: 8,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      labelPainter.layout();
-      final labelX = size.width - labelPainter.width - 2;
-      final labelY = (lastY - labelPainter.height - 4).clamp(0.0, size.height - labelPainter.height);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(labelX - 2, labelY - 1, labelPainter.width + 4, labelPainter.height + 2),
-          const Radius.circular(3),
-        ),
-        Paint()..color = Colors.black.withAlpha(160),
-      );
-      labelPainter.paint(canvas, Offset(labelX, labelY));
+          textDirection: TextDirection.ltr,
+        );
+        labelPainter.layout();
+        final labelX = (x - labelPainter.width / 2).clamp(0.0, size.width - labelPainter.width);
+        final labelY = (y + 6).clamp(0.0, size.height - labelPainter.height);
+        labelPainter.paint(canvas, Offset(labelX, labelY));
+      }
     }
   }
 
@@ -1392,7 +1363,7 @@ class AngleWaveformPainter extends CustomPainter {
   bool shouldRepaint(covariant AngleWaveformPainter oldDelegate) {
     return oldDelegate.currentFrame != currentFrame ||
         oldDelegate.angleData != angleData ||
-        oldDelegate.referenceData != referenceData ||
+        oldDelegate.phaseMarkers != phaseMarkers ||
         oldDelegate.showThreshold != showThreshold;
   }
 }

@@ -72,9 +72,6 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
                         setState(() {
                           _selectedPro = pro;
                         });
-                        if (pro != null) {
-                          postureService.loadProFormData(pro, throwType: _throwType);
-                        }
                       },
                     ),
                     const SizedBox(height: 12),
@@ -88,9 +85,6 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
                         setState(() {
                           _throwType = selection.first;
                         });
-                        if (_selectedPro != null) {
-                          postureService.loadProFormData(_selectedPro!, throwType: _throwType);
-                        }
                       },
                     ),
                     const SizedBox(height: 8),

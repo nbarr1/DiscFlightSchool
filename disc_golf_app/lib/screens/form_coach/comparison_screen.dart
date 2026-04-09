@@ -1,3 +1,8 @@
+// ARCHIVED — Frame-by-frame pro comparison using Catmull-Rom interpolated frames.
+// Interpolated frames are synthesized estimates, not measured data.
+// The only defensible pro comparison is PhaseComparisonScreen (4 measured snapshots).
+// Keep this file for potential future use if per-frame pro video data is ever collected.
+
 import 'package:flutter/material.dart';
 import '../../models/form_analysis.dart';
 

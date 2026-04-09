@@ -444,13 +444,12 @@ class _PoseCorrectionScreenState extends State<PoseCorrectionScreen> {
       postureService.recalculateFrameAngles(frame);
     }
 
-    final newScore = postureService.recalculateScore(_analysis.frames);
     final corrected = FormAnalysis(
       id: _analysis.id,
       date: _analysis.date,
       videoPath: _analysis.videoPath,
       frames: _analysis.frames,
-      score: newScore,
+      score: 0.0,
     );
 
     Navigator.pop(context, corrected);
