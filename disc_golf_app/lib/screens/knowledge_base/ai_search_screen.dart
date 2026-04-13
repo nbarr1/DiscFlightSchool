@@ -272,9 +272,7 @@ class _AISearchScreenState extends State<AISearchScreen> {
                       child: Switch(
                         value: _useAI,
                         onChanged: (v) => setState(() => _useAI = v),
-                        activeThumbColor: Colors.purple.shade300,
                         inactiveTrackColor: Colors.teal.withAlpha(60),
-                        inactiveThumbColor: Colors.teal.shade300,
                       ),
                     ),
                     const SizedBox(width: 6),
