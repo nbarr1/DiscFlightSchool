@@ -3,27 +3,22 @@ name: Build APK
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:         # lets you trigger manually from GitHub Actions tab
+  workflow_dispatch:
 
 jobs:
   build-apk:
     runs-on: ubuntu-latest
 
     steps:
-      # ── 1. Checkout ──────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Java (Android build requires JDK 17) ───────────────────────────
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # ── 3. Flutter ────────────────────────────────────────────────────────
-      # Flutter 3.32.x is the first stable release with Dart 3.8 (sdk >=3.8.0).
-      # Pinning to 3.32.x ensures compatibility with your pubspec constraint.
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -31,25 +26,20 @@ jobs:
           channel: 'stable'
           cache: true
 
-      # ── 4. Android SDK / NDK ────────────────────────────────────────────
-      # tflite_flutter, google_mlkit_pose_detection, and ffmpeg_kit_flutter_new
-      # all require NDK. The GitHub Actions runner includes the Android SDK;
-      # we just need to install the correct NDK version.
-      - name: Install Android NDK
+      # Install the exact NDK and SDK versions required by the plugins.
+      # NDK 27.0.12077973 — required by tflite_flutter, mlkit, ffmpeg_kit, etc.
+      # compileSdk 36 — required by tflite_flutter.
+      - name: Install Android NDK and SDK platform
         run: |
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-            "ndk;25.1.8937393" \
-            "platforms;android-34" \
+            "ndk;27.0.12077973" \
+            "platforms;android-36" \
             "build-tools;34.0.0"
 
-      # ── 5. Dependencies ───────────────────────────────────────────────────
       - name: Install Flutter dependencies
         working-directory: disc_golf_app
         run: flutter pub get
 
-      # ── 6. Verify assets exist ────────────────────────────────────────────
-      # Fails fast with a clear message if any declared asset is missing,
-      # rather than getting a cryptic build failure later.
       - name: Check required assets
         working-directory: disc_golf_app
         run: |
@@ -67,13 +57,10 @@ jobs:
           done
           echo "All assets present."
 
-      # ── 7. Build release APK ──────────────────────────────────────────────
       - name: Build release APK
         working-directory: disc_golf_app
         run: flutter build apk --release
 
-      # ── 8. Upload APK as artifact ─────────────────────────────────────────
-      # Download from: Actions tab → select run → Artifacts section
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
