@@ -16,6 +16,24 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+/// A background reference point used for camera motion compensation.
+///
+/// The user taps the same static landmark (e.g. a tee sign or tree) in two or
+/// more frames.  The app computes the 2-D camera pan between those frames and
+/// shifts past trail positions accordingly, keeping the flight path
+/// world-locked even when the camera moves — equivalent to the After-Effects
+/// "Create Null and Camera" workflow.
+class _CameraRefPoint {
+  final int frameIndex;
+  final double x; // normalized 0-1
+  final double y; // normalized 0-1
+  const _CameraRefPoint({
+    required this.frameIndex,
+    required this.x,
+    required this.y,
+  });
+}
+
 /// A keyframe marked by the user — disc position at a specific frame.
 class _FlightKeyframe {
   final int frameIndex;
@@ -78,6 +96,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   bool _targetLineMode = false;
   Offset? _targetLineStart; // Normalized 0-1
   Offset? _targetLineEnd;   // Normalized 0-1
+
+  // Camera lock / motion compensation state
+  bool _cameraLockMode = false;
+  final List<_CameraRefPoint> _cameraRefPoints = [];
 
   // Stabilization state
   bool _stabilizeEnabled = false;
@@ -272,6 +294,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   void _addKeyframeFromTap(TapUpDetails details) {
+    if (_cameraLockMode) {
+      _placeCameraRefPoint(details.localPosition);
+      return;
+    }
     if (_targetLineMode) {
       _placeTargetLinePoint(details.localPosition);
       return;
@@ -304,6 +330,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   void _clearAll() {
     setState(() {
       _keyframes.clear();
+      _cameraRefPoints.clear();
+      _cameraLockMode = false;
       _trackingResult = null;
       _firstBoxCorner = null;
     });
@@ -526,6 +554,84 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
   }
 
+  // ---------------------------------------------------------------------------
+  // Camera motion compensation
+  // ---------------------------------------------------------------------------
+
+  /// Returns the interpolated camera offset (normalized 0-1) at [frame],
+  /// relative to the first reference point's frame.
+  ///
+  /// The offset encodes how much the camera has panned since the base frame:
+  ///   offset = refPoint_at_frame - refPoint_at_baseFrame
+  ///
+  /// [FollowFlightPainter] uses this to shift past trail positions so they
+  /// stay locked to the environment as the camera moves.
+  Offset _computeCameraOffset(int frame) {
+    if (_cameraRefPoints.length < 2) return Offset.zero;
+    final sorted = List<_CameraRefPoint>.from(_cameraRefPoints)
+      ..sort((a, b) => a.frameIndex.compareTo(b.frameIndex));
+    final base = sorted.first;
+
+    // Find surrounding reference frames for interpolation
+    _CameraRefPoint prev = base;
+    _CameraRefPoint next = sorted.last;
+    for (final ref in sorted) {
+      if (ref.frameIndex <= frame) prev = ref;
+    }
+    for (final ref in sorted.reversed) {
+      if (ref.frameIndex >= frame) { next = ref; break; }
+    }
+
+    if (prev.frameIndex == next.frameIndex) {
+      return Offset(prev.x - base.x, prev.y - base.y);
+    }
+    final t = (frame - prev.frameIndex) / (next.frameIndex - prev.frameIndex);
+    final ox = (prev.x + (next.x - prev.x) * t) - base.x;
+    final oy = (prev.y + (next.y - prev.y) * t) - base.y;
+    return Offset(ox, oy);
+  }
+
+  /// Builds a map of frame → camera offset for all frames covered by the
+  /// current tracking result (or keyframes), for passing to [FollowFlightPainter].
+  Map<int, Offset> _buildCameraOffsetMap() {
+    if (_cameraRefPoints.length < 2) return {};
+    final sorted = List<_CameraRefPoint>.from(_cameraRefPoints)
+      ..sort((a, b) => a.frameIndex.compareTo(b.frameIndex));
+    final base = sorted.first;
+    // Only key the reference frames — the painter interpolates between them.
+    return {
+      for (final ref in sorted)
+        ref.frameIndex: Offset(ref.x - base.x, ref.y - base.y),
+    };
+  }
+
+  /// Places a camera reference point at [localPosition] in the video widget.
+  void _placeCameraRefPoint(Offset localPosition) {
+    if (_videoWidgetSize == Size.zero) return;
+    final nx = (localPosition.dx / _videoWidgetSize.width).clamp(0.0, 1.0);
+    final ny = (localPosition.dy / _videoWidgetSize.height).clamp(0.0, 1.0);
+    setState(() {
+      _cameraRefPoints.removeWhere((r) => r.frameIndex == _currentFrame);
+      _cameraRefPoints.add(_CameraRefPoint(
+        frameIndex: _currentFrame,
+        x: nx,
+        y: ny,
+      ));
+      _cameraRefPoints.sort((a, b) => a.frameIndex.compareTo(b.frameIndex));
+      // Invalidate tracking result so compensation is re-applied on next Process
+      _trackingResult = null;
+    });
+    if (_cameraRefPoints.length == 1 && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text(
+          'Landmark set. Scrub to a different frame where the camera has moved, '
+          'then tap the same landmark again.',
+        ),
+        duration: Duration(seconds: 4),
+      ));
+    }
+  }
+
   // --- Save video with overlay ---
 
   Future<ui.Image> _renderOverlayImage(
@@ -533,6 +639,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     double height,
     int currentFrame, {
     bool showDisc = false,
+    Map<int, Offset>? cameraOffsets,
   }) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(
@@ -544,6 +651,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       currentFrame: currentFrame,
       showFullTrail: false,
       showCurrentDisc: showDisc,
+      cameraOffsets: cameraOffsets,
     );
     painter.paint(canvas, Size(width, height));
     final picture = recorder.endRecording();
@@ -583,45 +691,77 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       if (overlayDir.existsSync()) overlayDir.deleteSync(recursive: true);
       overlayDir.createSync();
 
-      // Calculate flight time window
-      // Detection timestamps are relative to trim start (frame 0 = 0ms).
-      // FFmpeg video clock starts from the original video's beginning,
-      // so we must add the trim offset to align overlays correctly.
+      // Detection timestamps are relative to trim start (frame 0 = 0 ms).
+      // FFmpeg's video clock starts from the original file beginning, so we
+      // must add the trim offset to align each overlay with the right frame.
       final trimOffsetSec = (widget.trimStartMs ?? 0) / 1000.0;
       final detections = _trackingResult!.detections;
-      final firstSec = detections.first.timestamp.inMilliseconds / 1000.0;
-      final lastSec = detections.last.timestamp.inMilliseconds / 1000.0;
-      final flightDuration = lastSec - firstSec;
+      final cameraOffsets = _buildCameraOffsetMap();
 
-      // Render chunked overlays (~8 segments)
-      const segmentCount = 8;
-      final segmentDur = flightDuration / segmentCount;
+      // --- Render one overlay image per tracking frame ---
+      //
+      // Each image shows the full trail up to that frame, creating a smooth
+      // "Trim Path draw-on" animation in the exported video — matching the
+      // After-Effects workflow.  We cap at 90 frames (~9 s at 10 fps) to keep
+      // render time reasonable; frames are sub-sampled evenly if above the cap.
+      final allFrames = detections.map((d) => d.frameIndex).toSet().toList()
+        ..sort();
+
+      const maxOverlays = 90;
+      final List<int> framesToRender;
+      if (allFrames.length <= maxOverlays) {
+        framesToRender = allFrames;
+      } else {
+        // Even sub-sample: always include first and last
+        final step = (allFrames.length - 1) / (maxOverlays - 1);
+        framesToRender = [
+          for (int i = 0; i < maxOverlays; i++)
+            allFrames[(i * step).round().clamp(0, allFrames.length - 1)],
+        ];
+      }
+
       final overlayPaths = <String>[];
-      final segmentTimes = <double>[];
+      final overlayStartTimes = <double>[];
 
-      for (int i = 0; i < segmentCount; i++) {
-        final checkpointSec = firstSec + (i + 1) * segmentDur;
-        final checkpointFrame = (checkpointSec * trackingFps).round();
+      for (int i = 0; i < framesToRender.length; i++) {
+        final frame = framesToRender[i];
+        final detection = _trackingResult!.detectionAtFrame(frame);
+        if (detection == null) continue;
 
+        final isLastFrame = i == framesToRender.length - 1;
         final image = await _renderOverlayImage(
           videoWidth,
           videoHeight,
-          checkpointFrame,
-          showDisc: i == segmentCount - 1,
+          frame,
+          showDisc: isLastFrame,
+          cameraOffsets: cameraOffsets,
         );
-        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        final byteData =
+            await image.toByteData(format: ui.ImageByteFormat.png);
         image.dispose();
         if (byteData == null) continue;
 
-        final path = '${overlayDir.path}/seg_$i.png';
+        final path = '${overlayDir.path}/frame_${i.toString().padLeft(4, '0')}.png';
         await File(path).writeAsBytes(byteData.buffer.asUint8List());
         overlayPaths.add(path);
-        segmentTimes.add(trimOffsetSec + firstSec + i * segmentDur);
+
+        // Absolute video time this overlay should appear
+        final frameSec = detection.timestamp.inMilliseconds / 1000.0;
+        overlayStartTimes.add(trimOffsetSec + frameSec);
+
+        // Yield to the event loop every 10 frames to keep the UI responsive
+        if (i % 10 == 0) await Future.delayed(Duration.zero);
       }
 
-      if (overlayPaths.isEmpty) throw Exception('No overlay segments rendered');
+      if (overlayPaths.isEmpty) throw Exception('No overlay frames rendered');
 
-      // Build FFmpeg command with chained overlay filters
+      // --- Build FFmpeg filter_complex ---
+      //
+      // Chain: [0:v][1:v]overlay=enable=between(t,t0,t1)[v1];
+      //        [v1][2:v]overlay=enable=between(t,t1,t2)[v2]; ...
+      //
+      // Each overlay is visible from its start time until the next overlay's
+      // start time, so the trail smoothly draws on frame-by-frame.
       final inputs = StringBuffer('-y -i "${widget.videoPath}" ');
       for (final path in overlayPaths) {
         inputs.write('-i "$path" ');
@@ -630,22 +770,17 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       final filters = StringBuffer();
       final n = overlayPaths.length;
       for (int i = 0; i < n; i++) {
-        final inputLabel = i == 0 ? '0:v' : 'v$i';
+        final inputLabel = i == 0 ? '[0:v]' : '[v$i]';
         final outputLabel = i == n - 1 ? '' : '[v${i + 1}]';
-        final tStart = segmentTimes[i].toStringAsFixed(3);
+        final tStart = overlayStartTimes[i].toStringAsFixed(3);
         final tEnd = i < n - 1
-            ? segmentTimes[i + 1].toStringAsFixed(3)
-            : '9999';
+            ? overlayStartTimes[i + 1].toStringAsFixed(3)
+            : '99999';
         final enable = "enable='between(t\\,$tStart\\,$tEnd)'";
-
-        if (i == 0) {
-          filters.write('[$inputLabel][${i + 1}:v]overlay=$enable:format=auto');
-        } else {
-          filters.write('[$inputLabel][${i + 1}:v]overlay=$enable:format=auto');
-        }
-        if (i < n - 1) {
-          filters.write('$outputLabel;');
-        }
+        filters.write(
+          '$inputLabel[${i + 1}:v]overlay=$enable:format=auto$outputLabel',
+        );
+        if (i < n - 1) filters.write(';');
       }
 
       final timestamp = DateTime.now().millisecondsSinceEpoch;
@@ -811,6 +946,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                         trackingResult:
                                             _trackingResult!,
                                         currentFrame: _currentFrame,
+                                        cameraOffsets:
+                                            _buildCameraOffsetMap(),
                                       ),
                                     ),
                                   ),
@@ -840,6 +977,43 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                             kf,
                                             constraints.biggest,
                                           )),
+
+                                // Camera reference point markers
+                                if (_cameraRefPoints.isNotEmpty)
+                                  ..._cameraRefPoints.map((ref) =>
+                                      _buildCameraRefMarker(
+                                          ref, constraints.biggest)),
+
+                                // Camera lock mode instruction banner
+                                if (_cameraLockMode)
+                                  Positioned(
+                                    top: 8,
+                                    left: 0,
+                                    right: 0,
+                                    child: Center(
+                                      child: IgnorePointer(
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 14, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.purple.shade900
+                                                .withAlpha(220),
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                          ),
+                                          child: Text(
+                                            _cameraRefPoints.isEmpty
+                                                ? 'Tap a static background landmark'
+                                                : 'Scrub to another frame, tap same landmark',
+                                            style: const TextStyle(
+                                                color: Colors.purpleAccent,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
 
                                 // First corner marker in box mode
                                 if (_boxMode && _firstBoxCorner != null)
@@ -1248,6 +1422,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         runSpacing: 6,
         children: [
           _buildStabilizeToggle(),
+          _buildCameraLockButton(),
           if (trainingService.isOptedIn)
             _buildBoxModeToggle(),
           _buildTargetLineButton(),
@@ -1439,6 +1614,98 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCameraLockButton() {
+    final hasRefs = _cameraRefPoints.length >= 2;
+    final isActive = _cameraLockMode;
+    final color = isActive
+        ? Colors.purple.shade700
+        : hasRefs
+            ? Colors.purple.shade900
+            : Colors.grey.shade800;
+
+    return GestureDetector(
+      onTap: () => setState(() => _cameraLockMode = !_cameraLockMode),
+      onLongPress: _cameraRefPoints.isNotEmpty
+          ? () => setState(() {
+                _cameraRefPoints.clear();
+                _cameraLockMode = false;
+                _trackingResult = null;
+              })
+          : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(8),
+          border: (isActive || hasRefs)
+              ? Border.all(color: Colors.purpleAccent, width: 1.5)
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              hasRefs ? Icons.lock : Icons.lock_open,
+              size: 14,
+              color:
+                  (isActive || hasRefs) ? Colors.purpleAccent : Colors.grey,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              isActive ? 'Tap Landmark' : (hasRefs ? 'Scene Locked' : 'Lock Scene'),
+              style: TextStyle(
+                fontSize: 11,
+                color:
+                    (isActive || hasRefs) ? Colors.purpleAccent : Colors.grey,
+                fontWeight:
+                    (isActive || hasRefs) ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+            if (_cameraRefPoints.isNotEmpty) ...[
+              const SizedBox(width: 4),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.purple,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${_cameraRefPoints.length}',
+                  style: const TextStyle(color: Colors.white, fontSize: 10),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCameraRefMarker(_CameraRefPoint ref, Size videoSize) {
+    final x = ref.x * videoSize.width - 10;
+    final y = ref.y * videoSize.height - 10;
+    final isCurrentFrame = ref.frameIndex == _currentFrame;
+    return Positioned(
+      left: x,
+      top: y,
+      child: IgnorePointer(
+        child: Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            color: Colors.purple.withAlpha(isCurrentFrame ? 200 : 120),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.purpleAccent, width: 1.5),
+          ),
+          child: const Center(
+            child: Icon(Icons.lock, color: Colors.white, size: 10),
+          ),
         ),
       ),
     );
