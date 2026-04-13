@@ -4,7 +4,6 @@ import java.io.FileInputStream
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -14,7 +13,6 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
-// True when key.properties exists AND all four required fields are present.
 val hasSigningConfig = keystorePropertiesFile.exists() &&
     keystoreProperties["keyAlias"] != null &&
     keystoreProperties["keyPassword"] != null &&
@@ -23,8 +21,8 @@ val hasSigningConfig = keystorePropertiesFile.exists() &&
 
 android {
     namespace = "com.discflightschool.app"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    compileSdk = 36
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -56,9 +54,6 @@ android {
 
     buildTypes {
         release {
-            // Use release signing when key.properties is present (local builds
-            // and Play Store releases). Fall back to debug signing in CI so the
-            // APK still builds and can be installed on any device.
             signingConfig = if (hasSigningConfig) {
                 signingConfigs.getByName("release")
             } else {
