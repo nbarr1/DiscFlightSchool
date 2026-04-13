@@ -145,7 +145,6 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
           color: _isPutting ? Colors.teal : Colors.purple,
         ),
         value: _isPutting,
-        activeThumbColor: Colors.teal,
         onChanged: _isSpinning
             ? null
             : (value) {
