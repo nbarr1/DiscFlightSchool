@@ -1,0 +1,82 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:         # lets you trigger manually from GitHub Actions tab
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Java (Android build requires JDK 17) ───────────────────────────
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # ── 3. Flutter ────────────────────────────────────────────────────────
+      # Flutter 3.32.x is the first stable release with Dart 3.8 (sdk >=3.8.0).
+      # Pinning to 3.32.x ensures compatibility with your pubspec constraint.
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.7'
+          channel: 'stable'
+          cache: true
+
+      # ── 4. Android SDK / NDK ────────────────────────────────────────────
+      # tflite_flutter, google_mlkit_pose_detection, and ffmpeg_kit_flutter_new
+      # all require NDK. The GitHub Actions runner includes the Android SDK;
+      # we just need to install the correct NDK version.
+      - name: Install Android NDK
+        run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "ndk;25.1.8937393" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+      # ── 5. Dependencies ───────────────────────────────────────────────────
+      - name: Install Flutter dependencies
+        working-directory: disc_golf_app
+        run: flutter pub get
+
+      # ── 6. Verify assets exist ────────────────────────────────────────────
+      # Fails fast with a clear message if any declared asset is missing,
+      # rather than getting a cryptic build failure later.
+      - name: Check required assets
+        working-directory: disc_golf_app
+        run: |
+          for asset in \
+            "assets/data/output_coordinates.json" \
+            "assets/data/analysis_results.json" \
+            "assets/data/pro_baseline_db.json" \
+            "assets/data/knowledge_base.json" \
+            "assets/models/disc_detector.tflite" \
+            "assets/images/disc_golf_basket.svg"; do
+            if [ ! -f "$asset" ]; then
+              echo "ERROR: Missing asset: $asset"
+              exit 1
+            fi
+          done
+          echo "All assets present."
+
+      # ── 7. Build release APK ──────────────────────────────────────────────
+      - name: Build release APK
+        working-directory: disc_golf_app
+        run: flutter build apk --release
+
+      # ── 8. Upload APK as artifact ─────────────────────────────────────────
+      # Download from: Actions tab → select run → Artifacts section
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: disc-flight-school-${{ github.run_number }}
+          path: disc_golf_app/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
