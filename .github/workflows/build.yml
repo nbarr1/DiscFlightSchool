@@ -22,7 +22,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.32.7'
+          flutter-version: '3.x'
           channel: 'stable'
           cache: true
 
@@ -34,7 +34,15 @@ jobs:
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
             "ndk;27.0.12077973" \
             "platforms;android-36" \
-            "build-tools;34.0.0"
+            "build-tools;36.0.0"
+
+      # Apply init.gradle to suppress -Werror on JavaCompile tasks (ffmpeg_kit, etc.)
+      # Gradle only auto-loads init scripts from GRADLE_USER_HOME/init.d/ — the file
+      # sitting in android/ is ignored without this step.
+      - name: Apply Gradle init script
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cp disc_golf_app/android/init.gradle ~/.gradle/init.d/suppress-werror.gradle
 
       - name: Install Flutter dependencies
         working-directory: disc_golf_app
