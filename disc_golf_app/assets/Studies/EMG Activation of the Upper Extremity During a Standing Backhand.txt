@@ -1,0 +1,180 @@
+East Tennessee State University East Tennessee State University 
+Digital Commons @ East Digital Commons @ East 
+Tennessee State University Tennessee State University 
+Undergraduate Honors Theses 
+12-2023 
+EMG Activation of the Upper Extremity During a Standing EMG Activation of the Upper Extremity During a Standing 
+Backhand Disc Golf Throw Backhand Disc Golf Throw 
+Levi Holcomb 
+Follow this and additional works at: https://dc.etsu.edu/honors 
+Recommended Citation Recommended Citation 
+Holcomb, Levi, "EMG Activation of the Upper Extremity During a Standing Backhand Disc Golf Throw" 
+(2023). Undergraduate Honors Theses. Paper 820. https://dc.etsu.edu/honors/820 
+This Honors Thesis - Open Access is brought to you for free and open access by Digital Commons @ East 
+Tennessee State University. It has been accepted for inclusion in Undergraduate Honors Theses by an authorized 
+administrator of Digital Commons @ East Tennessee State University. For more information, please contact 
+digilib@etsu.edu. Dr. Kevin Carroll, Thesis Mentor  Date 
+Dr. Mike Ramsey, Reader  Date 
+Levi R. Holcomb  Date 
+EMG Activation of the Upper Extremity During a Standing Backhand Disc Golf Throw 
+____________________________ 
+An Undergraduate Thesis submitted in partial fulfillment 
+of the requirements for the 
+Midway Honors Scholars Program 
+Honors College 
+and the 
+Honors-in Exercise Science Program 
+Department of Sport, Exercise, Recreation, and Kinesiology 
+East Tennessee State University 
+____________________________ 
+by 
+Levi Ray Holcomb 
+December 2023 
+12/14/23
+12/15/23Abstract 
+EMG Activation of the Upper Extremity During a Standing Backhand Disc Golf Throw 
+by 
+Levi Holcomb 
+Introduction: Disc golf is a sport that has grown increasingly popular in recent years. However, 
+there is a lack of research pertaining to electromyography in a disc throw. Purpose: To analyze 
+the muscle activation of upper body musculature during a standing backhand disc golf throw. 
+Methods: Five male recreational disc golf players performed a maximal effort standing 
+backhand disc golf throw with EMG electrodes placed on the posterior deltoid, extensor carpi 
+ulnaris (ECU), and triceps brachii. The subjects performed a standardized warm-up prior to 
+testing. The subjects completed five maximum effort throws using the same disc while resting 60 
+seconds between each trial. The mean activation, peak activation, and time to peak activation 
+were measured. Results: The primary outcome of this study was the timing of peak muscle 
+activation occurring first in the triceps brachii (15.6+11.0%), followed by the ECU (21.3+12.1%) 
+and the posterior deltoid (50.3+18.1%). Conclusion: The timing of a disc golf throw is critical, 
+these data suggest coaches and sport participants should consider movement efficacy when 
+throwing a disc. Further, poor between-subjects reliability indicated the varying techniques 
+individuals have during a disc golf throw. 
+Review of Literature 
+ Disc golf has emerged as a highly popular recreational and competitive sport that 
+combines elements of traditional golf with the enjoyable activity of throwing discs (Gregoire et 
+al., 2020). Players compete by throwing discs from designated tee areas toward a target, typically metal baskets, aiming to complete each hole within the fewest possible throws. Disc golf courses 
+are typically built in natural environments, incorporating diverse terrains and obstacles to 
+provide an engaging and challenging experience. 
+The roots of disc golf are difficult to be traced back to a certain point in time but some of 
+the earliest documentations of play date back to the 1960s when a man named George 
+Sappenfield and his colleague Kevin Donnelly, both recreation class instructors out of California, 
+thought the youth they worked with would enjoy playing golf via frisbees (PDGA, n.d.). The two 
+would eventually push for disc golf tournaments across the nation and were a huge part of disc 
+golf becoming a sanctioned sport in 1974. The PDGA was founded in 1976 as the sport's 
+governing body, validating and facilitating its subsequent growth. The PDGA played a crucial 
+role in standardizing the rules and scoring system of disc golf, contributing to its broader 
+recognition as a sanctioned sport. 
+The first official disc golf course was created in 1975 in Pasadena, California by the 
+professional disc golfer “Steady” Ed Headrick who is hailed as the “Father of Disc Golf” 
+(Gregoire et al., 2020). Ed was an executive at the frisbee company Wham-O when he decided to 
+include disc golf in Wham-O’s 1975 World Frisbee Championships, and it ended up being a hit. 
+This event marked a significant milestone in the history of disc golf, highlighting its potential as 
+a competitive and engaging sport. With the growing interest and participation in disc golf, 
+tournaments and competitions started to emerge throughout the United States.  
+Disc golf has experienced substantial growth and development over the last several 
+decades, especially at the time of writing, seeing a 13% increase in the total number of courses 
+over the year 2021 (UDisc, 2023). The number of disc golf courses worldwide has expanded 
+significantly, offering a variety of challenging and enjoyable playing environments for players of all skill levels. As of 2022, there are over 14,000 disc golf courses worldwide (UDisc, 2023). The 
+sport has also gained increased media exposure, with televised tournaments and the emergence 
+of professional players who have helped raise awareness of the sport. In the present day, disc golf 
+thrives as both a recreational pastime and a competitive sport, supported by a wide community of 
+pros and enthusiasts.  
+The progression from casual frisbee throwing to the establishment of disc golf as its own 
+distinct and organized sport represents a milestone in its evolution. Early enthusiasts of frisbee 
+play recognized the potential for competitive engagement and began adapting the principles of 
+traditional golf to their frisbee throwing activities (Gregoire et al., 2020). This transition involved 
+the introduction of designated targets, such as utility poles, to serve as focal points for accuracy 
+and distance challenges (Bauerlein, 2022). Ed Headrick patented the “Disc Golf Pole Hole” in 
+1975 to avoid disputes in whether or not a disc hit a pole, the pole included an elevated metal 
+basket with a hanging ring of chains, these baskets are what are currently used in today’s games. 
+Concurrently, the development of specialized discs designed for disc golf, not just ultimate 
+frisbee, played a crucial role in the sport's advancement. Early frisbees were modified to cater to 
+the demands of disc golf, leading to the creation of discs with diverse flight characteristics and 
+specific usage purposes.  
+Discs designed as drivers, mid-range discs, and putters offer players a range of options to 
+optimize their throws in terms of distance, accuracy, and control (Immonen, 2021). Drivers are 
+designed for long-distance throws and have a sharp edge and a streamlined profile to maximize 
+distance. They come in various stability ratings, with under stable drivers having a tendency to 
+turn right for right-handed throwers, while stable or over stable drivers exhibit less turning in 
+flight. Mid-range discs offer versatility and are suitable for accurate throws at moderate Table 1. EMG Descriptive Data (mean + SD) 
+  Mean Activation (mV) Peak Activation (mv) Time to Peak Activation (%) 
+Posterior Deltoid 0.123 + 0.124 0.313 + 0.236 50.3% + 18.1% 
+Triceps Brachii 0.090 + 0.045 0.256 + 0.118 15.6% + 11.0% 
+Extensor Carpi 
+Ulnaris 0.093 + 0.040 0.422 + 0.318 21.3% + 12.1% 
+ 
+Table 2. Within-Subjects Reliability 
+  Posterior Deltoid Triceps Brachii Extensor Carpi 
+Ulnaris 
+  ICC CV (%) ICC CV (%) ICC CV (%) 
+Mean Activation (mV) 1 15.2% 1 9.1% 0.96 17.0% 
+Peak Activation (mV) 1 12.8% 0.99 13.9% 1 21.3% 
+Time to Peak Activation (%) 0.98 15.2% 0.98 26.7% 0.98 19.1% 
+ 
+Table 3. Between-Subjects Reliability 
+  Posterior Deltoid Triceps Brachii Extensor Carpi Ulnaris 
+  ICC CV (%) ICC CV (%) ICC CV (%) 
+Mean Activation (mV) 0.14 100.4% 0.35 50.3% 0.07 43.1% 
+Peak Activation (mV) 0.31 75.2% 0.03 46.0% 0.11 75.3% 
+Time to Peak Activation (%) 0.1 36.0% 0.16 70.4% 0.62 56.9% 
+ 
+Discussion 
+In regard to the timing of movement, it was originally hypothesized that the time to peak 
+activation of the tested muscles would go in the order of the posterior deltoid, triceps brachii, 
+then extensor carpi ulnaris. The result of this investigation (Table 1) indicated the triceps brachii, 
+extensor carpi ulnaris, then posterior deltoid reached time to peak activation in said order. In 
+retrospect, this pattern of time to peak activation makes more sense taking in consideration the 
+external rotation of the shoulder on the follow-through section of the movement.  With little research having been performed on EMG activity in disc golf, it is difficult to 
+compare the findings in this study to other research. However, looking at a similar sporting 
+movement, the baseball bat swing, it is interesting to take note that one study shows the posterior 
+deltoid reaching peak activation in the pre-swing portion of the movement followed by the 
+triceps brachii reaching peak activation later on in the movement (Escamilla, 2009). This is in 
+contrast to the data seen in Table 1 where the triceps brachii reaches peak activation first. 
+Further, this may indicate that the backhand disc golf throw is unique to other similar sporting 
+movements, therefore necessitating further investigation. 
+This preliminary investigation could help provide other researchers with information to 
+consider when performing future studies on disc golf. The data collected in this preliminary 
+investigation is limited by the small sample size and skill level of the participants. Future studies 
+could take into consideration using a larger sample size and a way to gauge player skill level, 
+such as a PDGA ranking. It could also be beneficial to study the difference in time to peak, mean, 
+and peak activation between subjects that are recreational players vs. players with a pro ranking 
+to see if there is any difference. Another limitation of the study was only including EMG data, 
+without contextual kinetic and kinematic variables. Future research should consider 
+incorporating these factors into the movement analysis. 
+ 
+. 
+ 
+ 
+ References 
+Bauerlein, V. (2022, April 14). America’s business challenge can be told in two words: Disc 
+golf. The Wall Street Journal. https://www.wsj.com/articles/americas-business-challenge-
+can-be-told-in-two-words-disc-golf-11648215832  
+Bocks, D. (2019). Incidence of shoulder pain in professional and semi-professional disc golfers. 
+SAMK. https://samk.finna.fi/Record/theseus_samk.10024_166731?sid=3520173413   
+Escamilla, R. F., & Andrews, J. R. (2009). Shoulder muscle recruitment patterns and related 
+biomechanics during upper extremity sports. Sports Medicine, 39(7), 569–590. 
+https://doi.org/10.2165/00007256-200939070-00004  
+Gregoire, M., Palmeri, J., & Feidt, J. (2020, August 24). Brief history of disc golf and the PDGA. 
+Professional Disc Golf Association. https://www.pdga.com/history  
+Hummel, S. (2003). (dissertation). Frisbee flight simulation and throw biomechanics. Retrieved 
+2023, from 
+https://search.library.ucdavis.edu/discovery/fulldisplay?context=L&vid=01UCD_INST:U
+CD&search_scope=DN_and_CI&tab=UCSILSDefaultSearch&docid=alma990022484250
+403126.  
+Immonen, E. (2022, January 19). Optimal design for disc golf by Computational Fluid Dynamics 
+and machine learning - structural and multidisciplinary optimization. SpringerLink. 
+https://link.springer.com/article/10.1007/s00158-021-03107-7 UDisc. (2023). Disc Golf 
+Growth Report powered by UDisc. https://udisc.com/disc-golf-growth-report  
+PDGA. (2023, December 13). Official Rules and regulations of Disc Golf. Professional Disc 
+Golf Association. https://www.pdga.com/rules  
+PDGA. (2023, March 28). A guide to disc golf from the PDGA. Professional Disc Golf 
+Association. https://www.pdga.com/introduction  
+Ryu, R. K. N., McCormick, J., Jobe, F. W., Moynes, D. R., & Antonelli, D. J. (1988). An 
+electromyographic analysis of shoulder function in tennis players. The American Journal 
+of Sports Medicine, 16(5), 481–485. https://doi.org/10.1177/036354658801600509  
+Straková, J. (1970, January 1). Elektromyografická Analýza Vybraných svalů Během Hodu 
+Backhand ve hře ultimate frisbee. Digitální repozitář UK. 
+https://dspace.cuni.cz/handle/20.500.11956/4289  
+Why disc golf?. DiscGolfPark. (2018, March 16). https://www.discgolfpark.com/disc-golf/why-
+disc-golf/  
+ 

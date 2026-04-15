@@ -1,0 +1,103 @@
+This item was submitted to 
+Loughborough's 
+Research Repository
+ by the author. 
+Items in Figshare are protected by copyright, with all rights reserved, unless otherwise 
+indicated.
+Biomechanical analysis of disc golf throws to improve performance
+Biomechanical analysis of disc golf throws to improve performance
+PLEASE CITE THE PUBLISHED VERSION
+LICENCE
+CC BY 4.0
+REPOSITORY RECORD
+Attias, Cedric E, Kat Webster, Clark Dickerson, and John McPhee. 2024. “Biomechanical Analysis of Disc
+Golf Throws to Improve Performance”. Loughborough University.
+https://doi.org/10.17028/rd.lboro.27045130.v1. 
+Corresponding author email: cattias@uwaterloo.ca 
+Biomechanical Analysis of Disc Golf Throws to Improve Performance 
+ 
+Cedric E. Attias1, Kat Webster2, Clark Dickerson2 and John McPhee3 
+1 Mechanical Engineering, 2 Kinesiology, 3 Systems Design Engineering, University of Waterloo, 200 
+University Ave West, Waterloo, ON, N2L 3G1, Canada  
+ 
+Introduction 
+Disc golf (DG) has recently seen a large growth in popularity. UDisc, a DG app reported a 50% 
+increase in their player base in 2020 compared to 2019 [1]. Despite this growth,  very little 
+literature correlates technique to performance maximization. This study aimed to gain insight 
+into the biomechanics of forehand and backhand DG throws and to relate these findings to 
+the skill level of the participants. Skill is assessed by relating the throwing mechanics of an 
+athlete to their  Professional Disc Golf Association (PDGA) rating, which assigns athletes a 
+number to reflect their performance in PDGA events. The range of PDGA ratings is from the 
+600s (beginners) to the low 1000s for top professionals [1].  In this study, the participants 
+ranged from the 800s to low 1000 ratings.  
+Methods 
+The dataset included 28 participants, including 23 male and 5 female players. Each athlete 
+provided informed consent to participate in the study, and the study was conducted in 
+accordance with the Office of Research Ethics at the University of Waterloo. Subject 
+information was collected and anonymized. The  subject was fit with 41 individual motion 
+capture markers spanning the bony landmarks of the subject’s shank, thigh, spine, chest , 
+upper arm, forearm, and head. An 8-camera VICON MX20+ motion tracking system (Vicon, 
+Oxford, UK) was used to measure the 3-dimensional kinematics of the throw. Five backhand 
+and five forehand throws were recorded for each participant. The players threw an Innova 
+Disc Golf Destroyer (Innova Disc Golf, Rock Hill, USA) driver into a net, in an indoor lab setting. 
+The participants were instructed to throw with full power while maintaining their standard 
+throwing mechanics, which may have been impacted by the experimental setup (i.e. 
+unfamiliarity with motion capture markers, indoor setting, and no official target). 
+Once data was collected, motion capture marker points were  exported, fit and 
+interpolated to account for gaps in the data. Using the measured data, a musculoskeletal 
+(MSK) model was created in Visual3D (V3D) software. This process began with a static 
+calibration dataset, which was used to match each marker to anatomical landmarks in the 
+software. The defined landmarks were used to create skeletal components, which created a 
+full skeletal model when put together . The articulation of two segments was defined as a 
+joint. Dynamic throwing datasets were applied to the static MSK model, generating a 
+throwing animation for each trial. An automated data pipeline was developed within the 
+software to extract desired kinematics, which were selected from previous literature [2,3]. 
+The selected movements were: elbow flexion/extension, forearm pronation/supination, 
+shoulder horizontal abduction/adduction, and X-Factor (the relative rotation of the trunk to 
+hips). The 3-dimensional coordinates and timesteps were exported from V3D and simulation 
+ISEA 2024 - The Engineering of Sport 15, Loughborough University, UK 
+Corresponding author email: cattias@uwaterloo.ca 
+start and end points were specified. The timesteps were then converted into a percentage of 
+the specified swinging motion and the data was plotted and compared in Microsoft Excel. 
+Analysis was conducted on only 6 right -handed subjects, for a total of 13 shots, 4 of which 
+were forehand and 9 of which were backhand. 
+Results and Discussion 
+Through the analysis of the plotted kinematics, trends in the higher-rated PDGA players were 
+identified. During a backhand, higher-rated players had faster horizontal abduction of the 
+shoulder, a greater range of shoulder adduction during the wind-up due to contributions of 
+trunk rotation, greater torso range of motion and velocity of trunk rotation, and a greater 
+transition range and velocity of both the wrist pronation/supination and elbow 
+flexion/extension. During a forehand, higher-rated players generated a greater torso 
+contribution due to an increased range of motion and velocity of trunk rotation, a larger 
+degree of elbow extension during the wind-up and most notably, a faster and wider transition 
+range from supination and pronation of the forearm, which generated a prominent wrist snap 
+at release. This can be seen in Figure 1, where generally, higher-rated players (ratings 
+indicated in bracketed numbers) demonstrated the widest range of supination and pronation. 
+Additionally, the steeper transition of said movements indicated a greater wrist snap velocity 
+during disc release.  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Figure 1: Degree of forearm supination/pronation (left) during forehand throw simulation (right) for variously 
+rated PDGA subjects. The simulation image was captured after disc release, at the beginning of follow-through. 
+In general, the higher-rated players presented a faster and more seamless transition 
+within the upper-body kinetic chain, while also achieving a greater range of motion for all 
+movement. These biomechanical factors likely contribute to an increased velocity and spin of 
+the disc at launch, which enables the athlete to maximize performance by increasing the carry 
+distance of the projectile during flight [3].The findings of this study will contribute to the 
+growth and quality of the disc golf game  by providing both novice and experienced players 
+with biomechanical technique guidelines to improve their performance.  
+References 
+1. (2020) UDisc: The disc golf growth report. https://udisc.com/disc- golf-growth-report. Accessed 6 Sep 
+2023. 
+2. Hummel SA (2003) Frisbee flight simulation and throw biomechanics. Dissertation, University of 
+California, Davis. 
+3. Sasakawa K, Sakurai S (2008) Biomechanical analysis of the sidearm throwing motion for distance of a 
+flying disc: A comparison of skilled and unskilled ultimate players. Sports Biomech, 7(3):311-321. 
+https://doi.org/10.1080/14763140802270936. 
+ISEA 2024 - The Engineering of Sport 15, Loughborough University, UK

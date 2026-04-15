@@ -16,24 +16,6 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-/// A background reference point used for camera motion compensation.
-///
-/// The user taps the same static landmark (e.g. a tee sign or tree) in two or
-/// more frames.  The app computes the 2-D camera pan between those frames and
-/// shifts past trail positions accordingly, keeping the flight path
-/// world-locked even when the camera moves — equivalent to the After-Effects
-/// "Create Null and Camera" workflow.
-class _CameraRefPoint {
-  final int frameIndex;
-  final double x; // normalized 0-1
-  final double y; // normalized 0-1
-  const _CameraRefPoint({
-    required this.frameIndex,
-    required this.x,
-    required this.y,
-  });
-}
-
 /// A keyframe marked by the user — disc position at a specific frame.
 class _FlightKeyframe {
   final int frameIndex;
@@ -97,14 +79,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   Offset? _targetLineStart; // Normalized 0-1
   Offset? _targetLineEnd;   // Normalized 0-1
 
-  // Camera lock / motion compensation state
-  bool _cameraLockMode = false;
-  final List<_CameraRefPoint> _cameraRefPoints = [];
-
   // Stabilization state
   bool _stabilizeEnabled = false;
   String? _stabilizedVideoPath; // Path to FFmpeg-stabilized temp file
   bool _isStabilizing = false;
+
+  // Lock scene (world-anchor) state — AE "Create Null and Camera" equivalent
+  bool _lockSceneMode = false;
+  final List<WorldAnchorFrame> _anchorFrames = [];
+  Offset? _pendingAnchorA; // Normalized 0-1, first tap in lock mode
 
   // Cached service references so dispose() doesn't need context
   VideoService? _videoService;
@@ -224,7 +207,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     // Use the tracked zoom position, falling back to the release position
     final position = _zoomPosition ?? details.localPosition;
     if (_videoWidgetSize != Size.zero) {
-      _placeKeyframe(position);
+      if (_lockSceneMode) {
+        _placeLockPoint(position);
+      } else {
+        _placeKeyframe(position);
+      }
     }
 
     setState(() {
@@ -294,8 +281,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   void _addKeyframeFromTap(TapUpDetails details) {
-    if (_cameraLockMode) {
-      _placeCameraRefPoint(details.localPosition);
+    if (_lockSceneMode) {
+      _placeLockPoint(details.localPosition);
       return;
     }
     if (_targetLineMode) {
@@ -319,6 +306,27 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     });
   }
 
+  void _placeLockPoint(Offset localPosition) {
+    if (_videoWidgetSize == Size.zero) return;
+    final nx = (localPosition.dx / _videoWidgetSize.width).clamp(0.0, 1.0);
+    final ny = (localPosition.dy / _videoWidgetSize.height).clamp(0.0, 1.0);
+    setState(() {
+      if (_pendingAnchorA == null) {
+        _pendingAnchorA = Offset(nx, ny);
+      } else {
+        // Replace any existing anchor at this exact frame
+        _anchorFrames.removeWhere((af) => af.frameIndex == _currentFrame);
+        _anchorFrames.add(WorldAnchorFrame(
+          frameIndex: _currentFrame,
+          pointA: _pendingAnchorA!,
+          pointB: Offset(nx, ny),
+        ));
+        _anchorFrames.sort((a, b) => a.frameIndex.compareTo(b.frameIndex));
+        _pendingAnchorA = null;
+      }
+    });
+  }
+
   void _undoLastKeyframe() {
     if (_keyframes.isEmpty) return;
     setState(() {
@@ -330,10 +338,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   void _clearAll() {
     setState(() {
       _keyframes.clear();
-      _cameraRefPoints.clear();
-      _cameraLockMode = false;
       _trackingResult = null;
       _firstBoxCorner = null;
+      _anchorFrames.clear();
+      _pendingAnchorA = null;
     });
   }
 
@@ -555,83 +563,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Camera motion compensation
-  // ---------------------------------------------------------------------------
-
-  /// Returns the interpolated camera offset (normalized 0-1) at [frame],
-  /// relative to the first reference point's frame.
-  ///
-  /// The offset encodes how much the camera has panned since the base frame:
-  ///   offset = refPoint_at_frame - refPoint_at_baseFrame
-  ///
-  /// [FollowFlightPainter] uses this to shift past trail positions so they
-  /// stay locked to the environment as the camera moves.
-  Offset _computeCameraOffset(int frame) {
-    if (_cameraRefPoints.length < 2) return Offset.zero;
-    final sorted = List<_CameraRefPoint>.from(_cameraRefPoints)
-      ..sort((a, b) => a.frameIndex.compareTo(b.frameIndex));
-    final base = sorted.first;
-
-    // Find surrounding reference frames for interpolation
-    _CameraRefPoint prev = base;
-    _CameraRefPoint next = sorted.last;
-    for (final ref in sorted) {
-      if (ref.frameIndex <= frame) prev = ref;
-    }
-    for (final ref in sorted.reversed) {
-      if (ref.frameIndex >= frame) { next = ref; break; }
-    }
-
-    if (prev.frameIndex == next.frameIndex) {
-      return Offset(prev.x - base.x, prev.y - base.y);
-    }
-    final t = (frame - prev.frameIndex) / (next.frameIndex - prev.frameIndex);
-    final ox = (prev.x + (next.x - prev.x) * t) - base.x;
-    final oy = (prev.y + (next.y - prev.y) * t) - base.y;
-    return Offset(ox, oy);
-  }
-
-  /// Builds a map of frame → camera offset for all frames covered by the
-  /// current tracking result (or keyframes), for passing to [FollowFlightPainter].
-  Map<int, Offset> _buildCameraOffsetMap() {
-    if (_cameraRefPoints.length < 2) return {};
-    final sorted = List<_CameraRefPoint>.from(_cameraRefPoints)
-      ..sort((a, b) => a.frameIndex.compareTo(b.frameIndex));
-    final base = sorted.first;
-    // Only key the reference frames — the painter interpolates between them.
-    return {
-      for (final ref in sorted)
-        ref.frameIndex: Offset(ref.x - base.x, ref.y - base.y),
-    };
-  }
-
-  /// Places a camera reference point at [localPosition] in the video widget.
-  void _placeCameraRefPoint(Offset localPosition) {
-    if (_videoWidgetSize == Size.zero) return;
-    final nx = (localPosition.dx / _videoWidgetSize.width).clamp(0.0, 1.0);
-    final ny = (localPosition.dy / _videoWidgetSize.height).clamp(0.0, 1.0);
-    setState(() {
-      _cameraRefPoints.removeWhere((r) => r.frameIndex == _currentFrame);
-      _cameraRefPoints.add(_CameraRefPoint(
-        frameIndex: _currentFrame,
-        x: nx,
-        y: ny,
-      ));
-      _cameraRefPoints.sort((a, b) => a.frameIndex.compareTo(b.frameIndex));
-      // Invalidate tracking result so compensation is re-applied on next Process
-      _trackingResult = null;
-    });
-    if (_cameraRefPoints.length == 1 && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text(
-          'Landmark set. Scrub to a different frame where the camera has moved, '
-          'then tap the same landmark again.',
-        ),
-        duration: Duration(seconds: 4),
-      ));
-    }
-  }
-
   // --- Save video with overlay ---
 
   Future<ui.Image> _renderOverlayImage(
@@ -639,7 +570,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     double height,
     int currentFrame, {
     bool showDisc = false,
-    Map<int, Offset>? cameraOffsets,
   }) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(
@@ -651,7 +581,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       currentFrame: currentFrame,
       showFullTrail: false,
       showCurrentDisc: showDisc,
-      cameraOffsets: cameraOffsets,
+      anchorFrames: _anchorFrames.length >= 2 ? _anchorFrames : null,
     );
     painter.paint(canvas, Size(width, height));
     final picture = recorder.endRecording();
@@ -696,7 +626,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       // must add the trim offset to align each overlay with the right frame.
       final trimOffsetSec = (widget.trimStartMs ?? 0) / 1000.0;
       final detections = _trackingResult!.detections;
-      final cameraOffsets = _buildCameraOffsetMap();
 
       // --- Render one overlay image per tracking frame ---
       //
@@ -734,7 +663,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           videoHeight,
           frame,
           showDisc: isLastFrame,
-          cameraOffsets: cameraOffsets,
         );
         final byteData =
             await image.toByteData(format: ui.ImageByteFormat.png);
@@ -912,6 +840,39 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     ),
                   ),
 
+                // Lock scene mode instruction banner
+                if (_lockSceneMode)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 6),
+                    color: Colors.purple.shade900,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.location_pin,
+                            color: Colors.purpleAccent, size: 14),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            _pendingAnchorA == null
+                                ? 'Tap a fixed background point (A) — e.g. tee sign, tree, basket'
+                                : 'Tap a second fixed background point (B) to set the anchor pair',
+                            style: const TextStyle(
+                                color: Colors.purpleAccent, fontSize: 12),
+                          ),
+                        ),
+                        if (_anchorFrames.isNotEmpty)
+                          Text(
+                            '${_anchorFrames.length} anchor${_anchorFrames.length == 1 ? '' : 's'}',
+                            style: const TextStyle(
+                                color: Colors.purpleAccent,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold),
+                          ),
+                      ],
+                    ),
+                  ),
+
                 // Video with overlays
                 Expanded(
                   child: Center(
@@ -943,11 +904,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                   Positioned.fill(
                                     child: CustomPaint(
                                       painter: FollowFlightPainter(
-                                        trackingResult:
-                                            _trackingResult!,
+                                        trackingResult: _trackingResult!,
                                         currentFrame: _currentFrame,
-                                        cameraOffsets:
-                                            _buildCameraOffsetMap(),
+                                        anchorFrames: _anchorFrames.length >= 2
+                                            ? _anchorFrames
+                                            : null,
                                       ),
                                     ),
                                   ),
@@ -1058,6 +1019,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                           // while waiting for second tap
                                           pendingMode: _targetLineMode &&
                                               _targetLineEnd == null,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+
+                                // Anchor point overlay (lock scene mode)
+                                if (_lockSceneMode || _anchorFrames.isNotEmpty)
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: CustomPaint(
+                                        painter: _AnchorOverlayPainter(
+                                          anchorFrames: _anchorFrames,
+                                          currentFrame: _currentFrame,
+                                          pendingA: _pendingAnchorA,
                                         ),
                                       ),
                                     ),
@@ -1422,7 +1397,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         runSpacing: 6,
         children: [
           _buildStabilizeToggle(),
-          _buildCameraLockButton(),
+          _buildLockSceneButton(),
           if (trainingService.isOptedIn)
             _buildBoxModeToggle(),
           _buildTargetLineButton(),
@@ -1507,6 +1482,72 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 fontWeight: _stabilizeEnabled
                     ? FontWeight.bold
                     : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLockSceneButton() {
+    final hasAnchors = _anchorFrames.isNotEmpty;
+    final isActive = _lockSceneMode;
+    final label = isActive
+        ? (_pendingAnchorA == null ? 'Tap A…' : 'Tap B…')
+        : hasAnchors
+            ? 'Locked ✓'
+            : 'Lock Scene';
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (isActive) {
+            _lockSceneMode = false;
+            _pendingAnchorA = null;
+          } else {
+            _lockSceneMode = true;
+            _pendingAnchorA = null;
+          }
+        });
+      },
+      onLongPress: hasAnchors
+          ? () {
+              setState(() {
+                _anchorFrames.clear();
+                _pendingAnchorA = null;
+                _lockSceneMode = false;
+              });
+            }
+          : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive
+              ? Colors.purple.shade800
+              : hasAnchors
+                  ? Colors.purple.shade900
+                  : Colors.grey.shade800,
+          borderRadius: BorderRadius.circular(8),
+          border: (isActive || hasAnchors)
+              ? Border.all(color: Colors.purpleAccent, width: 1.5)
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.location_pin,
+              size: 16,
+              color: (isActive || hasAnchors) ? Colors.purpleAccent : Colors.grey,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: (isActive || hasAnchors) ? Colors.purpleAccent : Colors.grey,
+                fontWeight: (isActive || hasAnchors) ? FontWeight.bold : FontWeight.normal,
               ),
             ),
           ],
@@ -2081,4 +2122,108 @@ class _PrevPositionPainter extends CustomPainter {
   @override
   bool shouldRepaint(_PrevPositionPainter old) =>
       prevPos != old.prevPos || currentPos != old.currentPos;
+}
+
+/// Draws world-anchor reference points for "Lock Scene" mode.
+///
+/// For each completed [WorldAnchorFrame]: draws A and B as purple dots
+/// connected by a dashed line.  The pair at [currentFrame] is full opacity;
+/// others are dimmed.  [pendingA] shows the first tap waiting for a second.
+class _AnchorOverlayPainter extends CustomPainter {
+  final List<WorldAnchorFrame> anchorFrames;
+  final int currentFrame;
+  final Offset? pendingA; // normalized 0-1
+
+  const _AnchorOverlayPainter({
+    required this.anchorFrames,
+    required this.currentFrame,
+    this.pendingA,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final frame in anchorFrames) {
+      final isCurrentFrame = frame.frameIndex == currentFrame;
+      final opacity = isCurrentFrame ? 1.0 : 0.35;
+      _drawPair(canvas, size, frame.pointA, frame.pointB, opacity);
+    }
+
+    // Pending first tap (A only, waiting for B)
+    if (pendingA != null) {
+      final a = Offset(pendingA!.dx * size.width, pendingA!.dy * size.height);
+      _drawDot(canvas, a, 'A', 1.0);
+    }
+  }
+
+  void _drawPair(Canvas canvas, Size size, Offset normA, Offset normB, double opacity) {
+    final a = Offset(normA.dx * size.width, normA.dy * size.height);
+    final b = Offset(normB.dx * size.width, normB.dy * size.height);
+
+    // Dashed connecting line
+    final linePaint = Paint()
+      ..color = Colors.purpleAccent.withAlpha((opacity * 160).round())
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    const dashLen = 8.0;
+    const gapLen = 5.0;
+    final dx = b.dx - a.dx;
+    final dy = b.dy - a.dy;
+    final dist = math.sqrt(dx * dx + dy * dy);
+    if (dist > 1) {
+      final ux = dx / dist;
+      final uy = dy / dist;
+      double drawn = 0;
+      bool drawing = true;
+      Offset cursor = a;
+      while (drawn < dist) {
+        final segLen = (drawing ? dashLen : gapLen).clamp(0, dist - drawn);
+        final next = Offset(cursor.dx + ux * segLen, cursor.dy + uy * segLen);
+        if (drawing) canvas.drawLine(cursor, next, linePaint);
+        cursor = next;
+        drawn += segLen;
+        drawing = !drawing;
+      }
+    }
+
+    _drawDot(canvas, a, 'A', opacity);
+    _drawDot(canvas, b, 'B', opacity);
+  }
+
+  void _drawDot(Canvas canvas, Offset center, String label, double opacity) {
+    // Fill
+    canvas.drawCircle(
+      center, 7,
+      Paint()
+        ..color = Colors.purple.withAlpha((opacity * 200).round())
+        ..style = PaintingStyle.fill,
+    );
+    // Border
+    canvas.drawCircle(
+      center, 7,
+      Paint()
+        ..color = Colors.purpleAccent.withAlpha((opacity * 230).round())
+        ..strokeWidth = 1.5
+        ..style = PaintingStyle.stroke,
+    );
+    // Label
+    final tp = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: TextStyle(
+          color: Colors.white.withAlpha((opacity * 230).round()),
+          fontSize: 8,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
+  }
+
+  @override
+  bool shouldRepaint(_AnchorOverlayPainter old) =>
+      old.currentFrame != currentFrame ||
+      old.anchorFrames != anchorFrames ||
+      old.pendingA != pendingA;
 }

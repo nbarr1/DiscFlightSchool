@@ -1,0 +1,281 @@
+Vol.:(0123456789)1 3
+Structural and Multidisciplinary Optimization (2021) 65:12 
+https://doi.org/10.1007/s00158-021-03107-7
+INDUSTRIAL APPLICATION PAPER
+Optimal design for disc golf by computational fluid dynamics 
+and machine learning
+Eero Immonen1 
+Received: 2 May 2021 / Revised: 8 October 2021 / Accepted: 21 October 2021 / Published online: 18 December 2021 
+© The Author(s) 2021, corrected publication 2022
+Abstract
+In this article, we introduce a computational methodology for golf disc shape optimization that employs a novel disc shape 
+parameterization by cubic B-splines. Through application of batch Computational Fluid Dynamics simulations and Machine 
+Learning, the disc parameterization yields functional relationships—so-called shape surrogate models—between the flying 
+rotating disc shape and its flight characteristics. The shape surrogate models facilitate free and constrained optimization in 
+both single- and multiobjective settings, such that both aerodynamic (drag and lift) and structural (mass and moment of iner-
+tia) features of the disc are addressed simultaneously. Further, the Professional Disc Golf Association rules for permissible 
+golf discs can be cast as nonlinear constraints for the computational optimization problem. The proposed numerical optimi-
+zation method yields disc drag coefficient values as low as 0.48 (unconstrained) and 0.52 (constrained) and lift coefficient 
+values as high as 0.26 (unconstrained) and 0.19 (constrained). The presented numerical optimization results also describe 
+the many design tradeoffs between the discs that target long flight range (so-called drivers) and the discs that target flight at 
+low speeds (so-called putters). Moreover, novel optimal rule compliant designs are presented for driver-type and putter-type 
+discs, as well as their compromise, the so-called mid-range discs.
+Keywords Computational design · Computational fluid dynamics · Disc golf · Drag coefficient · Lift coefficient · Machine 
+learning · Constrained optimization · Multiobjective optimization · Surrogate model
+List of symbols
+/u1D6FF  Distance between P-k and X-axis
+/u1D702  Growth parameter used in parameterization g
+/u1D6FE/u1D6FA  Symmetry curve for a disc /u1D6FA , i.e., intersection of 
+/u1D715/u1D6FA and XY−plane
+̂N  Number of samples in training data for SSM 
+identification
+̂y  Prediction for y from parametric model
+/u1D41E  Shape Surrogate Model for a given variable e
+/u1D421  Vector of PDGA design constraints for shape 
+optimization
+/u1D40B  Lower bounds (vector) for disc parameters
+/u1D414  Upper bounds (vector) for disc parameters
+L  Minimum leaf size in a Regression Tree 
+Ensemble
+M  Number of learning cycles in the lsboost 
+algorithm
+N   Number of trees in a Regression Tree Ensemble
+S  A subset of hypersurfaces of ℝ3
+/u1D707  Learning rate parameter in the lsboost algorithm
+/u1D6FA  Disc domain in ℝ3
+y  Sample average of y across training data
+/u1D715/u1D6FA  Surface of disc /u1D6FA
+/u1D70C  Disc material density kg/m 3
+/u1D70Ca  Density of air kg/m3
+/u1D41A  Vector of hyperparameters for an SSM
+/u1D431/u1D715/u1D6FA  Parameter vector representing disc /u1D6FA
+/u1D709k, /u1D41Ak  Parameters to be optimized during lsboost 
+algorithm
+AX  Disc projection area in X-direction
+AZ  Disc projection area in Z-direction
+cd  Drag coefficient
+cl  Lift coefficient
+d  Disc diameter, i.e., 2 × maximal distance between 
+/u1D6FE/u1D6FA and X-axis
+D  Latin Hypercube Design matrix (Dk,i)
+f  Shape Surrogate Model
+Responsible Editor: Nathalie Bartoli.
+ * Eero Immonen 
+ eero.immonen@turkuamk.fi
+1 Computational Engineering and Analysis Research Group, 
+Turku University of Applied Sciences, 20520 Turku, Finland E. Immonen 
+1 312 Page 2 of 17
+Fd  Drag force [N] in Z-direction
+Fl  Lift force [N] in X-direction
+g  Parameterization function for disc surfaces
+IX  Moment of inertia about X-axis
+k − /u1D716  Two equation model involving turbulent kinetic 
+energy and turbulent dissipation
+k − /u1D714  Two equation eddy-viscosity model for turbulent 
+flow simulation
+L  Precessional rolling moment about Z-axis
+l  Disc height [m], i.e., maximal distance between 
+points on /u1D715/u1D6FA in the X-direction
+M  Pitching moment about Y-axis
+m  Disc mass [kg]
+N  Number of rows in a Latin Hypercube Design
+p  Multivariate polynomial
+q  Disc rotation speed [rad/s] about Y-axis
+r  Disc rotation speed [rad/s] about X-axis
+r  Disc rotation speed [rad/s] about Z-axis
+R2  Coefficient of determination
+tm  Minimum disc thickness [m]
+v  Disc flight velocity [m/s] along Z-axis
+y/u1D6FA  Any disc characteristic (y) that only depends on 
+disc shape /u1D6FA
+AoA  Angle of attack [◦]
+CAD  Computer-Aided Design
+CART   Classification and Regression Trees algorithm
+CFD  Computational Fluid Dynamics
+cog  Center of gravity
+cop  Center of pressure
+CV  Cross-Validation
+MAE  Mean Absolute Error
+ML  Machine Learning
+MVP  Multivariate polynomial
+P-k  Control points k = 1, … , 19 for B-spline approxi-
+mation of /u1D6FE/u1D6FA
+PDGA  Professional Disc Golf Association
+RANS  Reynolds-Averaged Navier–Stokes (equations)
+RTE  Regression Tree Ensemble
+SSM  Shape Surrogate Model
+SST  Shear Stress Transport
+1 Introduction
+1.1  Background
+Disc golf is a sport that is similar to traditional golf, but 
+instead of a club and a ball, players use rotating flying discs 
+thrown toward standing baskets in as few intermediate 
+steps as possible. Although perhaps not yet as popular as 
+traditional golf, the disc sport is spreading rapidly across 
+the world. In 2020, the Professional Disc Golf Association 
+(PDGA) reported 71016 active members worldwide, 33% 
+growth from 2019. Further, the number of recreational disc 
+golf players is considerably larger than this. For example, 
+in Finland alone, single-disc golf courses have reportedly 
+been visited by over 2000 players on a weekly basis in 2020.
+While the ball shape and appearance in traditional golf 
+are rather fixed (clubs do vary), considerable shape variation 
+is allowed in golf discs. Indeed, players attempt to choose the 
+most suitable disc for each throw situation and course layout, 
+by exploiting the discs’ different flight characteristics. Golf 
+discs are typically categorized as drivers, mid-rangers, or 
+putters, and there are currently over 1300 different-shaped 
+discs approved by PDGA. However, perhaps due to commer-
+cial interests or complexity of the physics of rotating flight, 
+surprisingly little academic research has been reported on 
+the disc design principles and methodologies, which are the 
+focus of this article.
+To describe their products, golf disc manufacturers typi-
+cally list four integer parameters called speed, glide, turn, 
+and fade. The first two relate to the disc’s aerodynamic drag 
+and lift characteristics in horizontal flight, whereas the latter 
+two relate to its pitching moment in inclined flight conditions 
+(Lorenz 2007; Menickelli and Pickens 2016). Unfortunately, 
+the reported numerical values of these four parameters are 
+not based on measurements, but opinions of testers nor are 
+such values standardized across different disc manufactur -
+ers. Thus, in particular, the listed parameter values do not 
+directly tell a player which disc he or she should use in any 
+given throw situation. The problem is compounded by indi-
+vidual variation: An amateur player (with limited power and 
+technique) might be better off with a different disc than a 
+professional player, for (say) covering the most distance in 
+a single throw (Menickelli and Pickens 2016). These obser-
+vations make development of a systematic golf disc design 
+methodology both challenging and an important research 
+question, which is addressed herein.
+1.2  Contribution and limitations
+The purpose of the present article is to introduce a computa-
+tional methodology for golf disc shape optimization, based 
+on Computational Fluid Dynamics (CFD) and Machine 
+Learning (ML). The proposed methodology employs a 
+novel disc shape parameterization by cubic B-splines that 
+can be harnessed for batch solution of CFD simulation cases. 
+In contrast to the four vague disc shape parameters listed 
+above (speed, glide, turn, fade), the proposed parameteriza-
+tion yields precise functional relationships between the disc 
+shape and its flight characteristics. These relationships, or 
+shape surrogate models  (SSM), are first identified in the 
+present article through extensive CFD simulations and ML 
+methods and are then used in numerical optimization.
+The SSMs facilitate free and constrained optimiza -
+tion in both single- and multiobjective settings, such that Optimal design for disc golf by computational fluid dynamics and machine learning  
+1 3 Page 3 of 17 12
+both aerodynamic (drag and lift) and structural (mass and 
+moment of inertia) features of the shape are addressed 
+simultaneously. The upshot is that the PDGA rules for 
+permissible golf discs can be cast as nonlinear constraints 
+for the computational optimization problem.
+To demonstrate the efficacy of the proposed methodol-
+ogy, we carry out numerical solution of several optimiza-
+tion problems. They aim to
+– Establish general principles of rotating flying disc 
+design for improving flight characteristics, without 
+constraints on the shapes beyond a minimum thickness;
+– Describe tradeoffs between minimum-drag and maxi -
+mum-lift shape solutions (see Subsect.  2.1);
+– Resolve such golf disc shapes that both meet the PDGA 
+rules, cast as numerical optimization constraints, and 
+yield the longest range (drivers), best flight at low 
+speeds (putters), or their compromise (mid-rangers).
+Throughout this analysis, we confine our attention to 
+horizontal disc flight, with zero angle of attack (AoA). 
+Moreover, we assume stationary air (i.e., windless) condi-
+tions. It is well known (see Subsect.  2.1) that, even in such 
+ideal conditions, gyroscopic precession tends to change 
+the disc’s alignment during rotating flight. Indeed, disc 
+golf players occasionally exploit this tendency by impos-
+ing an initial inclination in throw or by choosing a disc 
+with significant curvature in flight trajectory. In the present 
+work, one part of the disc shape optimization problem is 
+to minimize this tendency for alignment change during 
+flight by maximizing the disc’s moment of inertia with 
+respect to the axis of forced rotation. Thus, we optimize 
+discs for linear motion, which, by the above, is not always 
+preferred by players in practice. Moreover, we neglect all 
+grip-related preferences in golf disc design and assume 
+that the presented disc flight characteristics can be realized 
+in actual throws.
+The approach proposed herein is computational, but 
+we emphasize that the CFD-based golf disc aerodynam -
+ics modeling method we utilize is extensively validated by 
+comparing our CFD predictions to measurement data and 
+earlier CFD analyses reported in the literature. Although 
+the optimal disc shape solutions presented in this article 
+comply with first principles of fluid mechanics, they are not 
+guaranteed to be globally optimal ones. This is because the 
+proposed disc shape parameterization does not cover all pos-
+sible disc shapes and because the optimization algorithms 
+are not guaranteed to yield global solutions for such non-
+linear problems. Finally, in this article, we do not address 
+the manufacturability of the presented optimal shape discs 
+beyond the requirement that the minimum surface thick -
+ness must always exceed a given threshold of 0.5 mm (see 
+Subsect.  2.5.2).
+1.3  Relation to literature
+1.3.1  Rotational flight
+The dynamics of rotational flight is relevant for many differ-
+ent sports (Goff 2013), among others. Its relative complexity 
+arises from the interplay of fluid mechanics—i.e., lift and 
+drag—and structural mechanics—i.e., moments induced by 
+rotation and translation. At the turn of the millennium, sev-
+eral researchers worldwide started working toward under -
+standing these phenomena for rotating discs, using experi-
+mental and (then emerging) computational approaches. The 
+history of flying discs up to that era is well documented in 
+the work of Potts and Crowther (2002) and Potts (2005) who 
+also reported extensive experimental results on the aero-
+dynamics of flying discs. Their results were subsequently 
+complemented by Kamaruddin (2011) who experimentally 
+evaluated the effect of different disc shape parameters on the 
+aerodynamics. One important conclusion of these experi-
+mental results, which is also at the core of the optimization 
+approach proposed in this article, is that the aerodynamic lift 
+and drag coefficients (cf. Subsect. 2.1)  are independent of 
+the spinning motion of the disc (Potts and Crowther 2002).
+The experimental research cited above was carried out in 
+wind tunnel laboratory conditions. Carrying out experimen-
+tal work on rotating flying discs outside wind tunnels is not 
+an easy challenge. We mention the recent work of Weizman 
+et al. (2020) and that of Lee et al. (2018). Both proposed 
+sensor architectures and algorithms for estimating the aero-
+dynamic coefficients. Instrumentation was also considered 
+by Mustafin et al. (2012). In the present article, we focus 
+on computational optimization and validate our results by 
+measurements and CFD simulation results reported in the 
+academic literature.
+CFD simulations facilitate determination of aerodynamic 
+coefficients for different disc geometries, with good accu-
+racy (Potts and Masters 2015; Lukes et al. 2014; Honeycutt 
+2020; Jin et al. 2020). Moreover, typically this computa-
+tional approach requires less time and effort and less expen-
+sive research infrastructure than is required for experimental 
+tests. Many other rotating structures immersed in air flow, 
+such as Flettner rotors, have also been successfully studied 
+by CFD methods (De Marco et al. 2016). We utilize these 
+results in selecting and validating the proposed CFD simula-
+tion methodology.
+If the aerodynamic and structural parameters of a fly -
+ing rotating disc are known, then computer simulations 
+can be used for predicting its flight trajectory (although 
+validation of such trajectory predictions by experiments 
+is, by the above, difficult). Since the pioneering work of 
+Hummel (2003) and Hubbard and Hummel (2000), several 
+simulation-based approaches have been proposed, includ-
+ing validation (Koyanagi et al. 2012). Crowther and Potts  E. Immonen 
+1 312 Page 4 of 17
+(2007) described a general six degrees-of-freedom simu-
+lation approach; Hummel and Hubbard (2002) proposed 
+an algorithm for estimating the aerodynamic coefficients 
+from measured flight trajectory data. Lissaman and Hub-
+bard (2010) studied the maximum ranges of flying discs, and 
+Kamaruddin (2011) addressed optimal initial launch con-
+ditions for maximal flight range. Optimal flight conditions 
+for discus were considered in simulations by Hubbard and 
+Cheng (2007). In the present article, we address disc trajec-
+tories indirectly by aerodynamic and 

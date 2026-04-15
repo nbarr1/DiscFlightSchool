@@ -1,0 +1,290 @@
+Vol.:(0123456789)
+Sports Engineering (2022) 25:26 
+https://doi.org/10.1007/s12283-022-00390-5
+ORIGINAL ARTICLE
+Disc golf trajectory modelling combining computational fluid 
+dynamics and rigid body dynamics
+Knut Erik Teigen Giljarhus1  · Mika Tobias Gooding1 · Joar Njærheim1
+Accepted: 25 October 2022 / Published online: 16 November 2022 
+© The Author(s) 2022
+Abstract
+In the sport of disc golf, athletes utilize discs with various shapes to achieve their desired throws. Computational methods 
+have the potential to give further insight into how the disc shape and throw parameters influence the disc trajectory. A 
+methodology is presented that combines computational fluid dynamics to obtain the aerodynamic coefficients for a given 
+disc shape, with rigid body dynamics to simulate the disc golf flight. The computational fluid dynamics simulations were 
+performed in OpenFOAM, and compared against wind tunnel experiments from the literature. The trajectory model was 
+implemented in an open-source software, and compared against simulated trajectories against measured trajectories of actual 
+disc golf throws. The methodology was applied to three different discs, comparing their aerodynamic coefficients and flight 
+trajectories. How the disc shape impacts lift, drag and moment coefficients and corresponding flight trajectories is discussed. 
+The methodology has the potential to consistently characterize the flight of a disc and lead to greater understanding of disc 
+flight, and thereby contribute to both training, disc development and regulation.
+Keywords Simulation · Sports projectiles · Aerodynamics
+1 Introduction
+Disc golf is a sport where the players throw discs at a tar -
+get, with rules similar to golf. In recent years, the sport has 
+seen significant growth [1 , 2]. From a sports engineering 
+and aerodynamics perspective, the sport is interesting as it 
+is arguably the sport with the broadest range of projectile 
+shapes. Compared to other sports, where typically only one 
+projectile is used, a disc golf athlete can carry more than 
+twenty different discs in a competition. The choice of disc 
+for a particular throw depends on the distance to the target, 
+obstacles on the way to the target and wind conditions. The 
+sport was made possible by utilizing discs with a triangular 
+rim [3]. This design yielded improved aerodynamics com-
+pared to former flying discs, such as the Frisbee [4 ], and 
+the increased amount of mass in the rim gives it increased 
+gyroscopic stability, which is crucial for control in a sports 
+setting. The current technical standards [5 ] for disc design 
+gives a large amount of flexibility, leading to a high number 
+of manufacturers with a wide range of designs. The current 
+methodology for determining the flight characteristics uses 
+a rating system with four numbers; speed, glide, turn and 
+fade. However, the system is subjective, with no standard 
+way of determining the numbers. Scientific methods, such as 
+experimental testing, computational analysis and mathemati-
+cal models, have the potential to consistently characterize 
+the flight of a disc. Such studies can also lead to greater 
+understanding of disc flight, and thereby contribute to both 
+training and disc development.
+The scientific studies on disc golf flight are relatively 
+sparse, with much of the available literature focusing on 
+Frisbee-like geometries. In Ref. [6], a comprehensive experi-
+mental study on the aerodynamic characteristics of a Frisbee 
+was performed. Results were found to be independent of 
+Reynolds number, and spin did not significantly influence 
+the aerodynamic coefficients for typical spin ratios. The 
+Open access funding provided by University Of Stavanger.
+This article is a part of a Topical Collection in Sports Engineering 
+on The Engineering of Sport 14 Conference held at Purdue 
+University USA, edited by Dr Hugo Espinosa, Steven Shade, Dr 
+Kim Blair and Professor Jan-Anders Månsson.
+ * Knut Erik Teigen Giljarhus 
+ knut.e.giljarhus@uis.no
+1 Department of Mechanical and Structural Engineering 
+and Materials Science, Faculty of Science and Technology, 
+University of Stavanger, PB 8600, 4036 Stavanger, Norway K. E. T. Giljarhus et al.
+26 Page 2 of 9
+negligible influence of spin was also confirmed in Ref. [7 ] 
+using computational fluid dynamics (CFD) simulations. The 
+investigation in Ref. [6 ] was later extended to discs with 
+triangular rims in Ref. [8]. In Refs. [9, 10], CFD simulations 
+were performed for flying discs and compared against the 
+experiments of Ref. [8], with reasonable agreement in aero-
+dynamic coefficients. In addition to wind tunnel experiments 
+and CFD simulations, there are also examples on using on-
+board instrumentation to both track the flight and estimate 
+aerodynamic coefficients [11–13]. In Ref. [14], a kinematic 
+model was developed for Frisbee flight and combined with 
+flight trajectory experiments to estimate aerodynamic coef-
+ficients. The kinematic model was based on Newton-Euler 
+equations for rigid bodies. A similar model was used in Ref. 
+[15] to investigate the influence of initial disc launch param-
+eters on the Frisbee flight.
+This work combines CFD simulations to obtain the aer -
+odynamics properties of a disc with rigid body dynamics 
+to simulate the flight of disc golf discs. A computational 
+methodology for determining the aerodynamic coefficients is 
+presented, along with an open-source flight trajectory model 
+to simulate the disc golf flight. The CFD model is compared 
+against available wind tunnel data [8], while experiments are 
+performed to assess the accuracy of the trajectory model.
+2  Methods
+2.1  Disc geometries
+The disc geometry was obtained by using a side profile 
+image to trace the outer shape and using an Artec Eva 3D 
+scanner in HD mode to trace the inner rim. A spline was 
+created from a slice of the disc, which was then revolved to 
+create a 3D model. The moments of inertia are also needed 
+by the rigid body dynamics model, and were found directly 
+from the 3D geometry file using the trimesh Python 
+library.
+Figure  1a shows the side profile of the discs used in this 
+work. The discs are commercial discs in Star plastic from 
+Innova (Innova Champion Discs Inc., California, United 
+States), namely a distance driver of model Wraith (DD), 
+and two control drivers of models Firebird (CD) and Road-
+runner (CD2).
+Discs are typically made from plastic using injection 
+molding. Due to variability in plastics, and also production 
+conditions such as temperature and humidity, there can be 
+slight differences in the disc shape and dimensions that can 
+influence the aerodynamic performance. Figure 1b shows an 
+image of the nose of two DD discs used in the flight trajec-
+tory experiments. It is evident that the height to the leading 
+edge is different in the two discs, with a difference of about 
+3 mm, which will influence the flight. For the experiments, 
+multiple discs were used for repeated throws, and the discs 
+were visually inspected to ensure they had only minor dif-
+ferences in shape.
+2.2  Computational fluid dynamics
+CFD simulations are performed using the open-source 
+OpenFOAM CFD software [16, 17]. The SIMPLE method 
+was used for pressure-velocity coupling, and turbulence was 
+modelled using the k-omega shear stress transport (SST) 
+model [18].
+Second-order discretization schemes were used for all 
+variables, and in particular the second-order linear upwind 
+scheme was used for the convective terms [19].
+10.55 cm
+2.1 cm
+1.36 cm
+0.51 cm
+0.96 cm
+0.64 cm
+1.17 cm
+0.59 cm
+1.9 cm
+1.9 cm
+DD
+CD
+CD2
+(a)
+5m m
+(b)
+Fig. 1  a Side profile of discs with specifications. b Illustration of difference in flight plate height for two DD discsDisc golf trajectory modelling combining computational fluid dynamics and rigid body dynamics  
+ Page 3 of 9 26
+The computational domain was a rectangle with dimen-
+sions 20D × 10D × 10D , where D is the disc diameter. The 
+disc was placed in the center, 5D  from the inlet. The disc 
+was kept fixed in the simulations, as spin has been shown 
+to have negligible influence on the aerodynamic coeffi-
+cients [6, 7]. The inlet velocity was set to 26.9 m/s, which 
+corresponds to a disc Reynolds number of 3.78 × 105 . The 
+Reynolds number is defined as Re = UD∕/u1D708 , where U is 
+the inlet velocity and /u1D708 is the kinematic viscosity of air. 
+At the outlet a fixed value of zero for pressure was used 
+and zero gradient conditions for the remaining fields. Slip 
+conditions were applied at the sides.
+The mesh is illustrated in Fig.  2. A new mesh was gen-
+erated for each angle of attack, ensuring cells are aligned 
+with the flow and yielding high resolution in the wake. 
+A total of 7 2:1 refinement levels were used towards the 
+disc surface, giving a cell size of 0.3 mm in the vicinity 
+the disc. Additionally, 15 prism layers were inserted near 
+the surface to resolve the boundary layer, with a minimum 
+size of 20 µm and an expansion ratio of 1.2. This gave a 
+maximum y+ value less than 2 and an average y+ value 
+less than 0.5 for all cases. The total grid size was about 
+23 million cells. The simulation was performed for 6000 
+iterations, after which the scaled residuals for the equa-
+tions and the variations in aerodynamic coefficients were 
+below 1 × 10−4.
+The forces on the disc were calculated by integrating 
+the pressure contribution and the viscous contribution over 
+the disc surface. From this the aerodynamic coefficients 
+were calculated using the following standard definitions:
+(1)FD = qCDS
+(2)FL = qCLS
+(3)M = qCM DS
+where CD , CL and CM denote the drag, lift and pitching 
+moment coefficients, respectively. q = 0.5/u1D70CU2 is the dynamic 
+pressure and S is the disc planform area.
+2.3  Rigid body dynamics
+The rigid body dynamic model is based on flight vehicle 
+dynamics [20] and previous work on disc trajectory model-
+ling [14, 15].
+The disc is described by a location vector, x =( x, y, z) and 
+an attitude vector using Euler angles, /u1D73D=( /u1D719,/u1D703, /u1D713).
+By using a series of coordinate transformations (see 
+Appendix A and Online Resource 1), the equations of 
+motion can be written in a straight-forward manner, directly 
+using the aerodynamic force coefficients calculated in the 
+CFD simulations. The four coordinate systems are, 
+1. Earth axes  - fixed coordinate system with the origin 
+placed at the ground of the position for the release of 
+the disc.
+2. Disc axes - coordinate system moving with the disc, 
+found by translation of the location vector and a 
+sequence of rotations defined by the attitude vector.
+3. Zero sideslip axes - coordinate system found by rotating 
+around the z2 axis by the sideslip angle.
+Fig. 2  Illustration of compu-
+tational mesh. a Overall grid 
+structure. b lose-up of layers 
+near disc surface
+Fig. 3  Illustration of forces acting on the disc K. E. T. Giljarhus et al.
+26 Page 4 of 9
+4. Wind axes - rotating the disc around the y3 axis by the 
+angle of attack, /u1D6FC , to obtain the coordinate system used 
+in the CFD simulations.
+The forces acting on the disc are illustrated in Fig.  3. The 
+calculation procedure is as follows. From the initial condi-
+tion, convert the velocity to the disc axes using the attitude 
+vector,
+Note that the subscripts here corresponds to the respective 
+coordinate system numbers, i.e. u1 is the velocity in the earth 
+axes. Also note that the wind velocity can also be included 
+by subtracting from the initial velocity. The sideslip angle 
+is then found using the horizontal velocity components in 
+the disc axes,
+This angle is used to transform to the zero sideslip axes,
+The angle of attack for the disc can now be found from the 
+velocities in this coordinate system,
+Finally, the velocity is converted to the wind axes by rotating 
+around this angle of attack,
+Now the forces can be calculated using the expressions in 
+Eqs.  1 and 2  with aerodynamic coefficients from the CFD 
+simulations. The force vector is given by
+Here, the gravitational force, g1 =[ 0, 0, −mg]T , is also trans-
+formed to the wind axes,
+For the attitude vector, the trajectory model assumes a con-
+stant spin rate and only considers the roll of the disc caused 
+by gyroscopic precession. This is a simplification assuming 
+the disc is thrown without any wobble during the release. 
+The roll occurs in the zero sideslip axes, hence the expres-
+sion for the angular velocities is
+Here, the moment M  is calculated using the coefficient of 
+moment from the CFD calculation, Eq.  3. The moments of 
+(4)u2 = T12(/u1D73D)u1.
+(5)/u1D6FD= −atan2(v 2, u2)
+(6)u3 = T23(/u1D6FD)u2.
+(7)/u1D6FC= −atan2(w 3, u3)
+(8)u4 = T34(/u1D6FC)u3.
+(9)F4 = g4 + [−FD, 0, FL]T .
+(10)g4 = T14(/u1D73D,/u1D6FD, /u1D6FC)g1.
+(11)̇/u1D73D3 =
+/bracketleft.s3
+− M
+𝜔(I xy − Iz),0 ,0
+/bracketright.s3T
+.
+inertia, Ixy and Iz , are found from the geometry models. /u1D714 is 
+the angular velocity of the disc.
+These values are finally transformed back to the ground 
+coordinate system before advancing the simulation,
+The actual integration is performed using numerical inte-
+gration routines from the SciPy library, more specifically 
+using an explicit Runge-Kutta method of order 5 [21]. The 
+full simulation code is implemented in Python and made 
+available in the open-source sports projectile trajectory 
+simulator Shotshaper [22], developed by the authors. The 
+simulator has also been compared against experiments on 
+spinning and non-spinning balls from Ref. [23], with differ-
+ences in trajectory of less than 5 %. These simulations can 
+be found in the source code.
+2.4  Disc trajectory experiments
+Experiments were performed by tracking the disc during 
+actual throws. The throws are made by a player rated as an 
+intermediate player according to the PDGA rating system 
+[24]. The athlete gave informed consent to participate in 
+the study, and the study was conducted in accordance with 
+the ethical standards of the University of Stavanger and the 
+Declaration of Helsinki [25].
+Four cameras were used for the tracking, as illustrated 
+in Fig.  4. Three of the cameras were used to estimate the 
+release conditions of the disc, while the fourth camera 
+was used to track the projected disc trajectory (see Online 
+Resource 2). The back camera was placed behind the player, 
+level with the release point of the disc, and was used for 
+measuring the roll angle of the disc. The side camera was 
+placed to the side of the release point, and was used to meas-
+ure the pitch angle, nose angle and release velocity. The 
+ground camera was placed below the release point, and was 
+used to measure the spin of the disc. A straight line was 
+drawn on the bottom plate of disc to measure the number 
+of frames for one full revolution. These three cameras were 
+GoPro HERO10 (GoPro Inc., California, United States) 
+cameras with a video resolution of 2704 × 1520 and a frame 
+rate of 240 FPS. The drone camera was a DJI Mini 2 (SZ DJI 
+Technology Co. Ltd., Shenzhen, China) drone, with a r

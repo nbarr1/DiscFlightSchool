@@ -1,0 +1,36 @@
+BALANCE ASSESSMENT OF DISC GOLF PLAYERS BY A SMARTPHONE         A Thesis presented to the Faculty of California Polytechnic State University, San Luis Obispo        In Partial Fulfillment of the Requirements for the Degree Master of Science in Biomedical Engineering   by Joshua Paul Kannankunni June 2025  ii 
+                                         © 2025  Joshua Paul Kannankunni  ALL RIGHTS RESERVED  iii 
+COMMITTEE MEMBERSHIP   TITLE:  Balance Assessment of Disc Golf Players by a Smartphone  AUTHOR:    Joshua Paul Kannankunni  DATE SUBMITTED:    June 2025     COMMITTEE CHAIR:    Stephen Klisch, Ph.D. Professor of Mechanical Engineering  COMMITTEE MEMBER:  Scott Hazelwood, Ph.D. Professor of Biomedical Engineering  COMMITTEE MEMBER:    Alec Andoyan, PT, D.P.T Physical Therapist   iv 
+ABSTRACT Balance Assessment of Disc Golf Players by a Smartphone Joshua Paul Kannankunni   Disc golf is an underrepresented sport in biomechanics research, even though it could have effects on gait and balance. Forward and side lunges performed while throwing discs can improve static and dynamic balance. The purpose of this study was to explore the effects of playing disc golf on various static and dynamic balance metrics. Static and dynamic balance experiments were done on 20 disc golf players and 20 control participants to record their RMS of acceleration during the double leg, tandem, and single leg static poses, as well as their gait speed, cadence, stride length, right step length, left step length, and step width during gait. Static data were collected using the acceleration of a handheld smartphone using the MATLAB app, and dynamic data were collected with the smartphone in the participant’s pocket using the OneStep app. The results of the disc golf players were compared against those of the control group using t-tests and regression analyses. It was found that (1) the disc golf players had improved gait speed, stride length, right step length, and left step length, and (2) after accounting for age, it was found that older age was correlated with worse tandem balance. The findings showed that playing disc golf can improve dynamic balance, but not necessarily static balance.    Keywords: Disc golf, biomechanics, balance, gait, smartphones  v 
+ACKNOWLEDGMENTS  Special thanks to Dr. Klisch and Dr. Hazelwood for their help in revising my thesis, as well as Dr. Andoyan for his advice and connecting me to the local disc golf community. Special thanks to Aditi Narasimhan for providing lots of moral support.                45 
+ Figure H-5. Mean cadence of both groups (p=0.2145).  
+ Figure H-6. Mean stride length of both groups (p=0.0037) * = significant difference (p<0.05) 
+ 
+90.00
+95.00
+100.00
+105.00
+110.00
+115.00
+ControlDisc Golf
+Cadence (steps/min)
+0.0010.0020.0030.0040.0050.0060.0070.00
+ControlDisc Golf
+Stride Length (in)
+Stride Length*  46 
+ Figure H-7. Mean right step length of both groups (p=0.0028). * = significant difference (p<0.05) 
+ Figure H-8. Mean left step length of both groups (p=0.0094). * = significant difference (p<0.05) 
+0.005.0010.0015.0020.0025.0030.0035.00
+ControlDisc Golf
+Right Step Length (in)
+0.005.0010.0015.0020.0025.0030.0035.00
+ControlDisc Golf
+Left Step Length (in)
+* 
+*  47 
+ Figure H-9. Mean step width of both groups (p=0.9413).  
+ 
+ 
+0.001.002.003.004.005.006.007.00
+ControlDisc Golf
+Step Width (in)

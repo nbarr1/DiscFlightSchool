@@ -1,0 +1,106 @@
+This item was submitted to 
+Loughborough's 
+Research Repository
+ by the author. 
+Items in Figshare are protected by copyright, with all rights reserved, unless otherwise 
+indicated.
+Launch speed and spin versus player skill level for disc golf throws
+Launch speed and spin versus player skill level for disc golf throws
+PLEASE CITE THE PUBLISHED VERSION
+LICENCE
+CC BY 4.0
+REPOSITORY RECORD
+Turner, Adam, Adam Caldwell, Kat Webster, Clark Dickerson, and John McPhee. 2024. “Launch Speed and
+Spin Versus Player Skill Level for Disc Golf Throws”. Loughborough University.
+https://doi.org/10.17028/rd.lboro.27044785.v1. 
+Corresponding author email: ar2turne@uwaterloo.ca 
+Launch Speed and Spin versus Player Skill Level for Disc Golf Throws 
+ 
+Adam Turner1, Adam Caldwell1, Kat Webster2, Clark Dickerson2, and John McPhee1 
+1Systems Design Engineering, University of Waterloo, ON, N2L 3G1, Canada 
+2Kinesiology, University of Waterloo, ON, N2L 3G1, Canada 
+ 
+Introduction 
+Recently, the game of disc golf has seen rapid growth, with a 55%  increase in Professional 
+Disc Golf Association (PDGA) memberships in 2021 [1]. Recent papers have predicted the 
+dynamics of golf discs, such as the model from Giljarhus et al. [2], but studies focusing on 
+player performance have yet to be conducted. In 2017, Sasakawa et al. [3] compared ultimate 
+forehand throws, a biomechanically similar action to forehand disc golf throws,  from skilled 
+and unskilled players. This abstract considers the performance characteristics of both 
+backhand and forehand disc golf throws and relates them to player skill level. 
+ 
+Methods 
+Twenty-eight participants with varying skill levels took part in this study. Twenty-three of the 
+participants were male and 5 were female . The official PDGA rating system  was used to 
+quantify the participants’ skill levels [4]. The average male and female PDGA ratings from this 
+study were 936 and 855, respectively, with higher ratings correlating to better-scoring players. 
+The average participant for each sex was considered an above average amateur player [4]. 
+The participants gave informed consent to take part in this study, and the study was 
+conducted in accordance with the ethical standards of the University of Waterloo. 
+The players threw an Innova D isc Golf Destroyer (Innova D isc Golf, Rock Hill, USA) 
+driver, with a mass of 173.5 grams, into a net. The players were allowed to take their preferred 
+run-up to the throw. Five backhand and 5 forehand throws were recorded for each participant. 
+To quantify performance, a single high -speed Photron SA1 (Photron, Tokyo, Japan) 
+camera, with a frame rate of 6250 frames/second and resolution of 1024 x 896 pixels, was 
+mounted above the participants to record the disc motion at release. A minimum of 30 frames 
+were used to estimate the speed and spin  of the disc . Due to the single camera setup, the 
+players were asked to throw the discs horizontally. 
+To find the disc’s initial speed, it was assumed that the velocity of the disc was entirely 
+within the horizontal plane and that the disc did not have any initial wobble. A circle was fitted 
+around the disc in each  frame to locate the disc centre and to estimate the pixel-to-metre 
+conversion for a given throw . Regression lines relating the disc position (one for each of the 
+frame axes) to time were calculated. The slopes of these lines were taken as the longitudinal 
+and lateral velocity components to calculate the disc speed. 
+Under the same assumptions as above, the disc spin was estimated by tracking the 
+rotation of circular markers located on the topside of the disc. The angles of lines from the 
+markers to the disc centre were determined in each frame. Regression lines  relating these 
+angles to time were calculated and the average slope was taken as the disc spin. 
+ISEA 2024 - The Engineering of Sport 15, Loughborough University, UK 
+Corresponding author email: ar2turne@uwaterloo.ca 
+Results and Discussion 
+Table 1 shows the average launch speed and spin of t he disc for varying skill levels.  
+Within skill -level groupings, backhand throws produce significantly more spin but similar 
+speed to forehand throws. In general, the higher -skilled players produced more speed and 
+spin than the lower-skilled players. This agrees with the findings of Sasakawa et al. [3], where 
+more skilful players generated higher speed and spin in forehand ultimate throws. 
+ 
+Table 1. Mean (relative standard deviation) of disc speed and spin grouped by different PDGA ratings. 
+PDGA Rating 
+Number of 
+Participants 
+Backhand Forehand 
+Speed (m/s) Spin (rpm) Speed (m/s) Spin (rpm) 
+<900 9 22.84 (11.9%) 920 (19.0%) 22.24 (15.1%) 656 (14.6%) 
+900-949 7 23.61 (7.8%) 1110 (9.7%) 24.06 (16.2%) 666 (14.2%) 
+950-999 10 26.87 (7.7%) 1252 (11.3%) 26.41 (5.4%) 734 (13.3%) 
+>999 2 30.16 (3.8%) 1332 (19.4%) 27.07 (11.8%) 774 (7.1%) 
+Total Range  19.62 – 30.97 713 – 1515 15.43 – 29.32 482 – 844 
+ 
+Table 2 shows  the correlation coefficients of speed and spin with PDGA rating  using 
+the average backhand and forehand  throws of each participant . Backhand speed and spin 
+showed stronger correlations to PDGA rating than their forehand counterparts. Forehand spin 
+for male participants was the weakest correlation and not significant. Most participants noted 
+backhand as their preferred throwing style, meaning for some players, if the forehand is used 
+sparingly during play, forehand throwing performance may not correlate well to their rating. 
+ 
+Table 2. Correlation coefficients, r, of speed and spin with PDGA rating. Unless denoted with n.s., coefficients 
+are significant (P < 0.05). (r = 1: perfect positive linear relationship; r = 0: no linear relationship exists). 
+Participants Backhand Speed Backhand Spin Forehand Speed Forehand Spin 
+Male only 0.61 0.64 0.57 0.36 n.s. 
+All 0.72 0.77 0.63 0.43 
+ 
+To improve upon this work, more female participants should be included to produce 
+statistically meaningful results for both sexes. Additionally, a stereo camera system can be 
+used to collect the complete three-dimensional launch conditions of the disc . A trajectory 
+model [2] can then be used to give further insight into the performance of the throw. 
+ 
+References 
+1. PDGA (2022) PDGA: The disc golf growth report. https://www.pdga.com/news/2021-
+pdga-year-end-demographics-report. Accessed 25 Aug 2023 
+2. Giljarhus KET, Gooding MT, Njærheim J  (2022) Disc golf trajectory modelling combining 
+computational fluid dynamics and rigid body dynamics. Sports Eng 25(26) 
+3. Sasakawa K, Umegaki K, Sakurai S (2017) Biomechanics of increased spin velocity of flying 
+discs during forehand throws by skilled and unskilled throwers. J Sports Sci 36(8):843-851 
+4. PDGA (2020) PDGA Ratings System Guide. https://www.pdga.com/ratings/guide. 
+Accessed 28 Aug 2023 
+ISEA 2024 - The Engineering of Sport 15, Loughborough University, UK

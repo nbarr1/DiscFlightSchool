@@ -1,0 +1,231 @@
+   A BIOMECHANICAL ANALYSIS OF THE  
+   BACKHAND DISC GOLF DRIVE FOR  
+DISTANCE 
+ 
+ 
+   By 
+   TRAVIS GREENWAY ATC, CSCS 
+   Bachelor of General Studies  
+   Lamar University 
+   Beaumont, Texas 
+   2003 
+ 
+ 
+   Submitted to the Faculty of the 
+   Graduate College of the 
+   Oklahoma State University 
+   in partial fulfillment of 
+   the requirements for 
+   the Degree of 
+   MASTER OF SCIENCE  
+  May, 2007     A BIOMECHANICAL ANALYSIS OF THE  
+   BACKHAND DISC GOLF DRIVE FOR 
+DISTANCE 
+ 
+ 
+ 
+ 
+   Thesis Approved: 
+ 
+ 
+   Tona Hetzler 
+   Thesis Adviser 
+   Matthew O’Brein 
+ 
+   Aric Warren 
+ 
+   A. Gordon Emslie 
+   Dean of the Graduate College 
+ iiTABLE OF CONTENTS 
+ 
+C h a p t e r           P a g e  
+ 
+I. INTRODUCTION......................................................................................................1 
+ 
+ Statement of Problem...............................................................................................2 
+ Purpose.....................................................................................................................3 
+ Significance of Study...............................................................................................3 
+ Hypothesis................................................................................................................4 
+ Delimitations............................................................................................................4 
+ Limitations ...............................................................................................................4 
+ Assumptions.............................................................................................................5 
+ Definition of Terms..................................................................................................5 
+ 
+ 
+II. REVIEW OF LITERATURE 
+  
+ Disc Golf..................................................................................................................7 
+ Biomechanics...........................................................................................................9 
+ Video Analysis.......................................................................................................10 
+ Summary................................................................................................................11 
+  
+ 
+III. METHODLOGY 
+ 
+ Subjects..................................................................................................................13 
+ Instrumentation ......................................................................................................14 
+ Experimental Design..............................................................................................15 
+ Procedure ...............................................................................................................15 
+  
+ 
+ 
+IV. FINDINGS.............................................................................................................17 
+ 
+ Results....................................................................................................................17 
+ Discussion..............................................................................................................19 
+  
+ 
+V.  CONCLUSION......................................................................................................32 
+ 
+ Conclusion .............................................................................................................32 
+ Recommendations..................................................................................................33 
+  
+ 
+REFERENCES ............................................................................................................34 
+ iii 
+ 
+ 
+LIST OF FIGURES 
+ 
+ Figure         Title         Page 
+ 
+Figure 1 …….………Clock reference around tee box……………………...…. 20 
+Figure 2 ………….….Path of travel………………………….………………... 21 
+Figure 3 ……………. Left leg absorbs weight of thrower ..........................…... 22 
+Figure 4 ……………. Left lower extremity abducted …………..…………….. 23 
+Figure 5 ……...…….. Beginning of Transition Phase ………...…….………… 24 
+Figure 6 …...……….. Beginning of Load Phase ……..……………………….. 26 
+Figure 7 ………...….. End of Load Phase ………………………..…………… 26 
+Figure 8 ………….… Beginning of Cross Over Phase ………..……………… 27 
+Figure 9 ……...…….. End of Cross Over Phase ……….…..…………………. 28 
+Figure 10 ………...… Release Point ...........................................................…... 30 
+Figure 11 …………... Follow through after release ……………...…………… 31 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ ivCHAPTER I 
+ 
+ 
+INTRODUCTION 
+For years researchers have studied the pa tterns of movement related to complex 
+sports skills to break down  these skills into components so that biomechanists can 
+analyze the fundamental principals of the ac tions contained within. Understanding these 
+actions allows researchers to deconstruct and analyze these actions to limit and correct 
+any deficiencies found. While breaking down these movements into their components, 
+actions can be grouped together  and referred to as phases,  such as the windup, cocking, 
+and acceleration phases of the baseball pitch. These phases allow instructors or coaches 
+to teach the complex movement in parts and allow participants to learn the movements 
+with less chance of injury or learning incorrect technique. In sports such as baseball, track 
+and field, swimming, football, and many others these phases are a critical part of learning 
+the proper sequence of events while teaching the body the correct biomechanical position 
+for optimal performance. In many of these s ports these phases seem to have been around 
+almost as long as the sports themselves, when in all actuality these movement patterns 
+and sequences came from many years of pr ofessional observation by coaches and 
+biomechanists watching the successful attempts of veteran players. 
+ This process of observation can now be made more efficient due to the use of 
+new analyzing techniques, namely video analys is. Video analysis can be used to record 
+and analyze the same successful attempt without the participant having to perform these 
+complex skills multiple times. Using video analysis, multiple attempts or multiple 
+participants can be observed simultaneously  and even on the same screen at varying 
+speeds to truly judge the similarities or differences that lie within each action.  
+ 1Tortora, G.J.(2005). Principles of human anatomy 10th ed. New Jersey: John Wiley and 
+Sons, Inc.  
+ 
+World Flying Disc Federation (n.d.). History of Disc Golf. Retrieved June 15, 2005, 
+from World Flying Disc Federation’s web site:  
+http://www.wfdf.org/index.php?page=history/discgolf.htm
+ 35 
+VITA 
+ 
+Travis W. Greenway 
+ 
+Candidate for the Degree of 
+ 
+Master of Science  
+ 
+ 
+Thesis:    A BIOMECHANICAL ANALYSIS OF THE BACKHAND DISC GOLF 
+DRIVE FOR DISTANCE 
+ 
+ 
+Major Field:  Applied Exercise Science 
+ 
+Biographical: 
+ 
+Personal Data:  Born in Port Arthur, Texas on February 15, 1978, the son of Jeff 
+and Sue Greenway 
+ 
+Education:  Graduated from Port Neches-Groves High School, Port Neches, 
+Texas in May 1996. Completed Bachelor of General Studies degree at 
+Lamar University in December 2003. Completed the requirements for 
+the Master of Science degree with a major in Applied Exercise Science 
+at Oklahoma State University in May 2007. 
+ 
+Experience:  Became a Certified Strength and Conditioning Specialists in 2004. 
+Became a Certified Athletic Trainer in August of 2005.  
+ 
+Professional Memberships:  National Athletic Trainers’ Association, National 
+Strength and Conditioning Association, Professional Disc Golf 
+Association.
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+   
+Name: Travis W. Greenway                    Date of Degree: May, 2007 
+ 
+Institution: Oklahoma State University        Location: OKC or Stillwater, Oklahoma 
+ 
+Title of Study: A BIOMECHANICAL ANALYSIS OF THE BACKHAND DISC GOLF 
+DRIVE FOR DISTANCE 
+ 
+Pages in Study: 36               Candidate for the Degree of Master of Science 
+Major Field: Applied Exercise Science 
+ 
+Scope and Method of Study: The purpose of this investigation was to gather video of disc 
+golf drives for distance and analyze the da ta to extract and name phases of the 
+drive, establishing a common language that researchers, sport performance 
+professionals, and the disc golf community can use to communicate. The drives 
+of 15 male disc golfers in  the advanced division were analyzed using video 
+analysis software. 
+ 
+Findings and Conclusions:  Video analysis of  the fifteen males has shown that there are 
+eight distinct phases of the disc golf drive for distance. Groups of actions make 
+up each phase, which was given a name according to the movements performed. 
+The eight phases consisted of four lower body phases and four upper body 
+phases. The phases in order of occurrenc e in the throw are Approach, Preload, 
+Transition, Load, Cross Over, Pull, Plant, and Release. This research provides a 
+viable new language to discuss the pattern of movements known as the 
+backhand disc golf drive for distance with more detail and accuracy than 
+previously existed.  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ADVISER’S APPROVAL:   Tona Hetzler 
+  

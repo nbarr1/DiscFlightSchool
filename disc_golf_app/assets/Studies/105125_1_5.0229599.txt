@@ -1,0 +1,256 @@
+ViewOnline
+ExportCitation
+RESEARCH ARTICLE |  OCTOBER 22 2024
+The effects of thumb position on backhand disc golf throws
+of a mid-range disc 
+Noah Koch 
+  ; Hayden McGuire; Connor Cole; Zachary Lindsey 
+AIP Advances 14, 105125 (2024)
+https://doi.org/10.1063/5.0229599
+Articles You May Be Interested In
+Momentum transfer analysis of upper body during backhand drive stroke in tennis
+AIP Conf. Proc. (April 2023)
+A symmetry-based modeling of the angular dependence of aerodynamic forces on disk-shaped bodies
+AIP Advances (December 2025)
+On the efficiency of the golf swing
+Am. J. Phys. (December 2006)
+ 30 March 2026 01:22:47
+AIP Advances ARTICLE pubs.aip.org/aip/adv
+The effects of thumb position on backhand disc
+golf throws of a mid-range disc
+Cite as: AIP Advances 14, 105125 (2024); doi: 10.1063/5.0229599
+Submitted: 18 July 2024 • Accepted: 13 September 2024 •
+Published Online: 22 October 2024
+Noah Koch,
+ Hayden McGuire, Connor Cole, and Zachary Lindseya)
+AFFILIATIONS
+Department of Physics, Berry College, Mount Berry, Georgia 30149, USA
+a)Author to whom correspondence should be addressed: zlindsey@berry.edu
+ABSTRACT
+In disc golf, having a comfortable and proper grip on the disc is crucial to achieving optimal throw dynamics, and the placement of the
+thumb is a key component of the grip. This research investigated the relationship between thumb position on a mid-range disc and the
+resulting angular speed, translational speed, and torque generated during the throw. Using a Discraft Buzzz disc equipped with a TechDisc
+sensor, measurements were obtained for throws made using five different thumb positions, starting near the outer edge of the disc (p= 1)
+and ending near the center of the disc (p= 5). Participants were sorted into two skill level groups that were determined based on their
+Professional Disc Golf Association rating. Each participant performed five throws at each thumb position with maximum effort, and angular
+and translational speeds of each throw were measured. The results varied between skill groups, but collective data displayed a general linear
+correlation between angular and translational speeds achieved across all thumb positions. While angular speed and applied torque were
+observed to be maximum for the thumb position with the largest radial distance from the center of the disc (p= 1), thumb positions located
+∼3–5 cm radially inward from the outer edge ( p= 2 and p= 3) resulted in the highest translational speeds. In general, a universally favorable
+thumb position was determined as that resulting in simultaneously large values of both angular and translational speeds for all participants,
+which occurred closest to the p= 2 position (∼3 cm from the outer edge).
+© 2024 Author(s). All article content, except where otherwise noted, is licensed under a Creative Commons Attribution-NonCommercial 4.0
+International (CC BY-NC) license (https://creativecommons.org/licenses/by-nc/4.0/). https://doi.org/10.1063/5.0229599
+I. INTRODUCTION
+Disc golf is a relatively young sport that has experienced con-
+sistent growth since its inception, and the disc golf community has
+significantly grown in popularity over the past several years. The
+sport was invented based on various flying toy discs contrived in
+the mid-twentieth century. The idea evolved until Wham-O pro-
+duced a Pro Model disc in 1964, 1 and disc golf officially became a
+professional sport in 1976. 2 As of 2022, the Professional Disc Golf
+Association (PDGA) reported a total of 130 700 registered members,
+which represents 19% and 84% increases over 1 and 2 year spans,
+respectively, with over 10 000 courses existing worldwide and nearly
+9000 sanctioned events held throughout the year. 3 Even with the
+growing popularity, there is a general lack of research devoted to the
+mechanics of disc golf throws.
+Compared to catch-style discs, disc golf discs typically have
+smaller diameters, higher densities, and a more aerodynamic outer
+rim. In disc golf, there are three main disc types, namely, drivers,
+mid-ranges, and putters. Driver discs are typically very thin and
+sharp-edged to reduce the amount of drag acting on the disc while
+in flight and can travel greater than 500 feet if thrown with high
+enough speeds. Putters are usually the thickest of the three disc types,
+experience higher drag forces than drivers, and are commonly used
+when players are close to the basket. Finally, mid-range discs typ-
+ically share characteristics of both drivers and putters, which offer
+players a reliable option for shots that require both control and accu-
+racy and are typically used for shots between 200 and 300 feet of
+distance.
+In general, there are two commonly used disc golf throwing
+styles: backhand (where the disc is pulled across the body from
+the player’s non-dominant side toward their dominant side before
+release) and forehand (where the disc is thrown sidearm with the
+player’s dominant hand). While there are currently no accessible sta-
+tistical data that report which style is most prevalent in the disc golf
+community, the backhand throw is widely assumed to be the most
+common based on various instructional resources and media cov-
+erage of professional disc golf tournaments. 4 No matter which style
+or type of disc a player is throwing, a comfortable and proper grip
+AIP Advances 14, 105125 (2024); doi: 10.1063/5.0229599 14, 105125-1
+© Author(s) 2024
+ 30 March 2026 01:22:47
+AIP Advances ARTICLE pubs.aip.org/aip/adv
+is essential to achieving accurate and appropriate distance for each
+shot on the course. There are different ways for players to position
+their fingers while gripping the disc, such as a fan grip (where the
+fingers are spread out near the inner edge of the disc), a stacked grip
+(where the fingers are stacked on top of one another along the inner
+edge of the disc), or a power grip (which is the most common and
+involves tightly wrapping all four fingers around the rim of the disc).
+The positioning of the thumb on the top side of the disc is another
+aspect of any disc golf grip. The thumb’s position is crucial, because
+it counterbalances the fingers underneath to secure the disc in the
+hand and also determines characteristics related to applied torque
+on the disc during a throw.
+The goal of this study is to investigate the effects of thumb
+position implemented via a backhand power grip on the resulting
+angular speed (or spin rate), translational speed (or launch speed),
+and torque generated on a mid-range disc. In the experiment, par-
+ticipants were split into two different skill level groups based on each
+participant’s PDGA rating, where group I included participants with
+ratings less than 900 (or unrated) and group II included participants
+with ratings of 900 or higher. Each participant performed repeated
+backhand throws using a Discraft Buzzz mid-range disc equipped
+with a TechDisc flight sensor utilizing five different thumb positions.
+Each participant was instructed to employ a consistent throwing
+motion to the best of their ability while only changing the position
+of the thumb, and angular and translational speeds of the disc were
+measured for each throw. One previous study was conducted where
+the trajectories of different disc shapes were tested computationally
+by combining computational fluid dynamics and rigid body dynam-
+ics,5 and two Ph.D. dissertations have investigated general throw
+biomechanics.1,6 However, this is the first instance in the literature of
+an experimental study performed to investigate the effects of thumb
+position on the resulting launch characteristics achieved during a
+disc golf throw.
+II. THEORY
+The angular momentum (⃗L)imparted to a spinning disc is
+given by
+⃗L= I ⃗ω, (1)
+where I is the moment of inertia and ⃗ωis the angular velocity of the
+disc. Newton’s second law of rotational motion states that
+⃗τ= d ⃗L
+dt , (2)
+where ⃗τis the net torque and d ⃗L
+dt is the first derivative of angular
+momentum with respect to time. At the release point of the throw,
+the center of the disc was considered to be the axis of rotation, and
+all thumb positions were measured relative to this axis. For all mea-
+surements of torques applied by participants during throws in this
+study, the angular velocity and angular momentum vectors were
+assumed to be directed purely in the direction perpendicular to the
+plane of the disc, which was defined to be along the ˆz-axis. As a disc
+is thrown with higher angular speeds, the angular momentum of the
+disc increases [according to Eq. (1)]. Discs that impart larger values
+of angular momentum upon launch will require larger values of net
+torque to cause noticeable changes in the direction of the disc’s axis
+of rotation while in flight. Thus, disc golf throws with higher angular
+speeds will possess higher degrees of gyroscopic stability than throws
+with lower angular speeds. Gyroscopic stability can be described as a
+disc’s tendency to resist changes to its axis of rotation due to con-
+servation of angular momentum. Increased gyroscopic stability is
+favorable for disc throws that require accuracy and control due to
+the larger external torques (primarily due to aerodynamic forces)
+that are required to change the disc’s rotational state during flight.
+This concept motivates the use of angular speed measurements to
+partially determine the optimal thumb position in disc golf throws.
+When using a power grip, forces applied to the disc due to the
+grip include the static force of friction between the thumb and the
+top of the disc, as well as the force applied by the fingers on the inner
+rim of the disc. During a throw, there may be additional force con-
+tributions applied to the disc that are not purely perpendicular to
+the radial direction. For example, the downward force of the thumb
+on the top of the disc may cause the disc material to flex in such a
+way that a component of the force is applied along the radial direc-
+tion toward the outer rim. However, since such a force would not
+directly contribute to the applied torque on the disc, this study uti-
+lized a simplified model that assumes a net horizontal force that
+is applied perpendicular to the radial direction. The net horizontal
+force (⃗Fhor)is assumed to be the sum of the frictional force and the
+horizontal component of the force from the fingers on the inner rim
+and generates a net torque on the disc, given by
+⃗τ= ⃗r × ⃗Fhor, (3)
+where ⃗τis the net torque applied to the disc and ⃗r is the radial dis-
+placement of the thumb position relative to the center of the disc. A
+basic schematic illustrating the general layout of the ⃗Fhor and ⃗r vec-
+tors during a disc golf throw is shown in Fig. 1. The grip depicted in
+Fig. 1 represents the general orientation of the hand during the accel-
+erating phase of the throw, with the translational velocity directed in
+the same direction as ⃗Fhor. Upon release, the player’s elbow and wrist
+will hinge just before the grip force is removed, setting the disc into
+flight.
+From the definition of a cross product, consequently,
+τ= rFhor sin θp, (4)
+FIG. 1. Schematic depicting the general orientation of the horizontal net force
+(⃗Fhor )and radial displacement (⃗r)vectors when using a power grip. The black
+rectangle illustrates the general location of the fingers located on the underside of
+the disc.
+AIP Advances 14, 105125 (2024); doi: 10.1063/5.0229599 14, 105125-2
+© Author(s) 2024
+ 30 March 2026 01:22:47
+AIP Advances ARTICLE pubs.aip.org/aip/adv
+whereτ, r, and Fhor are the respective magnitudes of ⃗τ, ⃗r, and ⃗Fhor,
+andθp is the angle between ⃗r and ⃗Fhor at each thumb position (p).
+The radial displacement vector of the thumb and the friction
+force vector were assumed to be orthogonal (θp ≈90○ and sinθp ≈1)
+for all thumb positions. In addition, each participant was asked to
+consistently throw the disc with full power, so Fhor was assumed
+to remain constant for each participant’s set of throws (regarding
+applied torque measurements). Thus, the magnitude of the applied
+torque was assumed to depend on the thumb position via the cor-
+responding radial displacement. As shown in Fig. 2, the selected
+thumb positions began near the outer edge of the disc (p= 1)with
+sequential positions approaching the center of the disc. The fifth
+thumb position (p= 5)was located near the center of the disc with
+a radial displacement of r= 2.61 ± 0.05 cm. The radial displacement
+of the thumb (relative to the center of the disc) decreased as thumb
+positions increased from p= 1 to p= 5. According to Eq. (4), the
+magnitude of the net torque applied to the disc was expected to
+decrease as r was decreased (and p was increased).
+An alternate form of Newton’s second law of rotational motion
+states that
+⃗τ= I ⋅⃗α, (5)
+where ⃗αis the disc’s angular acceleration vector and I is the disc’s
+inertia tensor for rotations about the vertical axis through its center.
+The inertia tensor is given by
+I=
+⎡⎢⎢⎢⎢⎢⎢⎣
+Ixx Ixy Ixz
+Iyx Iyy Iyz
+Izx Izy Izz
+⎤⎥⎥⎥⎥⎥⎥⎦
+, (6)
+where Ixx, Iyy, and Izz represent the disc’s moments of inertia about
+the x, y, and z-axes respectively, and the off-diagonal elements are
+FIG. 2. Schematic showing the top view of the mid-range disc with five marked
+thumb positions (p)at various radial displacements from the central axis of
+rotation.
+the six products of inertia for rotations about all three coordinate
+axes. Each moment of inertia of the disc is given by
+Iii = ∫V
+ρ(j 2 + k2)dV, (7)
+where ρis the mass density of the disc and V is the disc’s volume.
+Each product of inertia of the disc is given by
+Iij = ∫V
+ρ(ij)dV, (8)
+where i, j, and k represent x, y, and z in some arbitrary order. 7 The
+coordinate axes were chosen such that the x-axis and y-axis lie in
+the plane of the disc (and rotate along with the disc), and the z-axis
+points upward through the disc’s axis of rotation (with the origin at
+the center of the disc). Thus,I is diagonal due to rotational symmetry
+about the z-axis. Assuming a constant applied torque throughout
+the period of angular acceleration, in addition to angular velocity
+and angular acceleration vectors purely directed along the z-axis, it
+follows from Eq. (5) that
+τ= Izz(ω
+t ), (9)
+where ωis the angular speed of the disc about the z-axis (upon
+release) and t is the duration of angular acceleration during the
+throw. Combining Eqs. (4) and (9) results in an expression for the
+angular speed of the disc, given by
+ω= rFhort
+Izz
+, (10)
+which shows a predicted direct relationship between angular speed
+(ω)and radial displacement (r)of the thumb position.
+III. EXPERIMENTAL METHODS
+The experimental setup consisted of a Discraft Buzzz mid-range
+disc equipped with a TechDisc flight sensor, a 7 × 7 foot throw net,
+and the TechDisc data collection software. The angular and trans-
+lational speeds of backhand power grip throws were measured for
+a total of 24 participants, including 15 participants in group I and
+nine participants in group II. Each participant was instructed to
+throw five replicate throws using each marked thumb position at
+full power, result

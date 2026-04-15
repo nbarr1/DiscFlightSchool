@@ -1,0 +1,175 @@
+ 
+ 
+ 
+ 
+PHYSIOLOGICAL AND BIOMECHANICAL PERSPECTIVES ON ELBOW FUNCTION 
+DURING FOREHAND AND BACKHAND DISC GOLF THROWS: A NOVEL 
+INVESTIGATION 
+ 
+by 
+Lauren Rachelle Giles 
+Liberty University 
+ 
+ 
+A Dissertation Presented in Partial Fulfillment 
+Of the Requirements for the Degree 
+Doctor of Philosophy 
+ 
+Liberty University 
+2024 
+   
+ 
+2 
+ 
+PHYSIOLOGICAL AND BIOMECHANICAL PERSPECTIVES ON ELBOW FUNCTION 
+DURING FOREHAND AND BACKHAND DISC GOLF THROWS: A NOVEL 
+INVESTIGATION 
+by Lauren Rachelle Giles 
+ 
+A Dissertation Presented in Partial Fulfillment 
+Of the Requirements for the Degree 
+Doctor of Philosophy 
+ 
+ 
+Liberty University, Lynchburg, VA 
+2024 
+ 
+ 
+ 
+ 
+APPROVED BY: 
+ 
+Eric Sobolewski, PhD, Committee Chair 
+ 
+S. Kyle Travis, PhD, Committee Member 
+ 
+Michael Olson, PhD, Committee Member   
+ 
+3 
+ABSTRACT 
+Over 81% of players have reported injuries linked to disc golfing, predominantly due to 
+overuse. Since disc golf originated, there is a lack of research on the proper biomechanics of the 
+disc golf throw. This descriptive, quantitative study seeks to be the first. We investigated 6 
+females and 35 males, aged 21-66, registered to compete in disc golf. The goal was to examine 
+the kinetic parameters of healthy disc golfers to identify biomechanics likely associated with 
+safety. Research questions investigated whether there is a connection between lean body mass 
+and disc distance traveled, elbow torque and disc distance, or grip strength and torque on the 
+elbow. After recruitment from tournaments, biometric data including handgrip strength 
+(dynamometer), body mass index, and body fat percentage (bioelectrical impedance assay), were 
+collected. Torque was recorded using a Motus sensor during forehand and backhand throws. 
+Assumption tests revealed that lean body mass, maximum backhand and forehand distance and 
+handgrip MVIC were normally distributed, while torque on either style of throw were not. A 
+two-tailed Pearson correlation indicated that while some relationships were observed, none were 
+statistically significant, leading to a failure to reject the null hypotheses. Factors such as 
+individual variation and form might explain this, although notable findings emerged. 
+Specifically, some torque measures surpassed the upper limits established by studies in other 
+sports. There are numerous opportunities for future research to build on the findings of this study 
+including introducing a longitudinal aspect, expanding to other sports with different throwing 
+forms, and expanding to torque with “swinging” sports such as tennis or golf. 
+ 
+Keywords: disc golf, elbow torque, motus, elbow biomechanics, handgrip MVIC 
+ 
+4 
+Dedication 
+I want to dedicate this accomplishment to Laurie Ennis, my first professional mentor. I 
+am so grateful that her levity, patience, lightheartedness, and impartiality imprinted on me before 
+she left this Earth, and I miss her every day. Eternally humble, Laurie would roll in her grave to 
+think I worked so hard for this to then dedicate it fully to her, so: this is also for Me. I want to 
+dedicate this to the past version of Me who would have never predicted we’d be here (for so 
+many reasons), and the future version of Me (who I can only hope will be using retirement to 
+adopt dogs from hospice to give them the best final days on a tropical island). 
+Finally, this is for all of the powerhouse women who came before me. Your stories of 
+wishing you did it, or did it sooner, instilled such a sense of urgency in me. I am so grateful 
+to you as I stand here, completing a PhD. You all know who you are. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  
+ 
+5 
+Acknowledgments 
+Thank you, Justin. Your only question in this endeavor was if it was good for my mental 
+health to take on so much. I can’t think of a way a partner could be more supportive than you. 
+You always know the thing that will heal my spirit - and you book the trip knowing that that 
+thing is usually a trip to an island or the French Quarter. I am so lucky to have you as my rock. 
+Thank you, Kelly, for holding me down now and always, and for supporting all of my 
+ideas from day zero. One of the best things that’s happened to me is that life put us in the same 
+office all those years ago. I truly don’t think I would have been here without you. 
+A huge shout out to Maddie and Sophie, who took the back burner in terms of my 
+attention and free time more than I would have liked. Endless fetch and walks are in your future. 
+Thank you, Summer, for being there to pick me up and dust me off time and time again. I 
+am so grateful to have you offset the chaos that comes into my life with sensitivity and patience. 
+Thank you Kelley, for being a great listener and for reminding me to take care of myself. 
+You are so good at softening the blow when I get bad news and helping me to see clearly. 
+Thank you, Ted and Dr. Medler. I’m sure none of us foresaw that you’d be mentoring me 
+for decades when I walked into your classrooms all those years ago. I am so thankful that you’re 
+still enriching my life with your advice, experience, and encouragement. 
+Thank you Jen; for caffeinating and counseling me, Cody and Emily; for balancing my 
+work with the most fun distractions, and Mike; for listening. It is impossible to name and thank 
+everyone properly in one page. Thank you Ramses, Max, Josh, Melissa, Clint, Amy, Foulk, 
+Chris, Joe, Brad, Derek, Bob, Ashlyn, Abigail and Damon. I must’ve done something 
+exceptionally good in a past life to get to meet such kindhearted, amazing people and be 
+fortunate enough to make them a part of my circle.  
+ 
+113 
+Table 26 
+Pearson Correlation; Backhand Maximum Distance vs. Torque (RQ3) 
+ 
+Table 27 
+Pearson Correlation; Forehand Maximum Distance vs. Torque (RQ3) 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+114 
+Figure 13 
+Scatterplot; Backhand Maximum Distance vs. Torque (RQ3) 
+ 
+ 
+Figure 14 
+Scatterplot; Forehand Maximum Distance vs. Torque (RQ3) 
+ 
+ 
+ 
+115 
+APPENDIX B 
+ 
+Lauren Giles  
+Eric Sobolewski, Lauren Giles  
+Re: IRB Approval - IRB-FY23-24-2090 Quantification of Disc Golf Throwing Biomechanics and Relationship of Throwing 
+Performance to Subject Demographics  
+Dear Lauren Giles, Eric Sobolewski, Lauren Giles,  
+We are pleased to inform you that your study has been approved by the Liberty University Institutional Review Board 
+(IRB). This approval is extended to you for one year from the following date: July 31, 2024. If you need to make changes to 
+the methodology as it pertains to human subjects, you must submit a modification to the IRB. Modifications can be 
+completed through your Cayuse IRB account.  
+Your study falls under the expedited review category (45 CFR 46.110), which is applicable to specific, minimal risk studies 
+and minor changes to approved studies for the following reason(s):  
+4. Collection of data through noninvasive procedures (not involving general anesthesia or sedation) routinely employed in 
+clinical practice, excluding procedures involving x-rays or microwaves. Where medical devices are employed, they must be 
+cleared/approved for marketing. (Studies intended to evaluate the safety and effectiveness of the medical device are not 
+generally eligible for expedited review, including studies of cleared medical devices for new indications.)  
+For a PDF of your approval letter, click on your study number in the My Studies card on your Cayuse dashboard. 
+Next, click the Submissions bar beside the Study Details bar on the Study Details page. Finally, click Initial under 
+Submission Type and choose the Letters tab toward the bottom of the Submission Details page. Your stamped 
+consent form(s) and final versions of your study documents can be found on the same page under the 
+Attachments tab. Your stamped consent form(s) should be copied and used to gain the consent of your research 
+participants. If you plan to provide your consent information electronically, the contents of the attached consent 
+document(s) should be made available without alteration.  
+Thank you for your cooperation with the IRB, and we wish you well with your research project.  
+Sincerely,  
+G. Michele Baker, PhD, CIP  
+Administrative Chair  
+Research Ethics Office 
+ 
+  
+July 31, 2024  
+ 

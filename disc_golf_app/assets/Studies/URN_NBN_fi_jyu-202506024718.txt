@@ -1,0 +1,127 @@
+ 
+ 
+ 
+Lead leg ground reaction forces and knee kinematics in the disc golf backhand throw 
+Joona Tervonen 
+Bachelor’s Thesis in Biomechanics 
+Faculty of Sport and Health Sciences 
+University of Jyväskylä 
+Spring 2025 
+ 
+ 
+ 
+ABSTRACT 
+ 
+Tervonen, J. 2025.  Lead leg g round reaction forces and knee kinematics in the  disc golf 
+backhand throw. Faculty of Sport and Health Sciences, University of Jyväskylä, Bachelor’s 
+thesis in Biomechanics, 43 pp., 4 appendices.  
+ 
+The purpose of this study was to describe the characteristics of lead leg ground reaction forces 
+and knee kinematics in the disc golf backhand throw. The popularity of disc golf has been 
+increasing, while research on its biomechanics remains limited. 
+ 
+Ten male disc golfers (age 23,2 ± 2,5) with competition experience ranging from hobby level 
+to international elite level tournaments participated in this study. Each participant performed at 
+least five maximal backhand throws. The trial with the highest launch speed was considered in 
+the analysis. Three-dimensional ground reaction forces of the lead leg were measured on a force 
+plate. The peak vertical, anteroposterior, mediolateral, horizontal resultant and total resultant 
+forces were analyzed. Lead knee movement patterns and knee extension velocity were assessed 
+with a goniometer. 
+ 
+The mean launch speed was 30,7 ± 2,7 m/s. Association with launch speed was observed in five 
+peak force parameters. They were the absolute peak braking force (r = -0,748, p = 0,013), the 
+relative peak braking force (r = -0,735, p = 0,015), the absolute peak horizontal resultant force 
+(r = 0,732, p = 0,016), the relative peak horizontal resultant force (r = 0,734, p = 0,016) and the 
+absolute peak total resultant force (r = 0,669, p = 0,034). Peak lead knee extension velocity was 
+associated with higher launch speed (r = 0,781, p = 0,008) when the follow-through phase was 
+included in the analysis.  Three knee movement patterns were identified, but association with 
+launch speed was not analyzed. 
+ 
+Being able to create greater ground reaction forces, particularly in the posterior direction, may 
+help generate a higher launch speed. Greater knee extension velocity was associated with higher 
+launch speed. However, its contribution remains a question, as the timing of peak values varied 
+significantly. The characteristics of ground reaction forces and knee kinematics were presented 
+along with suggestions for future studies.  
+ 
+Keywords: disc golf, launch speed, ground reaction forces, knee kinematics 
+   
+ 
+ 
+ABBREVIATIONS 
+ 
+BW  body weight 
+Frh  horizontal resultant ground reaction force 
+Frt  total resultant ground reaction force 
+Fx  mediolateral ground reaction force 
+Fy  anteroposterior ground reaction force 
+Fz  vertical ground reaction force 
+GRF  ground reaction force 
+PD  proximal-to-distal 
+PDGA  Professional Disc Golf Association 
+ 
+   
+ 
+ 
+TABLE OF CONTENTS  
+ABSTRACT 
+1 INTRODUCTION ........................................................................................................... 1 
+2 BIOMECHANICS OF THE BACKHAND THROW..................................................... 2 
+2.1 Proximal-to-distal sequence .................................................................................... 2 
+2.2 Kinematic variables associated with the launch speed of the disc .......................... 4 
+3 GROUND REACTION FORCE ..................................................................................... 5 
+3.1 Overview of ground reaction forces ........................................................................ 5 
+3.2 Ground reaction forces during throwing motions ................................................... 7 
+3.3 Ground reaction forces and throwing performance ................................................. 9 
+4 LEAD LEG KNEE KINEMATICS DURING THROWING MOTION ...................... 11 
+4.1 Knee extension velocity......................................................................................... 11 
+4.2 Knee movement patterns ....................................................................................... 12 
+5 RESEARCH QUESTIONS ........................................................................................... 15 
+6 METHODS .................................................................................................................... 16 
+6.1 Participants ............................................................................................................ 16 
+6.2 Study setting .......................................................................................................... 16 
+6.3 Ground reaction forces .......................................................................................... 17 
+6.4 Knee kinematics .................................................................................................... 18 
+6.5 Launch speed and the timing of disc release ......................................................... 20 
+6.6 Statistical analysis ................................................................................................. 21 
+7 RESULTS ...................................................................................................................... 22 
+7.1 Force parameters.................................................................................................... 22 
+7.2 Knee kinematics .................................................................................................... 26 
+8 DISCUSSION ................................................................................................................ 29 
+8.1 Launch speed ......................................................................................................... 29  
+ 
+ 
+8.2 Peak ground reaction forces .................................................................................. 30 
+8.3 Temporal force parameters .................................................................................... 31 
+8.4 Characteristics of the forces .................................................................................. 32 
+8.5 Knee extension velocity......................................................................................... 33 
+8.6 Knee movement patterns ....................................................................................... 35 
+8.7 Limitations ............................................................................................................. 37 
+8.8 Conclusion ............................................................................................................. 39 
+REFERENCES .................................................................................................................. 40 
+APPENDICES 
+Appendix 1: Run-up orientation and stance deviation examples during the last step. 
+Appendix 2: Ground reaction force curves. 
+Appendix 3: Total resultant force and knee angle curves. 
+Appendix 4: Knee extension velocity and knee angle curves. 
+  
+ 
+ 
+APPENDIX 2. Ground reaction force curves. Force is presented as relative (BW) values. The 
+scale of the Y-axis is adjusted differently in each graph. 
+ 
+  
+ 
+ 
+ 
+APPENDIX 3. Total resultant force (Frt) and knee angle curves. Force is presented as absolute 
+values. The scale of the Y-axis is identical in each graph. 
+ 
+ 
+ 
+ 
+ 
+APPENDIX 4. Knee extension velocity and knee angle curves. The black solid line represents 
+extension velocity, the gray solid line represents knee angle and the dashed vertical line 
+represents disc release.  
+ 
+ 
