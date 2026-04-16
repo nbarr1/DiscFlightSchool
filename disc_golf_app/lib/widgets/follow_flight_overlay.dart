@@ -60,7 +60,6 @@ class _SimilarityTransform {
     final angle2 = atan2(b2.dy - a2.dy, b2.dx - a2.dx);
     final rotation = angle2 - angle1;
 
-    // centroid2 = scale * R(rotation) * centroid1 + t  →  solve for t
     final c1 = (a1 + b1) / 2;
     final c2 = (a2 + b2) / 2;
     final cosR = cos(rotation);
@@ -78,7 +77,6 @@ class _SimilarityTransform {
     );
   }
 
-  /// Linear interpolation between two transforms.
   static _SimilarityTransform lerp(
     _SimilarityTransform a,
     _SimilarityTransform b,
@@ -94,7 +92,6 @@ class _SimilarityTransform {
     );
   }
 
-  /// Apply this transform to a normalized point, returning canvas pixels.
   Offset apply(Offset p, Size size) {
     final cosR = cos(rotation);
     final sinR = sin(rotation);
@@ -103,7 +100,6 @@ class _SimilarityTransform {
     return Offset(rx * size.width, ry * size.height);
   }
 
-  /// Inverse transform: normalized screen coords → normalized world coords.
   Offset inverse(Offset p) {
     final tx = p.dx - translation.dx;
     final ty = p.dy - translation.dy;
@@ -120,22 +116,21 @@ class _SimilarityTransform {
 // FollowFlightPainter
 // ---------------------------------------------------------------------------
 
-/// Renders a follow-flight overlay on top of a video player.
+/// Renders a production-quality flight trail overlay on top of a video player.
 ///
-/// When [anchorFrames] contains ≥ 2 entries, each trail point is world-locked
-/// via a 2-D similarity transform computed from the two fixed background
-/// reference points per anchor frame.  This compensates for camera pan, zoom,
-/// and rotation so the trail stays anchored to the environment — equivalent to
-/// the After-Effects "Create Null and Camera" workflow.
+/// The trail is drawn as a smooth midpoint-quadratic-bezier curve with a soft
+/// glow layer underneath, giving a broadcast-style look.
+///
+/// When [anchorFrames] contains ≥ 2 entries each trail point is world-locked
+/// via a 2-D similarity transform, compensating for camera pan, zoom, and
+/// rotation so the path stays anchored to the environment — equivalent to the
+/// After-Effects "Create Null and Camera" workflow.
 class FollowFlightPainter extends CustomPainter {
   final FlightTrackingResult trackingResult;
   final int currentFrame;
   final bool showTrail;
   final bool showCurrentDisc;
-  final int trailFadeFrames;
   final bool showFullTrail;
-
-  /// World anchor frames.  Requires ≥ 2 entries to enable compensation.
   final List<WorldAnchorFrame>? anchorFrames;
 
   FollowFlightPainter({
@@ -143,7 +138,6 @@ class FollowFlightPainter extends CustomPainter {
     required this.currentFrame,
     this.showTrail = true,
     this.showCurrentDisc = true,
-    this.trailFadeFrames = 30,
     this.showFullTrail = false,
     this.anchorFrames,
   });
@@ -152,9 +146,6 @@ class FollowFlightPainter extends CustomPainter {
   // World-lock helpers
   // ---------------------------------------------------------------------------
 
-  /// Returns the similarity transform at [frame] relative to the earliest
-  /// anchor frame (the world origin).  Transforms are linearly interpolated
-  /// between anchor frames; frames outside the range clamp to nearest.
   _SimilarityTransform _transformAt(int frame) {
     final anchors = anchorFrames;
     if (anchors == null || anchors.length < 2) return _SimilarityTransform.identity;
@@ -163,10 +154,8 @@ class FollowFlightPainter extends CustomPainter {
       ..sort((a, b) => a.frameIndex.compareTo(b.frameIndex));
     final base = sorted.first;
 
-    // Identity at or before the base frame
     if (frame <= base.frameIndex) return _SimilarityTransform.identity;
 
-    // Find surrounding anchor frames
     WorldAnchorFrame prev = base;
     WorldAnchorFrame next = sorted.last;
     for (final a in sorted) {
@@ -191,12 +180,6 @@ class FollowFlightPainter extends CustomPainter {
     return _SimilarityTransform.lerp(tPrev, tNext, t.clamp(0.0, 1.0));
   }
 
-  /// Converts a [DiscDetection] to a world-locked canvas pixel position.
-  ///
-  ///   p_world = T_rec⁻¹(p_screen_at_rec)
-  ///   p_draw  = T_current(p_world) × size
-  ///
-  /// When no anchor frames are set, falls back to simple normalized→pixel scaling.
   Offset _toCanvas(DiscDetection d, Size size) {
     if (anchorFrames == null || anchorFrames!.length < 2) {
       return Offset(d.x * size.width, d.y * size.height);
@@ -213,147 +196,106 @@ class FollowFlightPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final allDetections = trackingResult.detectionsUpToFrame(currentFrame);
+    final allDetections = showFullTrail
+        ? trackingResult.detections
+        : trackingResult.detectionsUpToFrame(currentFrame);
     if (allDetections.isEmpty) return;
 
-    final scaledTrail = allDetections.map((d) => _toCanvas(d, size)).toList();
+    final points = allDetections.map((d) => _toCanvas(d, size)).toList();
 
-    if (showTrail && scaledTrail.length >= 2) {
-      _drawFadingTrail(canvas, scaledTrail, allDetections);
+    if (showTrail && points.length >= 2) {
+      _drawTrail(canvas, points);
     }
 
     if (showCurrentDisc) {
       _drawCurrentDisc(canvas, size);
     }
-
-    if (scaledTrail.isNotEmpty && allDetections.isNotEmpty) {
-      if (showFullTrail) {
-        _drawStartMarker(canvas, scaledTrail.first, 1.0);
-      } else {
-        final startAge = currentFrame - allDetections.first.frameIndex;
-        if (startAge <= trailFadeFrames) {
-          _drawStartMarker(
-              canvas, scaledTrail.first, 1.0 - (startAge / trailFadeFrames));
-        }
-      }
-    }
   }
 
   // ---------------------------------------------------------------------------
-  // Colour gradient: green → yellow → red
+  // Trail — smooth bezier with glow
   // ---------------------------------------------------------------------------
 
-  Color _gradientColor(int index, int total) {
-    if (total <= 0) return Colors.green;
-    final hue = 120.0 * (1.0 - index / total);
-    return HSLColor.fromAHSL(1.0, hue, 0.9, 0.5).toColor();
+  void _drawTrail(Canvas canvas, List<Offset> points) {
+    // Build smooth path: midpoint quadratic bezier through detection points.
+    // Each detection point acts as a bezier control; midpoints between adjacent
+    // points are the on-curve endpoints, producing a C1-continuous smooth curve.
+    final path = Path()..moveTo(points[0].dx, points[0].dy);
+    for (int i = 0; i < points.length - 1; i++) {
+      final mid = Offset(
+        (points[i].dx + points[i + 1].dx) / 2,
+        (points[i].dy + points[i + 1].dy) / 2,
+      );
+      path.quadraticBezierTo(points[i].dx, points[i].dy, mid.dx, mid.dy);
+    }
+    path.lineTo(points.last.dx, points.last.dy);
+
+    final bounds = path.getBounds();
+    if (bounds.isEmpty) return;
+
+    // Glow layer — wide, blurred, semi-transparent
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = _trailGradient(bounds, alpha: 55)
+        ..strokeWidth = 14.0
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
+    );
+
+    // Main line — sharp, full-opacity gradient
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = _trailGradient(bounds, alpha: 230)
+        ..strokeWidth = 3.0
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  Shader _trailGradient(Rect bounds, {required int alpha}) {
+    final a = alpha / 255.0;
+    return LinearGradient(
+      colors: [
+        HSLColor.fromAHSL(a, 120, 0.9, 0.5).toColor(), // green (start)
+        HSLColor.fromAHSL(a,  60, 0.9, 0.5).toColor(), // yellow (mid)
+        HSLColor.fromAHSL(a,   0, 0.9, 0.5).toColor(), // red (end)
+      ],
+    ).createShader(bounds);
   }
 
   // ---------------------------------------------------------------------------
-  // Trail drawing
+  // Current disc indicator
   // ---------------------------------------------------------------------------
-
-  void _drawFadingTrail(
-    Canvas canvas,
-    List<Offset> scaledTrail,
-    List<DiscDetection> detections,
-  ) {
-    final n = scaledTrail.length;
-    if (n < 2) return;
-
-    for (int i = 1; i < n; i++) {
-      final double fade;
-      if (showFullTrail) {
-        fade = 1.0;
-      } else {
-        final detIdx = min(i, detections.length - 1);
-        final age = currentFrame - detections[detIdx].frameIndex;
-        if (age > trailFadeFrames) continue;
-        fade = (1.0 - (age / trailFadeFrames)).clamp(0.0, 1.0);
-      }
-
-      final segColor = _gradientColor(i, n);
-
-      // Glow layer
-      canvas.drawLine(
-        scaledTrail[i - 1],
-        scaledTrail[i],
-        Paint()
-          ..color = segColor.withAlpha((fade * 40).round())
-          ..strokeWidth = 8.0
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round,
-      );
-
-      // Main trail line
-      canvas.drawLine(
-        scaledTrail[i - 1],
-        scaledTrail[i],
-        Paint()
-          ..color = segColor.withAlpha((fade * 220).round())
-          ..strokeWidth = 3.0
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round,
-      );
-    }
-
-    // High-confidence detection dots
-    for (int i = 0; i < n && i < detections.length; i++) {
-      if (detections[i].confidence <= 0.9) continue;
-      final double fade;
-      if (showFullTrail) {
-        fade = 1.0;
-      } else {
-        final age = currentFrame - detections[i].frameIndex;
-        if (age > trailFadeFrames) continue;
-        fade = (1.0 - (age / trailFadeFrames)).clamp(0.0, 1.0);
-      }
-      canvas.drawCircle(
-        scaledTrail[i],
-        2.5,
-        Paint()
-          ..color = Colors.white.withAlpha((fade * 160).round())
-          ..style = PaintingStyle.fill,
-      );
-    }
-  }
 
   void _drawCurrentDisc(Canvas canvas, Size size) {
     final detection = trackingResult.detectionAtFrame(currentFrame);
     if (detection == null) return;
+    final c = Offset(detection.x * size.width, detection.y * size.height);
 
-    // Current disc is always at its raw screen position — the world-lock
-    // round-trips T_cur⁻¹ then T_cur which cancels to the identity.
-    final center = Offset(detection.x * size.width, detection.y * size.height);
-
-    canvas.drawCircle(center, 14, Paint()..color = Colors.orange.withAlpha(50));
-    canvas.drawCircle(center, 6, Paint()..color = Colors.white);
+    // Soft outer glow
     canvas.drawCircle(
-      center,
-      6,
+      c,
+      16,
       Paint()
-        ..color = Colors.orange
+        ..color = Colors.white.withAlpha(28)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+    // White ring
+    canvas.drawCircle(
+      c,
+      8,
+      Paint()
+        ..color = Colors.white
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );
-  }
-
-  void _drawStartMarker(Canvas canvas, Offset start, double fade) {
-    canvas.drawCircle(
-      start,
-      6,
-      Paint()
-        ..color = Colors.green.withAlpha((fade * 255).round())
-        ..style = PaintingStyle.fill,
-    );
-    canvas.drawCircle(
-      start,
-      6,
-      Paint()
-        ..color = Colors.white.withAlpha((fade * 255).round())
-        ..strokeWidth = 2
-        ..style = PaintingStyle.stroke,
-    );
+    // Solid center dot
+    canvas.drawCircle(c, 3, Paint()..color = Colors.white);
   }
 
   @override

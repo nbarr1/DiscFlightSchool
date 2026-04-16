@@ -16,6 +16,14 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+/// Guided setup phases for the flight tracker.
+enum _SetupPhase {
+  camera,    // Asking whether camera was stationary
+  anchoring, // Placing WorldAnchorFrame pairs (camera moved)
+  marking,   // Tapping disc positions
+  result,    // Flight path generated — clean overlay shown
+}
+
 /// A keyframe marked by the user — disc position at a specific frame.
 class _FlightKeyframe {
   final int frameIndex;
@@ -79,15 +87,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   Offset? _targetLineStart; // Normalized 0-1
   Offset? _targetLineEnd;   // Normalized 0-1
 
-  // Stabilization state
-  bool _stabilizeEnabled = false;
-  String? _stabilizedVideoPath; // Path to FFmpeg-stabilized temp file
-  bool _isStabilizing = false;
+  // Guided setup phase
+  _SetupPhase _phase = _SetupPhase.camera;
 
-  // Lock scene (world-anchor) state — AE "Create Null and Camera" equivalent
-  bool _lockSceneMode = false;
+  // World-anchor state — AE "Create Null and Camera" equivalent
   final List<WorldAnchorFrame> _anchorFrames = [];
-  Offset? _pendingAnchorA; // Normalized 0-1, first tap in lock mode
+  Offset? _pendingAnchorA; // Normalized 0-1, first tap in anchor mode
 
   // Cached service references so dispose() doesn't need context
   VideoService? _videoService;
@@ -121,6 +126,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       _isInitialized = true;
     });
     _controller.addListener(_onVideoProgress);
+    // Show camera stability question on first init only
+    if (_phase == _SetupPhase.camera) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showCameraQuestion();
+      });
+    }
   }
 
   void _onVideoProgress() {
@@ -148,10 +159,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _controller.removeListener(_onVideoProgress);
     _controller.dispose();
     _capturedFrame?.dispose();
-    // Clean up stabilized temp file when leaving the screen
-    if (_stabilizedVideoPath != null) {
-      _videoService?.deleteStabilizedVideo(_stabilizedVideoPath!);
-    }
     super.dispose();
   }
 
@@ -207,7 +214,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     // Use the tracked zoom position, falling back to the release position
     final position = _zoomPosition ?? details.localPosition;
     if (_videoWidgetSize != Size.zero) {
-      if (_lockSceneMode) {
+      if (_phase == _SetupPhase.anchoring) {
         _placeLockPoint(position);
       } else {
         _placeKeyframe(position);
@@ -281,7 +288,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   void _addKeyframeFromTap(TapUpDetails details) {
-    if (_lockSceneMode) {
+    if (_phase == _SetupPhase.anchoring) {
       _placeLockPoint(details.localPosition);
       return;
     }
@@ -289,7 +296,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       _placeTargetLinePoint(details.localPosition);
       return;
     }
-    _placeKeyframe(details.localPosition);
+    if (_phase == _SetupPhase.marking) _placeKeyframe(details.localPosition);
   }
 
   void _placeTargetLinePoint(Offset localPosition) {
@@ -342,6 +349,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       _firstBoxCorner = null;
       _anchorFrames.clear();
       _pendingAnchorA = null;
+      _phase = _SetupPhase.marking;
     });
   }
 
@@ -397,6 +405,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             (_controller.value.duration.inMilliseconds * _frameFps / 1000)
                 .round(),
       );
+      _phase = _SetupPhase.result;
     });
 
     // Collect training data if opted in
@@ -481,76 +490,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
   }
 
-  // --- Stabilization ---
-
-  /// Toggle video stabilization on or off.
-  ///
-  /// When enabling: runs the two-pass FFmpeg vidstab pipeline via [VideoService],
-  /// then re-initializes the video player with the stabilized output.  Keyframes
-  /// placed after stabilization are frame-relative to the locked background, so
-  /// the rendered trail stays anchored to the environment even when the camera
-  /// panned during filming.
-  ///
-  /// When disabling: reverts to the original video and cleans up the temp file.
-  Future<void> _toggleStabilization() async {
-    if (_isStabilizing) return;
-
-    if (_stabilizeEnabled) {
-      // Turn off — revert to original
-      setState(() {
-        _stabilizeEnabled = false;
-        _isInitialized = false;
-        _keyframes.clear();
-        _trackingResult = null;
-      });
-      _controller.removeListener(_onVideoProgress);
-      await _controller.dispose();
-      if (!mounted) return;
-
-      if (_stabilizedVideoPath != null) {
-        await _videoService?.deleteStabilizedVideo(_stabilizedVideoPath!);
-        _stabilizedVideoPath = null;
-      }
-
-      await _initializeVideo();
-      return;
-    }
-
-    // Turn on — stabilize then reload
-    setState(() => _isStabilizing = true);
-
-    try {
-      final stabilized = await _videoService!.stabilizeVideo(
-        widget.videoPath,
-        onStatus: (msg) => debugPrint('[stabilization] $msg'),
-      );
-      if (!mounted) return;
-
-      _controller.removeListener(_onVideoProgress);
-      await _controller.dispose();
-      if (!mounted) return;
-
-      setState(() {
-        _stabilizedVideoPath = stabilized;
-        _stabilizeEnabled = true;
-        _isInitialized = false;
-        _keyframes.clear();
-        _trackingResult = null;
-      });
-
-      await _initializeVideo(stabilized);
-    } catch (e) {
-      debugPrint('Stabilization failed: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Stabilization failed: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isStabilizing = false);
-    }
-  }
-
   double _catmullRom(
       double p0, double p1, double p2, double p3, double t) {
     final t2 = t * t;
@@ -614,7 +553,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
       final videoWidth = _controller.value.size.width;
       final videoHeight = _controller.value.size.height;
-      final trackingFps = _trackingResult!.fps;
 
       final tempDir = await getTemporaryDirectory();
       final overlayDir = Directory('${tempDir.path}/flight_overlays');
@@ -800,78 +738,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                // Instructions
-                if (_keyframes.isEmpty && _trackingResult == null)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
-                    color: Colors.blue.withAlpha(40),
-                    child: const Text(
-                      'Tap to mark disc position, or hold for zoom precision. '
-                      'Mark 2+ keyframes, then tap Process to generate path.',
-                      style:
-                          TextStyle(color: Colors.white70, fontSize: 12),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-
-                // Stabilization active banner
-                if (_stabilizeEnabled)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 6),
-                    color: Colors.teal.shade900,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.check_circle,
-                            color: Colors.tealAccent, size: 14),
-                        const SizedBox(width: 6),
-                        const Expanded(
-                          child: Text(
-                            'Showing stabilized video — flight path will be '
-                            'anchored to the environment.',
-                            style: TextStyle(
-                                color: Colors.tealAccent, fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                // Lock scene mode instruction banner
-                if (_lockSceneMode)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 6),
-                    color: Colors.purple.shade900,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.location_pin,
-                            color: Colors.purpleAccent, size: 14),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            _pendingAnchorA == null
-                                ? 'Tap a fixed background point (A) — e.g. tee sign, tree, basket'
-                                : 'Tap a second fixed background point (B) to set the anchor pair',
-                            style: const TextStyle(
-                                color: Colors.purpleAccent, fontSize: 12),
-                          ),
-                        ),
-                        if (_anchorFrames.isNotEmpty)
-                          Text(
-                            '${_anchorFrames.length} anchor${_anchorFrames.length == 1 ? '' : 's'}',
-                            style: const TextStyle(
-                                color: Colors.purpleAccent,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold),
-                          ),
-                      ],
-                    ),
-                  ),
+                // Phase-aware instruction banner
+                _buildPhaseBanner(),
 
                 // Video with overlays
                 Expanded(
@@ -906,6 +774,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                       painter: FollowFlightPainter(
                                         trackingResult: _trackingResult!,
                                         currentFrame: _currentFrame,
+                                        showFullTrail: true,
+                                        showCurrentDisc: _phase != _SetupPhase.result,
                                         anchorFrames: _anchorFrames.length >= 2
                                             ? _anchorFrames
                                             : null,
@@ -913,22 +783,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                     ),
                                   ),
 
-                                // Keyframe markers (before processing).
-                                // Hidden during zoom mode — the magnifier's
-                                // direction arrow shows where the previous
-                                // disc was without the finger obscuring it.
+                                // Keyframe crosshairs — visible only during marking, not after result
                                 if (_showOverlay &&
-                                    _trackingResult == null &&
+                                    _phase == _SetupPhase.marking &&
                                     !_isZoomMode)
-                                  ..._keyframes
-                                      .asMap()
-                                      .entries
-                                      .map((entry) =>
-                                          _buildKeyframeMarker(
-                                            entry.key,
-                                            entry.value,
-                                            constraints.biggest,
-                                          )),
+                                  ..._keyframes.map((kf) =>
+                                      _buildKeyframeCrosshair(
+                                          kf, constraints.biggest)),
 
                                 // Bounding box overlays for keyframes with box data
                                 if (_showOverlay && _trackingResult == null && !_isZoomMode)
@@ -987,8 +848,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                     ),
                                   ),
 
-                                // Anchor point overlay (lock scene mode)
-                                if (_lockSceneMode || _anchorFrames.isNotEmpty)
+                                // Anchor point overlay — only visible during anchoring phase
+                                if (_phase == _SetupPhase.anchoring)
                                   Positioned.fill(
                                     child: IgnorePointer(
                                       child: CustomPaint(
@@ -1177,48 +1038,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
-  Widget _buildKeyframeMarker(
-      int index, _FlightKeyframe kf, Size videoSize) {
-    final x = kf.x * videoSize.width - 12;
-    final y = kf.y * videoSize.height - 12;
-
-    final isCurrentFrame = kf.frameIndex == _currentFrame;
-
-    return Positioned(
-      left: x,
-      top: y,
-      child: IgnorePointer(
-        child: Container(
-          width: 24,
-          height: 24,
-          decoration: BoxDecoration(
-            color: isCurrentFrame
-                ? Colors.green
-                : Colors.red.withAlpha(200),
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(120),
-                blurRadius: 4,
-              ),
-            ],
-          ),
-          child: Center(
-            child: Text(
-              '${index + 1}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildBoxOverlay(_FlightKeyframe kf, Size videoSize) {
     final w = (kf.boxWidth ?? 0) * videoSize.width;
     final h = (kf.boxHeight ?? 0) * videoSize.height;
@@ -1348,7 +1167,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   Widget _buildActionButtons() {
-    final hasEnoughKeyframes = _keyframes.length >= 2;
     final trainingService =
         Provider.of<TrainingDataService>(context, listen: false);
 
@@ -1359,162 +1177,69 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         spacing: 8,
         runSpacing: 6,
         children: [
-          _buildStabilizeToggle(),
-          _buildLockSceneButton(),
-          if (trainingService.isOptedIn)
-            _buildBoxModeToggle(),
-          _buildTargetLineButton(),
-          ElevatedButton.icon(
-            onPressed:
-                _keyframes.isEmpty ? null : _undoLastKeyframe,
-            icon: const Icon(Icons.undo, size: 16),
-            label: const Text('Undo', style: TextStyle(fontSize: 12)),
-          ),
-          ElevatedButton.icon(
-            onPressed: hasEnoughKeyframes ? _processKeyframes : null,
-            icon: const Icon(Icons.auto_awesome, size: 16),
-            label:
-                const Text('Process', style: TextStyle(fontSize: 12)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  hasEnoughKeyframes ? Colors.green : null,
-              foregroundColor:
-                  hasEnoughKeyframes ? Colors.white : null,
+          if (_phase == _SetupPhase.anchoring) ...[
+            ElevatedButton.icon(
+              onPressed: _anchorFrames.length >= 2
+                  ? () => setState(() => _phase = _SetupPhase.marking)
+                  : null,
+              icon: const Icon(Icons.arrow_forward, size: 16),
+              label: const Text('Continue ›', style: TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _anchorFrames.length >= 2 ? Colors.teal : null,
+                foregroundColor: _anchorFrames.length >= 2 ? Colors.white : null,
+              ),
             ),
-          ),
-          ElevatedButton.icon(
-            onPressed: (_keyframes.isEmpty && _trackingResult == null)
-                ? null
-                : _clearAll,
-            icon: const Icon(Icons.clear, size: 16),
-            label:
-                const Text('Clear', style: TextStyle(fontSize: 12)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+            if (_anchorFrames.isNotEmpty)
+              ElevatedButton.icon(
+                onPressed: () => setState(() {
+                  _anchorFrames.clear();
+                  _pendingAnchorA = null;
+                }),
+                icon: const Icon(Icons.undo, size: 16),
+                label: const Text('Re-do', style: TextStyle(fontSize: 12)),
+              ),
+          ],
+          if (_phase == _SetupPhase.marking) ...[
+            if (_anchorFrames.isNotEmpty)
+              TextButton.icon(
+                onPressed: () => setState(() => _phase = _SetupPhase.anchoring),
+                icon: const Icon(Icons.arrow_back, size: 14),
+                label: const Text('Anchoring', style: TextStyle(fontSize: 11)),
+              ),
+            if (trainingService.isOptedIn) _buildBoxModeToggle(),
+            ElevatedButton.icon(
+              onPressed: _keyframes.isEmpty ? null : _undoLastKeyframe,
+              icon: const Icon(Icons.undo, size: 16),
+              label: const Text('Undo', style: TextStyle(fontSize: 12)),
             ),
-          ),
+            ElevatedButton.icon(
+              onPressed: _keyframes.length >= 2 ? _processKeyframes : null,
+              icon: const Icon(Icons.auto_awesome, size: 16),
+              label: const Text('Process', style: TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _keyframes.length >= 2 ? Colors.green : null,
+                foregroundColor: _keyframes.length >= 2 ? Colors.white : null,
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: _keyframes.isEmpty ? null : _clearAll,
+              icon: const Icon(Icons.clear, size: 16),
+              label: const Text('Clear', style: TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+          if (_phase == _SetupPhase.result) ...[
+            ElevatedButton.icon(
+              onPressed: () => setState(() => _phase = _SetupPhase.marking),
+              icon: const Icon(Icons.arrow_back, size: 16),
+              label: const Text('Edit ←', style: TextStyle(fontSize: 12)),
+            ),
+            _buildTargetLineButton(),
+          ],
         ],
-      ),
-    );
-  }
-
-  Widget _buildStabilizeToggle() {
-    return GestureDetector(
-      onTap: _isStabilizing ? null : _toggleStabilization,
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: _stabilizeEnabled
-              ? Colors.teal.shade800
-              : Colors.grey.shade800,
-          borderRadius: BorderRadius.circular(8),
-          border: _stabilizeEnabled
-              ? Border.all(color: Colors.tealAccent, width: 1.5)
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_isStabilizing)
-              const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white),
-              )
-            else
-              Icon(
-                Icons.videocam_outlined,
-                size: 16,
-                color: _stabilizeEnabled
-                    ? Colors.tealAccent
-                    : Colors.grey,
-              ),
-            const SizedBox(width: 4),
-            Text(
-              _isStabilizing
-                  ? 'Stabilizing…'
-                  : (_stabilizeEnabled ? 'Stabilized' : 'Stabilize'),
-              style: TextStyle(
-                fontSize: 12,
-                color: _stabilizeEnabled
-                    ? Colors.tealAccent
-                    : Colors.grey,
-                fontWeight: _stabilizeEnabled
-                    ? FontWeight.bold
-                    : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLockSceneButton() {
-    final hasAnchors = _anchorFrames.isNotEmpty;
-    final isActive = _lockSceneMode;
-    final label = isActive
-        ? (_pendingAnchorA == null ? 'Tap A…' : 'Tap B…')
-        : hasAnchors
-            ? 'Locked ✓'
-            : 'Lock Scene';
-
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          if (isActive) {
-            _lockSceneMode = false;
-            _pendingAnchorA = null;
-          } else {
-            _lockSceneMode = true;
-            _pendingAnchorA = null;
-          }
-        });
-      },
-      onLongPress: hasAnchors
-          ? () {
-              setState(() {
-                _anchorFrames.clear();
-                _pendingAnchorA = null;
-                _lockSceneMode = false;
-              });
-            }
-          : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive
-              ? Colors.purple.shade800
-              : hasAnchors
-                  ? Colors.purple.shade900
-                  : Colors.grey.shade800,
-          borderRadius: BorderRadius.circular(8),
-          border: (isActive || hasAnchors)
-              ? Border.all(color: Colors.purpleAccent, width: 1.5)
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.location_pin,
-              size: 16,
-              color: (isActive || hasAnchors) ? Colors.purpleAccent : Colors.grey,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: (isActive || hasAnchors) ? Colors.purpleAccent : Colors.grey,
-                fontWeight: (isActive || hasAnchors) ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1678,6 +1403,169 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     final minutes = twoDigits(duration.inMinutes.remainder(60));
     final seconds = twoDigits(duration.inSeconds.remainder(60));
     return '$minutes:$seconds';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phase UI helpers
+  // ---------------------------------------------------------------------------
+
+  Widget _buildKeyframeCrosshair(_FlightKeyframe kf, Size videoSize) {
+    final cx = kf.x * videoSize.width;
+    final cy = kf.y * videoSize.height;
+    const halfSize = 10.0;
+    final isCurrentFrame = kf.frameIndex == _currentFrame;
+    return Positioned(
+      left: cx - halfSize,
+      top: cy - halfSize,
+      child: IgnorePointer(
+        child: Opacity(
+          opacity: isCurrentFrame ? 1.0 : 0.40,
+          child: SizedBox(
+            width: halfSize * 2,
+            height: halfSize * 2,
+            child: CustomPaint(painter: _KeyframeCrosshairPainter()),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhaseBanner() {
+    switch (_phase) {
+      case _SetupPhase.anchoring:
+        final sub = _pendingAnchorA == null
+            ? 'Tap point A — a fixed background landmark (tree, basket, sign)'
+            : 'Now tap point B — a second distinct landmark in the same frame';
+        return _instructionBanner(
+          'Step 1 of 2 — Anchor the Environment',
+          sub,
+          Colors.teal.shade900,
+        );
+      case _SetupPhase.marking:
+        return _instructionBanner(
+          'Step 2 of 2 — Mark the Disc',
+          'Tap the disc in 2+ frames (hold for zoom precision), then tap Process',
+          const Color(0xFF1a237e),
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _instructionBanner(String title, String subtitle, Color color) {
+    return Container(
+      width: double.infinity,
+      color: color,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: const TextStyle(color: Color(0xCCFFFFFF), fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCameraQuestion() {
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: const Color(0xFF1a1a2e),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _CameraQuestionSheet(
+        onFixed: () {
+          Navigator.pop(context);
+          setState(() => _phase = _SetupPhase.marking);
+        },
+        onMoved: () {
+          Navigator.pop(context);
+          setState(() => _phase = _SetupPhase.anchoring);
+        },
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _CameraQuestionSheet
+// ---------------------------------------------------------------------------
+
+class _CameraQuestionSheet extends StatelessWidget {
+  final VoidCallback onFixed;
+  final VoidCallback onMoved;
+
+  const _CameraQuestionSheet({required this.onFixed, required this.onMoved});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Was the camera stationary?',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'If the camera panned or zoomed during the throw, we\'ll correct for it first.',
+              style: TextStyle(color: Color(0xCCFFFFFF), fontSize: 14),
+            ),
+            const SizedBox(height: 28),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: onFixed,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white54),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('Yes, camera was fixed'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: onMoved,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('No, camera moved'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -2097,4 +1985,25 @@ class _AnchorOverlayPainter extends CustomPainter {
       old.currentFrame != currentFrame ||
       old.anchorFrames != anchorFrames ||
       old.pendingA != pendingA;
+}
+
+/// Small ±6 px crosshair drawn at each manually placed keyframe position
+/// during the marking phase.
+class _KeyframeCrosshairPainter extends CustomPainter {
+  const _KeyframeCrosshairPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    const arm = 6.0;
+    final paint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 1.5;
+    canvas.drawLine(Offset(cx - arm, cy), Offset(cx + arm, cy), paint);
+    canvas.drawLine(Offset(cx, cy - arm), Offset(cx, cy + arm), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
 }
