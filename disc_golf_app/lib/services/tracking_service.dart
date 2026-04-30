@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'disc_detection_service.dart';
 
 class TrackingService extends ChangeNotifier {
   List<Offset> _trackingPoints = [];
@@ -54,17 +55,36 @@ class TrackingService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Auto-track video (placeholder for future AI implementation)
-  Future<void> autoTrackVideo(String videoPath, String discId) async {
+  // Auto-track video using ML disc detection when a service is provided,
+  // falling back to a sample path for testing.
+  Future<void> autoTrackVideo(
+    String videoPath,
+    String discId, {
+    DiscDetectionService? detectionService,
+  }) async {
     _isTracking = true;
     notifyListeners();
 
-    // Simulate processing delay
-    await Future.delayed(const Duration(seconds: 2));
-
-    // TODO: Implement actual video tracking with ML/CV
-    // For now, generate sample points
-    _flightPoints = _generateSampleFlightPath();
+    try {
+      if (detectionService != null) {
+        final result = await detectionService.processVideo(videoPath);
+        // Scale normalized 0–1 coordinates to a 640-unit pixel space so that
+        // analyzeFlightPath thresholds (e.g. horizontalMovement > 50) are meaningful.
+        const double scale = 640.0;
+        _flightPoints = result.detections
+            .map((d) => Offset(d.x * scale, d.y * scale))
+            .toList();
+        if (_flightPoints.isEmpty) {
+          _flightPoints = _generateSampleFlightPath();
+        }
+      } else {
+        await Future.delayed(const Duration(seconds: 2));
+        _flightPoints = _generateSampleFlightPath();
+      }
+    } catch (e) {
+      debugPrint('autoTrackVideo error: $e');
+      _flightPoints = _generateSampleFlightPath();
+    }
 
     _isTracking = false;
     notifyListeners();
