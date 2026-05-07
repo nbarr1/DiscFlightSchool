@@ -13,6 +13,7 @@ from typing import Any
 from fastapi import UploadFile
 
 from .config import Settings
+from .protocols import DatasetCounts, ModelInfo
 from .validation import normalized_image_ext, safe_child, validate_image_signature
 
 
@@ -50,7 +51,7 @@ class FileStorage:
         stats["last_upload"] = datetime.now().isoformat()
         self.save_stats(stats)
 
-    def dataset_counts(self) -> dict[str, int]:
+    def dataset_counts(self) -> DatasetCounts:
         return {
             "full_images": len(list(self.settings.images_dir.glob("*_full.*"))),
             "all_images": len(list(self.settings.images_dir.glob("*.*"))),
@@ -97,7 +98,7 @@ class FileStorage:
         label_dest.write_text(label.strip())
         self.record_upload()
 
-    def latest_model_info(self) -> dict[str, Any] | None:
+    def latest_model_info(self) -> ModelInfo | None:
         tflite_files = list(self.settings.models_dir.glob("*.tflite"))
         if not tflite_files:
             return None

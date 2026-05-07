@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 
 from .config import Settings
+from .protocols import StorageBackend
 from .storage import FileStorage
 from .training import TrainingManager
 from .validation import sample_id_error, yolo_label_error
@@ -21,9 +22,9 @@ from .validation import sample_id_error, yolo_label_error
 logger = logging.getLogger("disc_flight_school.training_server")
 
 
-def create_app(settings: Settings) -> FastAPI:
+def create_app(settings: Settings, storage: StorageBackend | None = None) -> FastAPI:
     """Build the FastAPI app with explicit dependencies."""
-    storage = FileStorage(settings)
+    storage = storage or FileStorage(settings)
     storage.initialize()
     trainer = TrainingManager(settings, storage)
 

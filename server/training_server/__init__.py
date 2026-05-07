@@ -2,5 +2,6 @@
 
 from .app import create_app
 from .config import Settings
+from .protocols import StorageBackend
 
-__all__ = ["Settings", "create_app"]
+__all__ = ["Settings", "StorageBackend", "create_app"]

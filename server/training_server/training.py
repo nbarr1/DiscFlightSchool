@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Any
 
 from .config import Settings
-from .storage import FileStorage
+from .protocols import StorageBackend
 
 logger = logging.getLogger("disc_flight_school.training_server.training")
 
@@ -18,7 +18,7 @@ logger = logging.getLogger("disc_flight_school.training_server.training")
 class TrainingManager:
     """Thread-backed training manager preserving the original endpoint behavior."""
 
-    def __init__(self, settings: Settings, storage: FileStorage) -> None:
+    def __init__(self, settings: Settings, storage: StorageBackend) -> None:
         self._settings = settings
         self._storage = storage
         self._lock = threading.Lock()

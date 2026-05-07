@@ -258,6 +258,7 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 - `server/Dockerfile`
 - `server/Procfile`
 - `server/README.md`
+- `server/dataset/dataset.yaml`
 - `server/dataset/images/train/.gitkeep`
 - `server/dataset/labels/train/.gitkeep`
 - `server/main.py`
@@ -270,6 +271,7 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 - `server/training_server/__init__.py`
 - `server/training_server/app.py`
 - `server/training_server/config.py`
+- `server/training_server/protocols.py`
 - `server/training_server/storage.py`
 - `server/training_server/training.py`
 - `server/training_server/validation.py`

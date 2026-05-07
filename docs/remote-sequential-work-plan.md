@@ -47,7 +47,7 @@ This plan breaks the remaining rebuild work into reviewable remote/virtual slice
 
 ## Step 4 — Server Storage Adapter Boundary
 
-**Status:** In progress; export-file concurrency hardening is implemented, adapter protocols remain next.
+**Status:** Implemented in this update.
 
 **Goal:** Prepare for PostgreSQL/object-storage migration without changing the current filesystem behavior.
 
@@ -57,10 +57,11 @@ This plan breaks the remaining rebuild work into reviewable remote/virtual slice
 - Filesystem adapter remains the default.
 - Tests run against the adapter interface.
 - Keep export generation thread-safe with unique ZIP paths and cleanup after responses.
+- App factory accepts an injected storage backend so future durable adapters can be tested without changing endpoint code.
 
 ## Step 5 — Flutter Data-Layer Foundation
 
-**Status:** Queued pending Flutter SDK availability in CI/local environment.
+**Status:** Next recommended remote slice, pending Flutter SDK availability in CI/local environment.
 
 **Goal:** Start the client rebuild without replacing UI flows first.
 

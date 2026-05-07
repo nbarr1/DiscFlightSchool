@@ -47,6 +47,7 @@ No persistent schema migration is required for this server slice. Existing local
 - Added request-id propagation and structured request lifecycle logging as the second remote-verifiable Phase 4 follow-up.
 - Added validated remote training configuration knobs and tests as the third remote-verifiable Phase 4 follow-up.
 - Hardened upload/export concurrency by moving blocking handlers to FastAPI's thread pool and generating unique temporary export ZIP files.
+- Added the storage backend protocol boundary and verified the filesystem adapter against it as the fourth remote-verifiable Phase 4 follow-up.
 
 ## Remaining Phase 4 Work
 
