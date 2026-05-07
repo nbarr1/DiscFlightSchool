@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/knowledge_base.dart';
@@ -11,6 +12,7 @@ class KnowledgeBaseService extends ChangeNotifier {
   List<KBArticle> _articles = [];
   List<KBCategory> _categories = [];
   String? _apiKey;
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
   bool _isLoaded = false;
 
   List<KBStudy> get studies => _studies;
@@ -81,20 +83,44 @@ class KnowledgeBaseService extends ChangeNotifier {
 
   Future<void> _loadApiKey() async {
     final prefs = await SharedPreferences.getInstance();
-    _apiKey = prefs.getString('anthropic_api_key');
+    try {
+      _apiKey = await _secureStorage.read(key: 'anthropic_api_key');
+      final legacyKey = prefs.getString('anthropic_api_key');
+      if ((_apiKey == null || _apiKey!.isEmpty) &&
+          legacyKey != null &&
+          legacyKey.isNotEmpty) {
+        _apiKey = legacyKey;
+        await _secureStorage.write(key: 'anthropic_api_key', value: legacyKey);
+      }
+      await prefs.remove('anthropic_api_key');
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Secure storage unavailable for Anthropic API key: $e');
+      _apiKey = null;
+    }
   }
 
   Future<void> setApiKey(String key) async {
     _apiKey = key.trim();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('anthropic_api_key', _apiKey!);
+    try {
+      if (_apiKey!.isEmpty) {
+        await _secureStorage.delete(key: 'anthropic_api_key');
+      } else {
+        await _secureStorage.write(key: 'anthropic_api_key', value: _apiKey!);
+      }
+    } catch (e) {
+      debugPrint('Failed to update Anthropic API key in secure storage: $e');
+    }
     notifyListeners();
   }
 
   Future<void> clearApiKey() async {
     _apiKey = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('anthropic_api_key');
+    try {
+      await _secureStorage.delete(key: 'anthropic_api_key');
+    } catch (e) {
+      debugPrint('Failed to clear Anthropic API key from secure storage: $e');
+    }
     notifyListeners();
   }
 

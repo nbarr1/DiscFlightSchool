@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'services/tracking_service.dart';
 import 'services/video_service.dart';
 import 'services/posture_analysis_service.dart';
-// import 'services/scoring_service.dart'; // ARCHIVED
+import 'services/scoring_service.dart';
 import 'services/disc_detection_service.dart';
 import 'services/form_history_service.dart';
 import 'services/roulette_history_service.dart';
@@ -42,7 +42,7 @@ class _DiscGolfAppState extends State<DiscGolfApp> {
         ChangeNotifierProvider(create: (_) => TrackingService()),
         ChangeNotifierProvider(create: (_) => VideoService()),
         ChangeNotifierProvider.value(value: _postureAnalysisService),
-        // ChangeNotifierProvider(create: (_) => ScoringService()), // ARCHIVED
+        ChangeNotifierProvider(create: (_) => ScoringService()),
         ChangeNotifierProvider.value(value: _discDetectionService),
         ChangeNotifierProvider(create: (_) => TrainingDataService()..init()),
         ChangeNotifierProvider(create: (_) => KnowledgeBaseService()),

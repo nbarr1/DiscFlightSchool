@@ -46,15 +46,13 @@ Flutter App (disc_golf_app/)
 │   └── disc_detector.tflite   Updated via server OTA
 │
 ├── Form Coach              Google ML Kit pose detection
-│   ├── Pro baseline DB     assets/data/pro_baseline_db.json (v4.0)
-│   └── Biomechanics API    GET /api/biomechanics/* from server
+│   └── Pro baseline DB     assets/data/pro_baseline_db.json (v4.0)
 │
 └── Knowledge Base          assets/data/knowledge_base.json
 
 Python Server (server/)
 ├── Training data store     YOLO images + labels
 ├── Model versioning        .tflite served to app
-├── Biomechanics DB         throws.json / players.json
 └── Training runner         YOLOv8 → TFLite pipeline
 
 Data Pipeline (Discandformdetection — separate repo)
@@ -78,24 +76,16 @@ Run with: `uvicorn main:app --host 0.0.0.0 --port 8000`
 | GET | `/api/model/download` | Download latest `.tflite` |
 
 ### Training data
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/training/upload` | Upload single sample from app |
-| POST | `/api/training/bulk-import` | Ingest YOLO ZIP from data pipeline |
-| GET | `/api/training/stats` | Sample counts by source |
-| GET | `/api/training/sources` | App vs pipeline breakdown |
-| GET | `/api/training/export` | Download full dataset as ZIP |
-| POST | `/api/training/start` | Kick off YOLOv8 training run |
-| GET | `/api/training/status` | Training run status |
+| Method | Endpoint | Description | Auth |
+|---|---|---|---|
+| POST | `/api/training/upload` | Upload one validated JPEG/PNG sample plus one YOLO label row | `X-App-Key` |
+| GET | `/api/training/stats` | Dataset counts | none |
+| GET | `/api/training/export` | Download full dataset as ZIP | `X-App-Key` |
+| POST | `/api/training/start` | Kick off YOLOv8 training run | `X-App-Key` |
+| GET | `/api/training/status` | Training run status | none |
 
-### Biomechanics
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/biomechanics/sync` | Ingest `throws.json` from pipeline |
-| GET | `/api/biomechanics/players` | Player list with aggregate stats |
-| GET | `/api/biomechanics/player/{name}` | Full profile + throw records |
-| GET | `/api/biomechanics/throw/{clip_id}` | Single throw record |
-| GET | `/api/biomechanics/stats` | Dataset overview |
+### Not currently implemented
+The previous README mentioned bulk-import and biomechanics sync endpoints. They are not present in `server/main.py`; treat them as future work unless they are added with tests and OpenAPI documentation.
 
 ---
 
@@ -120,7 +110,8 @@ DiscFlightSchool/
 │   │   │   └── knowledge_base/
 │   │   ├── services/
 │   │   │   ├── posture_analysis_service.dart
-│   │   │   ├── biomechanics_service.dart
+│   │   │   ├── disc_detection_service.dart
+│   │   │   ├── training_data_service.dart
 │   │   │   ├── video_service.dart
 │   │   │   ├── video_frame_extractor.dart
 │   │   │   ├── form_history_service.dart
@@ -141,11 +132,8 @@ DiscFlightSchool/
     ├── dataset/
     │   ├── images/train/
     │   └── labels/train/
-    ├── models/
-    │   └── disc_detector_v*.tflite
-    └── biomechanics/
-        ├── throws.json
-        └── players.json
+    └── models/
+        └── disc_detector_v*.tflite
 ```
 
 ---
@@ -166,26 +154,26 @@ Requires Flutter 3.x. Tested on Android; iOS compatible.
 
 ```bash
 cd server
-pip install fastapi uvicorn ultralytics
+pip install -r requirements.txt
+export APP_API_KEY=replace-with-a-long-random-secret
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-Set the server URL in the app via the `SERVER_URL` build environment variable or update the default in `biomechanics_service.dart`.
+The server refuses to start without `APP_API_KEY`. Enter the same private key in the app's Training Settings > Advanced section before uploading training samples. Do not commit or publish production API keys.
 
 ### Environment variables (server)
 
-| Variable | Default | Description |
+| Variable | Required | Description |
 |---|---|---|
-| `APP_API_KEY` | `disc-flight-school-v1` | Shared secret for app requests |
-| `PIPELINE_API_KEY` | same as above | Separate key for data pipeline |
-| `TRAINING_DEVICE` | `0` | GPU device for YOLOv8 (`0` = first GPU, `cpu` = CPU) |
-| `HSA_OVERRIDE_GFX_VERSION` | `12.0.0` | Required for AMD RX 9060 XT (RDNA4) |
+| `APP_API_KEY` | Yes | Private key required by upload/export/training endpoints. No default is provided. |
+| `CORS_ALLOW_ORIGINS` | No | Comma-separated browser origins allowed by FastAPI CORS. Empty by default. |
+| `MAX_UPLOAD_BYTES` | No | Maximum bytes per uploaded image; defaults to 8 MiB. |
 
 ---
 
 ## Data Pipeline
 
-The disc detection model and biomechanics database are built and maintained by a separate pipeline repo: [Discandformdetection](https://github.com/nbarr1/Discandformdetection).
+The disc detection model and pro-reference data are built and maintained by a separate pipeline repo: [Discandformdetection](https://github.com/nbarr1/Discandformdetection).
 
 That pipeline ingests JomezPro 2025 tournament footage, segments individual throws, annotates bounding boxes via CVAT, and runs ViTPose-B pose extraction. Outputs sync to this server via:
 
@@ -197,10 +185,10 @@ After syncing annotations, retrain the disc detector:
 
 ```bash
 curl -X POST http://your-server:8000/api/training/start \
-  -H "X-App-Key: disc-flight-school-v1"
+  -H "X-App-Key: $APP_API_KEY"
 ```
 
-The app checks `/api/model/version` on launch and downloads any updated `.tflite` automatically.
+The app can check `/api/model/version` from Training Settings, verifies the downloaded model's SHA-256, and reloads the model after a successful update.
 
 ---
 

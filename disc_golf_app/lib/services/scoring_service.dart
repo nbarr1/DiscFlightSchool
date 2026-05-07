@@ -42,12 +42,16 @@ class ScoringService extends ChangeNotifier {
     if (_currentRound == null || _currentPlayer == null) return;
 
     final updatedScores = List<HoleScore>.from(_currentRound!.scores)..add(score);
-    
+    final willBeComplete = _currentRound!.playerNames.every((player) {
+      return updatedScores.where((s) => s.playerName == player).length >=
+          _currentRound!.coursePars.length;
+    });
+
     _currentRound = ScoredRound(
       id: _currentRound!.id,
       playerNames: _currentRound!.playerNames,
       startedAt: _currentRound!.startedAt,
-      completedAt: _currentRound!.isComplete ? DateTime.now() : null,
+      completedAt: willBeComplete ? DateTime.now() : null,
       coursePars: _currentRound!.coursePars,
       scores: updatedScores,
       useWeighting: _currentRound!.useWeighting,

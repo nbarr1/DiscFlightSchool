@@ -1,16 +1,26 @@
-# disc_golf_app
+# Disc Flight School Flutter App
 
-A new Flutter project.
+Flutter client for Disc Flight School. The app provides:
 
-## Getting Started
+- Disc flight tracking with bundled or downloaded TFLite models.
+- Manual tracking data collection with explicit opt-in.
+- Form Coach pose analysis using Google ML Kit.
+- Disc Roulette, including optional scored rounds.
+- Offline knowledge-base search and optional Anthropic-powered Q&A.
 
-This project is a starting point for a Flutter application.
+## Setup
 
-A few resources to get you started if this is your first Flutter project:
+```bash
+flutter pub get
+flutter run
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Security-sensitive settings
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Training uploads require a private server key. Configure it in **Training Settings > Advanced > Training API Key**; the key is stored with platform secure storage. The app no longer ships a default training key.
+
+Anthropic API keys for AI knowledge-base search are also stored with platform secure storage.
+
+## Model updates
+
+Model downloads are checked from **Training Settings**. The app validates the server-provided SHA-256 before saving the downloaded `.tflite` file and reloads the detector after a successful update.

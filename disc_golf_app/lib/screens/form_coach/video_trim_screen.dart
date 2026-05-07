@@ -31,6 +31,7 @@ class _VideoTrimScreenState extends State<VideoTrimScreen> {
   bool _isInitialized = false;
   RangeValues _trimRange = const RangeValues(0, 1);
   double _totalDurationMs = 1;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -39,16 +40,24 @@ class _VideoTrimScreenState extends State<VideoTrimScreen> {
   }
 
   Future<void> _initializeVideo() async {
-    _controller = VideoPlayerController.file(File(widget.videoPath));
-    await _controller!.initialize();
-    final durationMs = _controller!.value.duration.inMilliseconds.toDouble();
-    setState(() {
-      _isInitialized = true;
-      _totalDurationMs = durationMs;
-      // Default: first 6 seconds or full video, whichever is shorter
-      final defaultEnd = durationMs.clamp(0.0, 6000.0);
-      _trimRange = RangeValues(0, defaultEnd);
-    });
+    try {
+      _controller = VideoPlayerController.file(File(widget.videoPath));
+      await _controller!.initialize();
+      if (!mounted) return;
+      final durationMs = _controller!.value.duration.inMilliseconds.toDouble();
+      setState(() {
+        _isInitialized = true;
+        _totalDurationMs = durationMs;
+        // Default: first 6 seconds or full video, whichever is shorter
+        final defaultEnd = durationMs.clamp(0.0, 6000.0);
+        _trimRange = RangeValues(0, defaultEnd);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Could not load this video: $e';
+      });
+    }
   }
 
   @override
@@ -121,9 +130,28 @@ class _VideoTrimScreenState extends State<VideoTrimScreen> {
       appBar: AppBar(
         title: const Text('Trim Video'),
       ),
-      body: !_isInitialized
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
+      body: _errorMessage != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                    const SizedBox(height: 16),
+                    Text(_errorMessage!, textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Go back'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : !_isInitialized
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
               children: [
                 // Video preview
                 Expanded(

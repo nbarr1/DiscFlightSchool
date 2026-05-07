@@ -16,6 +16,7 @@ class TrainingSettingsScreen extends StatefulWidget {
 class _TrainingSettingsScreenState extends State<TrainingSettingsScreen> {
   bool? _serverOnline;
   bool _checkingServer = false;
+  String? _pendingServerUrl;
 
   @override
   void initState() {
@@ -218,13 +219,16 @@ class _TrainingSettingsScreenState extends State<TrainingSettingsScreen> {
               // Upload button
               ElevatedButton.icon(
                 onPressed: service.pendingSamples > 0 &&
-                        service.serverUrl.isNotEmpty
+                        service.serverUrl.isNotEmpty &&
+                        service.hasApiKey
                     ? () => _uploadData(context, service)
                     : null,
                 icon: const Icon(Icons.cloud_upload),
                 label: Text(
                   service.pendingSamples > 0
-                      ? 'Upload ${service.pendingSamples} samples'
+                      ? service.hasApiKey
+                          ? 'Upload ${service.pendingSamples} samples'
+                          : 'Add training API key to upload'
                       : 'No samples to upload',
                 ),
                 style: ElevatedButton.styleFrom(
@@ -362,12 +366,78 @@ class _TrainingSettingsScreenState extends State<TrainingSettingsScreen> {
                             border: OutlineInputBorder(),
                             labelText: 'Custom Server (optional)',
                             hintText: 'https://disc-flight-school.onrender.com',
-                            helperText: 'Leave blank to use the default server',
+                            helperText: 'Tap Save server URL after editing',
                           ),
-                          onFieldSubmitted: (value) {
-                            service.setServerUrl(value.trim());
+                          onChanged: (value) => _pendingServerUrl = value,
+                          onFieldSubmitted: (value) async {
+                            await service.setServerUrl(value.trim());
+                            _pendingServerUrl = null;
                             _checkServerHealth();
                           },
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              await service.setServerUrl(
+                                (_pendingServerUrl ?? service.serverUrl).trim(),
+                              );
+                              _pendingServerUrl = null;
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Server URL saved')),
+                                );
+                              }
+                              _checkServerHealth();
+                            },
+                            icon: const Icon(Icons.save),
+                            label: const Text('Save server URL'),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Icon(
+                              service.hasApiKey ? Icons.lock : Icons.lock_open,
+                              size: 18,
+                              color: service.hasApiKey ? Colors.green : Colors.orange,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                service.hasApiKey
+                                    ? 'Training API key saved'
+                                    : 'No training API key set; uploads are disabled',
+                                style: TextStyle(
+                                  color: service.hasApiKey
+                                      ? Colors.green
+                                      : Colors.orange,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            if (service.hasApiKey)
+                              TextButton(
+                                onPressed: () async {
+                                  await service.clearApiKey();
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text('Training API key removed')),
+                                    );
+                                  }
+                                },
+                                child: const Text('Remove',
+                                    style: TextStyle(color: Colors.red)),
+                              )
+                            else
+                              TextButton(
+                                onPressed: () =>
+                                    _showTrainingApiKeyDialog(context, service),
+                                child: const Text('Add key'),
+                              ),
+                          ],
                         ),
                         const SizedBox(height: 8),
                         FutureBuilder<String>(
@@ -418,7 +488,7 @@ class _TrainingSettingsScreenState extends State<TrainingSettingsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Your key is stored locally on this device and is only '
+              'Your key is stored in platform secure storage and is only '
               'used to query the Claude API for research answers.',
             ),
             const SizedBox(height: 12),
@@ -446,6 +516,56 @@ class _TrainingSettingsScreenState extends State<TrainingSettingsScreen> {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('API key saved')),
+                  );
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  void _showTrainingApiKeyDialog(
+      BuildContext context, TrainingDataService trainingService) {
+    final keyController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Training API Key'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'This private server key is stored in platform secure storage and '
+              'is required before uploading training samples.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: keyController,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Training API Key',
+              ),
+              obscureText: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (keyController.text.trim().isNotEmpty) {
+                await trainingService.setApiKey(keyController.text);
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Training API key saved')),
                   );
                 }
               }
@@ -562,6 +682,12 @@ class _TrainingSettingsScreenState extends State<TrainingSettingsScreen> {
         );
 
         final success = await service.downloadModel();
+        if (success && context.mounted) {
+          final customPath = await service.getCustomModelPath();
+          await context
+              .read<DiscDetectionService>()
+              .loadModel(customModelPath: customPath, forceReload: true);
+        }
 
         if (context.mounted) {
           Navigator.of(context).pop();
@@ -569,7 +695,7 @@ class _TrainingSettingsScreenState extends State<TrainingSettingsScreen> {
             SnackBar(
               content: Text(
                 success
-                    ? 'Model updated! Restart the app to use it.'
+                    ? 'Model updated and loaded.'
                     : 'Download failed.',
               ),
             ),

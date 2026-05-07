@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/tracking_service.dart';
+import '../../manual_tracking.dart';
 import '../../services/video_service.dart';
 import '../form_coach/video_trim_screen.dart';
-import 'manual_tracking_screen.dart';
 import 'video_player_screen.dart';
 
 class FlightTrackerScreen extends StatefulWidget {
@@ -117,16 +117,29 @@ class _FlightTrackerScreenState extends State<FlightTrackerScreen> {
               _buildActionCard(
                 context,
                 title: 'Manual Tracking',
-                description: 'Track disc path by tapping points',
+                description: 'Select a video and mark disc points manually',
                 icon: Icons.touch_app,
                 color: Colors.green,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ManualTrackingScreen(),
-                    ),
-                  );
+                onTap: () async {
+                  final videoPath = await videoService.selectVideo();
+                  if (videoPath != null && context.mounted) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ManualTrackingPage(
+                          videoPath: videoPath,
+                        ),
+                      ),
+                    );
+                  } else if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(videoService.lastError ??
+                            'Select a video before manual tracking.'),
+                        duration: const Duration(seconds: 6),
+                      ),
+                    );
+                  }
                 },
               ),
               

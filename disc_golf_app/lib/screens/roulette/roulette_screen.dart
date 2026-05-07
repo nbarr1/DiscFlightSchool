@@ -5,6 +5,7 @@ import '../../services/roulette_history_service.dart';
 import '../../widgets/roulette_wheel.dart';
 import 'dart:math';
 import 'roulette_history_screen.dart';
+import 'start_round_screen.dart';
 
 class RouletteScreen extends StatefulWidget {
   const RouletteScreen({Key? key}) : super(key: key);
@@ -61,6 +62,16 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
         title: const Text('Disc Golf Roulette'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.scoreboard),
+            tooltip: 'Scored Round',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const StartRoundScreen(),
+              ),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.history),
             tooltip: 'Spin History',
             onPressed: () => Navigator.push(
@@ -101,16 +112,24 @@ class _RouletteScreenState extends State<RouletteScreen> with SingleTickerProvid
             const SizedBox(height: 12),
             Expanded(
               child: Center(
-                child: GestureDetector(
-                  onTap: _isSpinning ? null : _spinRoulette,
-                  child: AnimatedBuilder(
-                    animation: _animationController,
-                    builder: (context, child) {
-                      return Transform.rotate(
-                        angle: _animationController.value * 2 * pi * 3,
-                        child: RouletteWheel(isSpinning: _isSpinning),
-                      );
-                    },
+                child: Semantics(
+                  button: true,
+                  enabled: !_isSpinning,
+                  label: _isPutting
+                      ? 'Spin roulette wheel for a putting challenge'
+                      : 'Spin roulette wheel for a throwing challenge',
+                  child: InkWell(
+                    onTap: _isSpinning ? null : _spinRoulette,
+                    customBorder: const CircleBorder(),
+                    child: AnimatedBuilder(
+                      animation: _animationController,
+                      builder: (context, child) {
+                        return Transform.rotate(
+                          angle: _animationController.value * 2 * pi * 3,
+                          child: RouletteWheel(isSpinning: _isSpinning),
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),

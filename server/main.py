@@ -15,24 +15,46 @@ Endpoints:
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
 from datetime import datetime
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from fastapi import FastAPI, File, Form, Header, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
-APP_API_KEY = os.environ.get("APP_API_KEY", "disc-flight-school-v1")
+APP_API_KEY = os.environ.get("APP_API_KEY")
+if not APP_API_KEY:
+    raise RuntimeError("APP_API_KEY must be set before starting the training server")
+
+_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ALLOW_ORIGINS", "").split(",")
+    if origin.strip()
+]
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(8 * 1024 * 1024)))
+_SAFE_SAMPLE_ID = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
+_YOLO_LABEL = re.compile(
+    r"^0\s+"
+    r"(?:0(?:\.\d+)?|1(?:\.0+)?)\s+"
+    r"(?:0(?:\.\d+)?|1(?:\.0+)?)\s+"
+    r"(?:0(?:\.\d+)?|1(?:\.0+)?)\s+"
+    r"(?:0(?:\.\d+)?|1(?:\.0+)?)$"
+)
+_IMAGE_SIGNATURES = {
+    ".jpg": (b"\xff\xd8\xff",),
+    ".jpeg": (b"\xff\xd8\xff",),
+    ".png": (b"\x89PNG\r\n\x1a\n",),
+}
 
 app = FastAPI(title="Disc Flight School Training Server")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS or [],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -45,6 +67,67 @@ def _require_api_key(x_app_key: str | None) -> JSONResponse | None:
             {"error": "Invalid or missing API key"},
             status_code=403,
         )
+
+
+def _validate_sample_id(sample_id: str) -> JSONResponse | None:
+    if not _SAFE_SAMPLE_ID.fullmatch(sample_id):
+        return JSONResponse(
+            {"error": "sample_id must contain only letters, numbers, underscores, and hyphens"},
+            status_code=400,
+        )
+    return None
+
+
+def _validate_yolo_label(label: str) -> JSONResponse | None:
+    lines = [line.strip() for line in label.strip().splitlines() if line.strip()]
+    if len(lines) != 1 or not _YOLO_LABEL.fullmatch(lines[0]):
+        return JSONResponse(
+            {"error": "label must be a single YOLO class-0 row with normalized values"},
+            status_code=400,
+        )
+    return None
+
+
+def _safe_child(base: Path, filename: str) -> Path:
+    base_resolved = base.resolve()
+    path = (base_resolved / filename).resolve()
+    if base_resolved != path.parent:
+        raise ValueError("Unsafe output path")
+    return path
+
+
+def _normalized_image_ext(filename: str | None) -> str:
+    ext = Path(filename or "image.jpg").suffix.lower()
+    if ext in _IMAGE_SIGNATURES:
+        return ext
+    return ".jpg"
+
+
+def _validate_image_signature(ext: str, header: bytes) -> bool:
+    return any(header.startswith(sig) for sig in _IMAGE_SIGNATURES[ext])
+
+
+def _copy_upload_image(upload: UploadFile, dest: Path, ext: str) -> int:
+    total = 0
+    header = b""
+    with open(dest, "wb") as f:
+        while True:
+            chunk = upload.file.read(1024 * 1024)
+            if not chunk:
+                break
+            if not header:
+                header = chunk[:16]
+            total += len(chunk)
+            if total > MAX_UPLOAD_BYTES:
+                f.close()
+                dest.unlink(missing_ok=True)
+                raise ValueError("Uploaded image exceeds size limit")
+            f.write(chunk)
+    if total == 0 or not _validate_image_signature(ext, header):
+        dest.unlink(missing_ok=True)
+        raise ValueError("Uploaded image type does not match an allowed JPEG/PNG signature")
+    return total
+
 
 BASE_DIR = Path(__file__).parent
 DATASET_DIR = BASE_DIR / "dataset"
@@ -123,20 +206,27 @@ async def upload_training_sample(
     if auth_error:
         return auth_error
 
-    # Save full image
-    full_ext = Path(full_image.filename or "image.jpg").suffix or ".jpg"
-    full_dest = IMAGES_DIR / f"{sample_id}_full{full_ext}"
-    with open(full_dest, "wb") as f:
-        shutil.copyfileobj(full_image.file, f)
+    sample_error = _validate_sample_id(sample_id)
+    if sample_error:
+        return sample_error
+    label_error = _validate_yolo_label(label)
+    if label_error:
+        return label_error
+    if image_width <= 0 or image_height <= 0:
+        return JSONResponse({"error": "image dimensions must be positive"}, status_code=400)
 
-    # Save crop image (for manual review, not used by YOLO)
-    crop_ext = Path(crop_image.filename or "crop.jpg").suffix or ".jpg"
-    crop_dest = IMAGES_DIR / f"{sample_id}_crop{crop_ext}"
-    with open(crop_dest, "wb") as f:
-        shutil.copyfileobj(crop_image.file, f)
+    full_ext = _normalized_image_ext(full_image.filename)
+    crop_ext = _normalized_image_ext(crop_image.filename)
+    full_dest = _safe_child(IMAGES_DIR, f"{sample_id}_full{full_ext}")
+    crop_dest = _safe_child(IMAGES_DIR, f"{sample_id}_crop{crop_ext}")
+    label_dest = _safe_child(LABELS_DIR, f"{sample_id}.txt")
 
-    # Save YOLO label
-    label_dest = LABELS_DIR / f"{sample_id}.txt"
+    try:
+        _copy_upload_image(full_image, full_dest, full_ext)
+        _copy_upload_image(crop_image, crop_dest, crop_ext)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
     label_dest.write_text(label.strip())
 
     # Update stats
@@ -251,9 +341,10 @@ def _run_training():
                 text=True,
                 timeout=600,
             )
+            if export_result.returncode != 0:
+                _training_status["result"] = f"failed export: {export_result.stderr[-500:]}"
+                return
 
-            # Copy TFLite to models directory
-            tflite_src = best_pt.with_name("best_saved_model").with_suffix("")
             # YOLOv8 exports to best_float32.tflite or similar
             for tflite in best_pt.parent.glob("*.tflite"):
                 version = f"disc_detector_v{datetime.now().strftime('%Y%m%d%H%M')}"
