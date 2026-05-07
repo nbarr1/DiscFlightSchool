@@ -1,11 +1,13 @@
 # Repository Inventory
 
-Generated during Phase 1 reconnaissance. Build caches (`.git`, Android `build/`, and `.gradle`) are intentionally excluded; source files, platform templates, assets, tests, and deployment descriptors are included.
+Maintained from the Phase 1 reconnaissance inventory. Build caches (`.git`, Android `build/`, and `.gradle`) are intentionally excluded; source files, platform templates, assets, tests, documentation, and deployment descriptors are included.
 
 - `.claude/settings.local.json`
 - `.github/workflows/build.yml`
 - `.vscode/launch.json`
 - `README.md`
+- `docs/phase1-audit.md`
+- `docs/phase2-synthesis.md`
 - `disc_golf_app/.gitignore`
 - `disc_golf_app/.metadata`
 - `disc_golf_app/README.md`
