@@ -1,14 +1,11 @@
 # Repository Inventory
 
-Maintained from the Phase 1 reconnaissance inventory. Build caches (`.git`, Android `build/`, and `.gradle`) are intentionally excluded; source files, platform templates, assets, tests, documentation, and deployment descriptors are included.
+Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `build/`, Android `.gradle`, and Python `__pycache__`) are intentionally excluded; source files, platform templates, assets, tests, documentation, and deployment descriptors are included.
 
 - `.claude/settings.local.json`
 - `.github/workflows/build.yml`
 - `.vscode/launch.json`
 - `README.md`
-- `docs/phase1-audit.md`
-- `docs/phase2-synthesis.md`
-- `docs/phase3-architecture-decisions.md`
 - `disc_golf_app/.gitignore`
 - `disc_golf_app/.metadata`
 - `disc_golf_app/README.md`
@@ -244,13 +241,26 @@ Maintained from the Phase 1 reconnaissance inventory. Build caches (`.git`, Andr
 - `disc_golf_app/windows/runner/utils.h`
 - `disc_golf_app/windows/runner/win32_window.cpp`
 - `disc_golf_app/windows/runner/win32_window.h`
+- `docs/phase1-audit.md`
+- `docs/phase2-synthesis.md`
+- `docs/phase3-architecture-decisions.md`
+- `docs/phase4-rebuild.md`
+- `docs/repository-inventory.md`
 - `server/.dockerignore`
 - `server/.gitignore`
 - `server/Dockerfile`
 - `server/Procfile`
+- `server/README.md`
 - `server/dataset/images/train/.gitkeep`
 - `server/dataset/labels/train/.gitkeep`
 - `server/main.py`
 - `server/models/disc_detector.tflite`
 - `server/requirements.txt`
+- `server/test_http_contracts.py`
 - `server/test_validation.py`
+- `server/training_server/__init__.py`
+- `server/training_server/app.py`
+- `server/training_server/config.py`
+- `server/training_server/storage.py`
+- `server/training_server/training.py`
+- `server/training_server/validation.py`
