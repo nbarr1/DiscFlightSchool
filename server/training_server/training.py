@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import subprocess
 import threading
@@ -10,6 +11,8 @@ from typing import Any
 
 from .config import Settings
 from .storage import FileStorage
+
+logger = logging.getLogger("disc_flight_school.training_server.training")
 
 
 class TrainingManager:
@@ -99,6 +102,7 @@ class TrainingManager:
         except subprocess.TimeoutExpired:
             self._status["result"] = "failed: training timed out"
         except Exception as exc:
+            logger.error("Unexpected error during training", exc_info=True)
             self._status["result"] = f"failed: {exc}"
         finally:
             with self._lock:

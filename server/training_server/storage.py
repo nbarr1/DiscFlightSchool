@@ -106,7 +106,7 @@ class FileStorage:
         return {"path": model_path, "version": model_path.stem, "sha256": sha256}
 
     def build_training_export(self) -> Path:
-        export_dir = self.settings.base_dir / "exports"
+        export_dir = self.settings.export_dir
         export_dir.mkdir(parents=True, exist_ok=True)
         zip_path = export_dir / f"training_export_{uuid.uuid4().hex}.zip"
         shutil.make_archive(str(zip_path.with_suffix("")), "zip", str(self.settings.dataset_dir))

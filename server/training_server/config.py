@@ -38,6 +38,10 @@ class Settings:
         return self.base_dir / "models"
 
     @property
+    def export_dir(self) -> Path:
+        return self.base_dir / "exports"
+
+    @property
     def stats_file(self) -> Path:
         return self.base_dir / "stats.json"
 
