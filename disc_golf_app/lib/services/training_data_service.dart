@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:archive/archive_io.dart';
+import 'package:crypto/crypto.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -31,6 +34,7 @@ class KeyframeData {
 class TrainingDataService extends ChangeNotifier {
   static const String _optInKey = 'training_opt_in';
   static const String _serverUrlKey = 'training_server_url';
+  static const String _apiKeyKey = 'training_api_key';
   static const String _modelVersionKey = 'disc_model_version';
   static const String _manifestFile = 'manifest.json';
   static const String _defaultServerUrl = 'https://discflightschool.onrender.com';
@@ -40,10 +44,14 @@ class TrainingDataService extends ChangeNotifier {
   List<TrainingSample> _samples = [];
   bool _isOptedIn = false;
   String _serverUrl = _defaultServerUrl;
+  String _apiKey = '';
   bool _loaded = false;
+
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
   bool get isOptedIn => _isOptedIn;
   String get serverUrl => _serverUrl;
+  bool get hasApiKey => _apiKey.isNotEmpty;
   List<TrainingSample> get samples => List.unmodifiable(_samples);
   int get totalSamples => _samples.length;
   int get uploadedSamples => _samples.where((s) => s.uploaded).length;
@@ -56,6 +64,12 @@ class TrainingDataService extends ChangeNotifier {
     _isOptedIn = prefs.getBool(_optInKey) ?? false;
     final storedUrl = prefs.getString(_serverUrlKey) ?? '';
     _serverUrl = storedUrl.isEmpty ? _defaultServerUrl : storedUrl;
+    try {
+      _apiKey = await _secureStorage.read(key: _apiKeyKey) ?? '';
+    } catch (e) {
+      debugPrint('Secure storage unavailable for training API key: $e');
+      _apiKey = '';
+    }
     await _loadManifest();
     _loaded = true;
     notifyListeners();
@@ -77,6 +91,23 @@ class TrainingDataService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Store the private training API key used for uploads/admin operations.
+  Future<void> setApiKey(String key) async {
+    _apiKey = key.trim();
+    try {
+      if (_apiKey.isEmpty) {
+        await _secureStorage.delete(key: _apiKeyKey);
+      } else {
+        await _secureStorage.write(key: _apiKeyKey, value: _apiKey);
+      }
+    } catch (e) {
+      debugPrint('Failed to update training API key in secure storage: $e');
+    }
+    notifyListeners();
+  }
+
+  Future<void> clearApiKey() => setApiKey('');
+
   // ---------------------------------------------------------------------------
   // Data Collection
   // ---------------------------------------------------------------------------
@@ -88,7 +119,7 @@ class TrainingDataService extends ChangeNotifier {
     String videoPath,
     double fps,
   ) async {
-    if (!_isOptedIn || keyframes.isEmpty) return 0;
+    if (!_isOptedIn || keyframes.isEmpty || fps <= 0) return 0;
 
     final dataDir = await _getDataDir();
     final imagesDir = Directory('${dataDir.path}/images');
@@ -127,14 +158,18 @@ class TrainingDataService extends ChangeNotifier {
         final imgW = decoded.width;
         final imgH = decoded.height;
 
-        // Crop disc region
-        final cropCenterX = (kf.x * imgW).round();
-        final cropCenterY = (kf.y * imgH).round();
-        final halfCrop = _cropPixels ~/ 2;
-        final cropX = (cropCenterX - halfCrop).clamp(0, imgW - _cropPixels);
-        final cropY = (cropCenterY - halfCrop).clamp(0, imgH - _cropPixels);
-        final cropW = min(_cropPixels, imgW - cropX);
-        final cropH = min(_cropPixels, imgH - cropY);
+        // Crop disc region. Keep bounds valid even for unusually small frames.
+        final cropCenterX = (kf.x.clamp(0.0, 1.0) * imgW).round();
+        final cropCenterY = (kf.y.clamp(0.0, 1.0) * imgH).round();
+        final cropSize = min(_cropPixels, min(imgW, imgH));
+        if (cropSize <= 0) continue;
+        final halfCrop = cropSize ~/ 2;
+        final maxCropX = max(0, imgW - cropSize);
+        final maxCropY = max(0, imgH - cropSize);
+        final cropX = (cropCenterX - halfCrop).clamp(0, maxCropX);
+        final cropY = (cropCenterY - halfCrop).clamp(0, maxCropY);
+        final cropW = min(cropSize, imgW - cropX);
+        final cropH = min(cropSize, imgH - cropY);
 
         final cropped = img.copyCrop(
           decoded,
@@ -191,6 +226,10 @@ class TrainingDataService extends ChangeNotifier {
       debugPrint('No server URL configured for training data upload');
       return 0;
     }
+    if (_apiKey.isEmpty) {
+      debugPrint('No training API key configured for upload');
+      return 0;
+    }
 
     final pending = _samples.where((s) => !s.uploaded).toList();
     if (pending.isEmpty) return 0;
@@ -216,7 +255,7 @@ class TrainingDataService extends ChangeNotifier {
             'Content-Type',
             'multipart/form-data; boundary=$boundary',
           );
-          request.headers.set('X-App-Key', 'disc-flight-school-v1');
+          request.headers.set('X-App-Key', _apiKey);
 
           // Helper to write a text field part
           void writeField(StringBuffer buf, String name, String value) {
@@ -395,9 +434,11 @@ class TrainingDataService extends ChangeNotifier {
       if (response.statusCode == 200) {
         final body = await response.transform(utf8.decoder).join();
         final data = jsonDecode(body) as Map<String, dynamic>;
-        final remoteVersion = data['version'] as String;
+        final remoteVersion = data['version'] as String? ?? 'none';
+        final remoteUrl = data['url'] as String? ?? '';
         final localVersion = await getModelVersion();
         client.close();
+        if (remoteVersion == 'none' || remoteUrl.isEmpty) return false;
         return remoteVersion != localVersion;
       }
       client.close();
@@ -425,12 +466,24 @@ class TrainingDataService extends ChangeNotifier {
 
       final versionBody = await versionResp.transform(utf8.decoder).join();
       final versionData = jsonDecode(versionBody) as Map<String, dynamic>;
-      final modelUrl = versionData['url'] as String;
-      final version = versionData['version'] as String;
+      final modelUrl = versionData['url'] as String? ?? '';
+      final version = versionData['version'] as String? ?? 'none';
+      final expectedSha256 = versionData['sha256'] as String? ?? '';
+      if (version == 'none' || modelUrl.isEmpty || expectedSha256.isEmpty) {
+        client.close();
+        return false;
+      }
 
-      // Download model file — server returns relative path, prepend base URL
+      // Download model file. Server normally returns a relative path; reject
+      // absolute URLs that point at a different host.
+      final serverUri = Uri.parse(_serverUrl);
       final fullUrl = modelUrl.startsWith('http') ? modelUrl : '$_serverUrl$modelUrl';
       final modelUri = Uri.parse(fullUrl);
+      if (modelUri.host != serverUri.host || modelUri.scheme != serverUri.scheme) {
+        client.close();
+        debugPrint('Rejected model URL outside configured server: $fullUrl');
+        return false;
+      }
       final modelReq = await client.getUrl(modelUri);
       final modelResp = await modelReq.close();
 
@@ -443,9 +496,20 @@ class TrainingDataService extends ChangeNotifier {
       final modelsDir = Directory('${dataDir.path}/models');
       if (!await modelsDir.exists()) await modelsDir.create(recursive: true);
 
+      final downloadedBytes = await modelResp.fold<BytesBuilder>(
+        BytesBuilder(copy: false),
+        (builder, chunk) => builder..add(chunk),
+      );
+      final modelBytes = downloadedBytes.takeBytes();
+      final actualSha256 = sha256.convert(modelBytes).toString();
+      if (actualSha256.toLowerCase() != expectedSha256.toLowerCase()) {
+        client.close();
+        debugPrint('Downloaded model hash mismatch: $actualSha256');
+        return false;
+      }
+
       final modelFile = File('${modelsDir.path}/disc_detector.tflite');
-      final sink = modelFile.openWrite();
-      await modelResp.pipe(sink);
+      await modelFile.writeAsBytes(modelBytes, flush: true);
 
       // Save version
       final prefs = await SharedPreferences.getInstance();

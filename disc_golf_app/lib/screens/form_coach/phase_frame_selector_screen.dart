@@ -292,56 +292,63 @@ class _PhaseFrameSelectorScreenState extends State<PhaseFrameSelectorScreen> {
     final label = _formatPhase(phase);
     final icon = _phaseIcons[phase] ?? Icons.flag;
 
-    return GestureDetector(
-      onTap: () => _markPhase(phase),
-      child: Container(
-        decoration: BoxDecoration(
-          color: isSet ? Colors.green.shade900 : Colors.grey.shade800,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSet ? Colors.greenAccent : Colors.grey.shade600,
-            width: isSet ? 1.5 : 1,
+    return Semantics(
+      button: true,
+      label: isSet
+          ? '$label marked at ${_formatMs(_phaseTimestamps[phase]!)}'
+          : 'Mark $label phase at current video frame',
+      child: InkWell(
+        onTap: () => _markPhase(phase),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isSet ? Colors.green.shade900 : Colors.grey.shade800,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSet ? Colors.greenAccent : Colors.grey.shade600,
+              width: isSet ? 1.5 : 1,
+            ),
           ),
-        ),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            Icon(icon,
-                size: 20,
-                color: isSet ? Colors.greenAccent : Colors.grey),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              Icon(icon,
+                  size: 20,
+                  color: isSet ? Colors.greenAccent : Colors.grey),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
                     label,
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
                       color: isSet ? Colors.white : Colors.grey,
                     ),
-                  ),
-                  Text(
-                    isSet
-                        ? _formatMs(_phaseTimestamps[phase]!)
-                        : 'Tap to mark',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isSet
-                          ? Colors.greenAccent
-                          : Colors.grey,
                     ),
-                  ),
-                ],
+                    Text(
+                      isSet
+                          ? _formatMs(_phaseTimestamps[phase]!)
+                          : 'Tap to mark',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isSet
+                            ? Colors.greenAccent
+                            : Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            if (isSet)
-              const Icon(Icons.check_circle,
-                  color: Colors.greenAccent, size: 18),
-          ],
+              if (isSet)
+                const Icon(Icons.check_circle,
+                    color: Colors.greenAccent, size: 18),
+            ],
+          ),
         ),
       ),
     );

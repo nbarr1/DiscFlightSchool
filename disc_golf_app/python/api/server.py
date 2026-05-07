@@ -7,7 +7,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r'/api/*': {'origins': ['http://127.0.0.1', 'http://localhost']}})
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -46,4 +46,4 @@ if __name__ == '__main__':
     print("Server running on http://localhost:5000")
     print("Press CTRL+C to quit")
     print("=" * 50)
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host=os.environ.get('FLASK_HOST', '127.0.0.1'), port=5000, debug=os.environ.get('FLASK_DEBUG') == '1')

@@ -127,15 +127,22 @@ class DiscDetectionService extends ChangeNotifier {
 
   /// Load the TFLite model. Uses a custom (retrained) model if available,
   /// otherwise falls back to the bundled asset model.
-  Future<void> loadModel({String? customModelPath}) async {
-    if (_isModelLoaded) return;
+  Future<void> loadModel({String? customModelPath, bool forceReload = false}) async {
+    if (_isModelLoaded && !forceReload) return;
 
     try {
-      File modelFile;
+      if (forceReload) {
+        _interpreter?.close();
+        _interpreter = null;
+        _isModelLoaded = false;
+      }
 
-      if (customModelPath != null && await File(customModelPath).exists()) {
-        modelFile = File(customModelPath);
-        debugPrint('Loading custom disc detection model: $customModelPath');
+      File modelFile;
+      final resolvedCustomPath = customModelPath ?? await _getDownloadedModelPath();
+
+      if (resolvedCustomPath != null && await File(resolvedCustomPath).exists()) {
+        modelFile = File(resolvedCustomPath);
+        debugPrint('Loading custom disc detection model: $resolvedCustomPath');
       } else {
         final modelData =
             await rootBundle.load('assets/models/disc_detector.tflite');
@@ -152,6 +159,12 @@ class DiscDetectionService extends ChangeNotifier {
       debugPrint('Error loading disc detection model: $e');
       rethrow;
     }
+  }
+
+  Future<String?> _getDownloadedModelPath() async {
+    final appDir = await getApplicationDocumentsDirectory();
+    final modelPath = '${appDir.path}/training_data/models/disc_detector.tflite';
+    return await File(modelPath).exists() ? modelPath : null;
   }
 
   /// Process a video file: extract frames, run detection, filter & smooth.

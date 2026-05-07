@@ -151,6 +151,22 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
     });
   }
 
+  void _completeOrAdvanceRound() {
+    final scoringService =
+        Provider.of<ScoringService>(context, listen: false);
+    final round = scoringService.currentRound!;
+
+    if (_currentHoleNumber >= round.coursePars.length) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const ScorecardScreen()),
+      );
+      return;
+    }
+
+    _moveToNextHole();
+  }
+
   String _formatScore(int score) {
     if (score == 0) return 'E';
     if (score > 0) return '+$score';
@@ -513,19 +529,27 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
         SizedBox(
           height: 250,
           child: Center(
-            child: GestureDetector(
-              onTap: _isSpinning ? null : _spinRoulette,
-              child: AnimatedBuilder(
-                animation: _animationController,
-                builder: (context, child) {
-                  return Transform.rotate(
-                    angle: _animationController.value * 2 * pi * 3,
-                    child: RouletteWheel(isSpinning: _isSpinning),
-                  );
-                },
-              ),
+            child: Semantics(
+              button: true,
+              enabled: !_isSpinning,
+              label: _isPutting
+                  ? 'Spin roulette wheel for putt number ${_currentThrows.length + 1}'
+                  : 'Spin roulette wheel for throw number ${_currentThrows.length + 1}',
+              child: InkWell(
+                onTap: _isSpinning ? null : _spinRoulette,
+                customBorder: const CircleBorder(),
+                child: AnimatedBuilder(
+                  animation: _animationController,
+                  builder: (context, child) {
+                    return Transform.rotate(
+                      angle: _animationController.value * 2 * pi * 3,
+                      child: RouletteWheel(isSpinning: _isSpinning),
+                    );
+                  },
+                ),
             ),
           ),
+        ),
         ),
       ],
     );
@@ -710,7 +734,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
                     color: Colors.white)),
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: _moveToNextHole,
+              onPressed: _completeOrAdvanceRound,
               icon: const Icon(Icons.arrow_forward),
               label: Text(_currentHoleNumber < round.coursePars.length
                   ? 'Next Hole'

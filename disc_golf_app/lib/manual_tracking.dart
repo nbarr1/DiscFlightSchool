@@ -16,6 +16,7 @@ class _ManualTrackingPageState extends State<ManualTrackingPage> {
   List<TrackPoint> trackedPoints = [];
   int currentFrame = 0;
   bool isPlaying = false;
+  final GlobalKey _videoStackKey = GlobalKey();
 
   /// Estimated FPS of the loaded video (defaults to 30 until known).
   double _videoFps = 30.0;
@@ -152,11 +153,21 @@ class _ManualTrackingPageState extends State<ManualTrackingPage> {
             flex: 3,
             child: GestureDetector(
               onTapDown: (details) {
-                final renderBox = context.findRenderObject() as RenderBox;
-                final localPosition = renderBox.globalToLocal(details.globalPosition);
+                final renderObject =
+                    _videoStackKey.currentContext?.findRenderObject();
+                if (renderObject is! RenderBox) return;
+                final localPosition =
+                    renderObject.globalToLocal(details.globalPosition);
+                if (localPosition.dx < 0 ||
+                    localPosition.dy < 0 ||
+                    localPosition.dx > renderObject.size.width ||
+                    localPosition.dy > renderObject.size.height) {
+                  return;
+                }
                 _addTrackPoint(localPosition);
               },
               child: Stack(
+                key: _videoStackKey,
                 children: [
                   Center(
                     child: AspectRatio(
