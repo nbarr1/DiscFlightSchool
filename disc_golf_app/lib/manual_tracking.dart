@@ -52,18 +52,53 @@ class _ManualTrackingPageState extends State<ManualTrackingPage> {
     return (_controller!.value.position.inMilliseconds * _videoFps / 1000).round();
   }
 
-  void _addTrackPoint(Offset position) {
+  void _addTrackPoint(Offset normalizedPosition) {
     if (_controller == null) return;
     final frame = _currentFrameIndex();
 
     setState(() {
       trackedPoints.add(TrackPoint(
         frame: frame,
-        position: position,
+        position: Offset(
+          normalizedPosition.dx.clamp(0.0, 1.0),
+          normalizedPosition.dy.clamp(0.0, 1.0),
+        ),
         timestamp: _controller!.value.position,
       ));
       trackedPoints.sort((a, b) => a.frame.compareTo(b.frame));
     });
+  }
+
+  Rect _actualVideoRect(Size containerSize) {
+    final aspectRatio = _controller?.value.aspectRatio ?? 1.0;
+    if (containerSize.width <= 0 ||
+        containerSize.height <= 0 ||
+        aspectRatio <= 0) {
+      return Rect.zero;
+    }
+
+    final containerAspect = containerSize.width / containerSize.height;
+    if (containerAspect > aspectRatio) {
+      final videoHeight = containerSize.height;
+      final videoWidth = videoHeight * aspectRatio;
+      final left = (containerSize.width - videoWidth) / 2;
+      return Rect.fromLTWH(left, 0, videoWidth, videoHeight);
+    }
+
+    final videoWidth = containerSize.width;
+    final videoHeight = videoWidth / aspectRatio;
+    final top = (containerSize.height - videoHeight) / 2;
+    return Rect.fromLTWH(0, top, videoWidth, videoHeight);
+  }
+
+  Offset? _normalizedVideoPosition(Offset stackPosition, Size stackSize) {
+    final videoRect = _actualVideoRect(stackSize);
+    if (videoRect.isEmpty || !videoRect.contains(stackPosition)) return null;
+
+    return Offset(
+      (stackPosition.dx - videoRect.left) / videoRect.width,
+      (stackPosition.dy - videoRect.top) / videoRect.height,
+    );
   }
 
   List<TrackPoint> _interpolatePoints() {
@@ -156,15 +191,14 @@ class _ManualTrackingPageState extends State<ManualTrackingPage> {
                 final renderObject =
                     _videoStackKey.currentContext?.findRenderObject();
                 if (renderObject is! RenderBox) return;
-                final localPosition =
+                final stackPosition =
                     renderObject.globalToLocal(details.globalPosition);
-                if (localPosition.dx < 0 ||
-                    localPosition.dy < 0 ||
-                    localPosition.dx > renderObject.size.width ||
-                    localPosition.dy > renderObject.size.height) {
-                  return;
-                }
-                _addTrackPoint(localPosition);
+                final normalizedPosition = _normalizedVideoPosition(
+                  stackPosition,
+                  renderObject.size,
+                );
+                if (normalizedPosition == null) return;
+                _addTrackPoint(normalizedPosition);
               },
               child: Stack(
                 key: _videoStackKey,
@@ -179,6 +213,7 @@ class _ManualTrackingPageState extends State<ManualTrackingPage> {
                     painter: TrackingOverlayPainter(
                       points: trackedPoints,
                       currentFrame: _currentFrameIndex(),
+                      videoAspectRatio: _controller!.value.aspectRatio,
                     ),
                     size: Size.infinite,
                   ),
@@ -263,7 +298,7 @@ class _ManualTrackingPageState extends State<ManualTrackingPage> {
                     ),
                     title: Text('Frame ${point.frame}'),
                     subtitle: Text(
-                      'Position: (${point.position.dx.toInt()}, ${point.position.dy.toInt()})',
+                      'Normalized: (${point.position.dx.toStringAsFixed(3)}, ${point.position.dy.toStringAsFixed(3)})',
                     ),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete, color: Colors.red),
@@ -291,12 +326,48 @@ class _ManualTrackingPageState extends State<ManualTrackingPage> {
 class TrackingOverlayPainter extends CustomPainter {
   final List<TrackPoint> points;
   final int currentFrame;
+  final double videoAspectRatio;
 
-  TrackingOverlayPainter({required this.points, required this.currentFrame});
+  TrackingOverlayPainter({
+    required this.points,
+    required this.currentFrame,
+    required this.videoAspectRatio,
+  });
+
+  Rect _actualVideoRect(Size containerSize) {
+    if (containerSize.width <= 0 ||
+        containerSize.height <= 0 ||
+        videoAspectRatio <= 0) {
+      return Rect.zero;
+    }
+
+    final containerAspect = containerSize.width / containerSize.height;
+    if (containerAspect > videoAspectRatio) {
+      final videoHeight = containerSize.height;
+      final videoWidth = videoHeight * videoAspectRatio;
+      final left = (containerSize.width - videoWidth) / 2;
+      return Rect.fromLTWH(left, 0, videoWidth, videoHeight);
+    }
+
+    final videoWidth = containerSize.width;
+    final videoHeight = videoWidth / videoAspectRatio;
+    final top = (containerSize.height - videoHeight) / 2;
+    return Rect.fromLTWH(0, top, videoWidth, videoHeight);
+  }
+
+  Offset _toCanvasPosition(Offset normalizedPosition, Rect videoRect) {
+    return Offset(
+      videoRect.left + normalizedPosition.dx * videoRect.width,
+      videoRect.top + normalizedPosition.dy * videoRect.height,
+    );
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
     if (points.isEmpty) return;
+
+    final videoRect = _actualVideoRect(size);
+    if (videoRect.isEmpty) return;
 
     // Draw path
     final pathPaint = Paint()
@@ -308,11 +379,12 @@ class TrackingOverlayPainter extends CustomPainter {
     bool first = true;
 
     for (var point in points) {
+      final canvasPosition = _toCanvasPosition(point.position, videoRect);
       if (first) {
-        path.moveTo(point.position.dx, point.position.dy);
+        path.moveTo(canvasPosition.dx, canvasPosition.dy);
         first = false;
       } else {
-        path.lineTo(point.position.dx, point.position.dy);
+        path.lineTo(canvasPosition.dx, canvasPosition.dy);
       }
     }
 
@@ -321,11 +393,12 @@ class TrackingOverlayPainter extends CustomPainter {
     // Draw points
     for (int i = 0; i < points.length; i++) {
       final point = points[i];
+      final canvasPosition = _toCanvasPosition(point.position, videoRect);
       final paint = Paint()
         ..color = point.isInterpolated ? Colors.green : Colors.red
         ..style = PaintingStyle.fill;
 
-      canvas.drawCircle(point.position, 6, paint);
+      canvas.drawCircle(canvasPosition, 6, paint);
 
       // Draw frame number
       final textPainter = TextPainter(
@@ -338,24 +411,29 @@ class TrackingOverlayPainter extends CustomPainter {
       textPainter.layout();
       textPainter.paint(
         canvas,
-        Offset(point.position.dx + 10, point.position.dy - 6),
+        Offset(canvasPosition.dx + 10, canvasPosition.dy - 6),
       );
     }
 
     // Highlight current frame point
     final currentPoint = points.where((p) => p.frame == currentFrame).firstOrNull;
     if (currentPoint != null) {
+      final canvasPosition = _toCanvasPosition(currentPoint.position, videoRect);
       final highlightPaint = Paint()
         ..color = Colors.yellow
         ..strokeWidth = 3
         ..style = PaintingStyle.stroke;
 
-      canvas.drawCircle(currentPoint.position, 10, highlightPaint);
+      canvas.drawCircle(canvasPosition, 10, highlightPaint);
     }
   }
 
   @override
-  bool shouldRepaint(TrackingOverlayPainter oldDelegate) => true;
+  bool shouldRepaint(TrackingOverlayPainter oldDelegate) {
+    return oldDelegate.points != points ||
+        oldDelegate.currentFrame != currentFrame ||
+        oldDelegate.videoAspectRatio != videoAspectRatio;
+  }
 }
 
 // ============================================================================
@@ -364,6 +442,7 @@ class TrackingOverlayPainter extends CustomPainter {
 
 class TrackPoint {
   final int frame;
+  /// Normalized video-space position, where both axes are in the range 0.0-1.0.
   final Offset position;
   final Duration timestamp;
   final bool isInterpolated;

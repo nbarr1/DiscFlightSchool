@@ -93,6 +93,7 @@ class KnowledgeBaseService extends ChangeNotifier {
         await _secureStorage.write(key: 'anthropic_api_key', value: legacyKey);
       }
       await prefs.remove('anthropic_api_key');
+      notifyListeners();
     } catch (e) {
       debugPrint('Secure storage unavailable for Anthropic API key: $e');
       _apiKey = null;
