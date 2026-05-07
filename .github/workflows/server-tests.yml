@@ -1,0 +1,49 @@
+name: Server Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test-server:
+    name: Python ${{ matrix.python-version }} server contract tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
+
+    env:
+      APP_API_KEY: test-key
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install server test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            "fastapi>=0.104.0" \
+            "python-multipart>=0.0.6" \
+            "pytest>=8.0.0"
+
+      - name: Compile server Python modules
+        run: |
+          python -m py_compile \
+            server/main.py \
+            server/test_validation.py \
+            server/test_http_contracts.py \
+            server/test_config.py \
+            server/training_server/*.py
+
+      - name: Run server unit and contract tests
+        run: python -m pytest server
