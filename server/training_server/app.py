@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+import json
+import logging
+import time
+import uuid
 from datetime import datetime
 
-from fastapi import FastAPI, File, Form, Header, UploadFile
+from fastapi import FastAPI, File, Form, Header, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.background import BackgroundTask
 
 from .config import Settings
 from .storage import FileStorage
 from .training import TrainingManager
 from .validation import sample_id_error, yolo_label_error
+
+logger = logging.getLogger("disc_flight_school.training_server")
 
 
 def create_app(settings: Settings) -> FastAPI:
@@ -32,13 +39,45 @@ def create_app(settings: Settings) -> FastAPI:
         allow_headers=["*"],
     )
 
+    @app.middleware("http")
+    async def request_context_middleware(request: Request, call_next):
+        request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+        request.state.request_id = request_id
+        start = time.perf_counter()
+        logger.info(
+            json.dumps(
+                {
+                    "event": "request.start",
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                }
+            )
+        )
+        response = await call_next(request)
+        duration_ms = round((time.perf_counter() - start) * 1000, 3)
+        response.headers["X-Request-ID"] = request_id
+        logger.info(
+            json.dumps(
+                {
+                    "event": "request.finish",
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": response.status_code,
+                    "duration_ms": duration_ms,
+                }
+            )
+        )
+        return response
+
     def require_api_key(x_app_key: str | None) -> JSONResponse | None:
         if x_app_key != settings.app_api_key:
             return JSONResponse({"error": "Invalid or missing API key"}, status_code=403)
         return None
 
     @app.post("/api/training/upload")
-    async def upload_training_sample(
+    def upload_training_sample(
         sample_id: str = Form(...),
         label: str = Form(...),
         image_width: int = Form(...),
@@ -101,7 +140,7 @@ def create_app(settings: Settings) -> FastAPI:
         }
 
     @app.get("/api/training/export")
-    async def export_training_data(x_app_key: str | None = Header(None)):
+    def export_training_data(x_app_key: str | None = Header(None)):
         auth_error = require_api_key(x_app_key)
         if auth_error:
             return auth_error
@@ -114,6 +153,7 @@ def create_app(settings: Settings) -> FastAPI:
             zip_path,
             media_type="application/zip",
             filename=f"disc_training_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+            background=BackgroundTask(zip_path.unlink, missing_ok=True),
         )
 
     @app.post("/api/training/start")

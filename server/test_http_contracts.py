@@ -19,6 +19,13 @@ class AsgiResponse:
     def json(self) -> dict:
         return json.loads(self.body.decode())
 
+    def header(self, name: str) -> str | None:
+        target = name.lower().encode()
+        for key, value in self.headers:
+            if key.lower() == target:
+                return value.decode()
+        return None
+
 
 async def call_asgi(app, method: str, path: str, *, headers: dict[str, str] | None = None, body: bytes = b"") -> AsgiResponse:
     request_sent = False
@@ -106,6 +113,26 @@ class TrainingServerContractTests(unittest.TestCase):
             {"version": "none", "sha256": "", "url": ""},
         )
         self.assertEqual(self.request(app, "GET", "/api/model/download").status_code, 404)
+
+    def test_request_id_header_is_generated_and_can_be_provided(self):
+        app = self.build_app()
+        generated = self.request(app, "GET", "/health")
+        self.assertIsNotNone(generated.header("x-request-id"))
+
+        provided = self.request(app, "GET", "/health", headers={"x-request-id": "req-test-123"})
+        self.assertEqual(provided.header("x-request-id"), "req-test-123")
+
+    def test_export_returns_zip_and_cleans_temporary_file(self):
+        app = self.build_app()
+        app.state.settings.labels_dir.mkdir(parents=True, exist_ok=True)
+        (app.state.settings.labels_dir / "sample.txt").write_text("0 0.5 0.5 0.1 0.1")
+
+        response = self.request(app, "GET", "/api/training/export", headers={"x-app-key": "test-key"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.header("content-type"), "application/zip")
+        exports_dir = app.state.settings.base_dir / "exports"
+        self.assertFalse(any(exports_dir.glob("*.zip")))
 
     def test_upload_requires_api_key(self):
         app = self.build_app()

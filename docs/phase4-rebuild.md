@@ -41,6 +41,13 @@ No persistent schema migration is required for this server slice. Existing local
 4. Validate `/health`, `/api/training/stats`, `/api/model/version`, and one authenticated upload against the target environment.
 5. Trigger `/api/training/export` and compare label/image counts against the previous deployment before enabling new training runs.
 
+## Remote Progress
+
+- Added a dedicated server CI gate and reusable local test script as the first remote-verifiable Phase 4 follow-up.
+- Added request-id propagation and structured request lifecycle logging as the second remote-verifiable Phase 4 follow-up.
+- Added validated remote training configuration knobs and tests as the third remote-verifiable Phase 4 follow-up.
+- Hardened upload/export concurrency by moving blocking handlers to FastAPI's thread pool and generating unique temporary export ZIP files.
+
 ## Remaining Phase 4 Work
 
 - Rebuild the Flutter client architecture around Riverpod, Drift, typed repositories, and generated API clients.

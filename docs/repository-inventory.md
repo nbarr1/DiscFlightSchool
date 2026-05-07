@@ -4,6 +4,11 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 
 - `.claude/settings.local.json`
 - `.github/workflows/build.yml`
+- `.github/workflows/server-tests.yml`
+- `.pytest_cache/.gitignore`
+- `.pytest_cache/CACHEDIR.TAG`
+- `.pytest_cache/README.md`
+- `.pytest_cache/v/cache/nodeids`
 - `.vscode/launch.json`
 - `README.md`
 - `disc_golf_app/.gitignore`
@@ -245,7 +250,9 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 - `docs/phase2-synthesis.md`
 - `docs/phase3-architecture-decisions.md`
 - `docs/phase4-rebuild.md`
+- `docs/remote-sequential-work-plan.md`
 - `docs/repository-inventory.md`
+- `scripts/test_server.sh`
 - `server/.dockerignore`
 - `server/.gitignore`
 - `server/Dockerfile`
@@ -256,7 +263,9 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 - `server/main.py`
 - `server/models/disc_detector.tflite`
 - `server/requirements.txt`
+- `server/test_config.py`
 - `server/test_http_contracts.py`
+- `server/test_storage.py`
 - `server/test_validation.py`
 - `server/training_server/__init__.py`
 - `server/training_server/app.py`

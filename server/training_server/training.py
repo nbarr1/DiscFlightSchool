@@ -54,16 +54,16 @@ class TrainingManager:
                     "train",
                     f"data={self._settings.dataset_yaml.resolve()}",
                     "model=yolov8n.pt",
-                    "epochs=50",
-                    "imgsz=640",
-                    "batch=16",
+                    f"epochs={self._settings.training_epochs}",
+                    f"imgsz={self._settings.training_image_size}",
+                    f"batch={self._settings.training_batch_size}",
                     f"project={self._settings.base_dir / 'runs'}",
                     "name=disc_detector",
                     "exist_ok=True",
                 ],
                 capture_output=True,
                 text=True,
-                timeout=7200,
+                timeout=self._settings.training_timeout_seconds,
             )
 
             if result.returncode != 0:
@@ -73,10 +73,16 @@ class TrainingManager:
             best_pt = self._settings.base_dir / "runs" / "disc_detector" / "weights" / "best.pt"
             if best_pt.exists():
                 export_result = subprocess.run(
-                    ["yolo", "export", f"model={best_pt}", "format=tflite", "imgsz=640"],
+                    [
+                        "yolo",
+                        "export",
+                        f"model={best_pt}",
+                        "format=tflite",
+                        f"imgsz={self._settings.training_image_size}",
+                    ],
                     capture_output=True,
                     text=True,
-                    timeout=600,
+                    timeout=self._settings.export_timeout_seconds,
                 )
                 if export_result.returncode != 0:
                     self._status["result"] = f"failed export: {export_result.stderr[-500:]}"

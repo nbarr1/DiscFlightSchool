@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -105,6 +106,8 @@ class FileStorage:
         return {"path": model_path, "version": model_path.stem, "sha256": sha256}
 
     def build_training_export(self) -> Path:
-        zip_path = self.settings.base_dir / "training_export.zip"
+        export_dir = self.settings.base_dir / "exports"
+        export_dir.mkdir(parents=True, exist_ok=True)
+        zip_path = export_dir / f"training_export_{uuid.uuid4().hex}.zip"
         shutil.make_archive(str(zip_path.with_suffix("")), "zip", str(self.settings.dataset_dir))
         return zip_path

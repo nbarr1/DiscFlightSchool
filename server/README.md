@@ -19,6 +19,11 @@ This is the Phase 4 rebuilt server entrypoint for Disc Flight School training da
 | `APP_API_KEY` | Yes | none | Shared private key required by upload/export/training-start endpoints. |
 | `CORS_ALLOW_ORIGINS` | No | empty | Comma-separated list of allowed browser origins. |
 | `MAX_UPLOAD_BYTES` | No | `8388608` | Maximum bytes per uploaded image. |
+| `TRAINING_TIMEOUT_SECONDS` | No | `7200` | Timeout for the YOLO training subprocess. |
+| `MODEL_EXPORT_TIMEOUT_SECONDS` | No | `600` | Timeout for the YOLO TFLite export subprocess. |
+| `TRAINING_EPOCHS` | No | `50` | Epoch count passed to `yolo detect train`. |
+| `TRAINING_IMAGE_SIZE` | No | `640` | Image size passed to YOLO train/export commands. |
+| `TRAINING_BATCH_SIZE` | No | `16` | Batch size passed to `yolo detect train`. |
 
 ## Run locally
 
@@ -33,8 +38,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 ```bash
 cd server
-APP_API_KEY=test-key python test_validation.py
-python test_http_contracts.py
+APP_API_KEY=test-key ../scripts/test_server.sh
 ```
 
 ## Deploy
