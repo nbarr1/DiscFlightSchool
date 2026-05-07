@@ -8,6 +8,7 @@ Maintained from the Phase 1 reconnaissance inventory. Build caches (`.git`, Andr
 - `README.md`
 - `docs/phase1-audit.md`
 - `docs/phase2-synthesis.md`
+- `docs/phase3-architecture-decisions.md`
 - `disc_golf_app/.gitignore`
 - `disc_golf_app/.metadata`
 - `disc_golf_app/README.md`
