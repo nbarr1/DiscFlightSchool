@@ -61,7 +61,7 @@ This plan breaks the remaining rebuild work into reviewable remote/virtual slice
 
 ## Step 5 — Flutter Data-Layer Foundation
 
-**Status:** Next recommended remote slice, pending Flutter SDK availability in CI/local environment.
+**Status:** In progress; repository contracts and migration plan are implemented, Flutter SDK validation remains pending.
 
 **Goal:** Start the client rebuild without replacing UI flows first.
 
@@ -70,6 +70,7 @@ This plan breaks the remaining rebuild work into reviewable remote/virtual slice
 - Typed repository interfaces for training samples, model metadata, roulette history, form history, and knowledge-base loading.
 - Serialization tests for legacy JSON contracts.
 - A migration plan from SharedPreferences/JSON to SQLite/Drift.
+- Next: add Drift tables and repository implementations once Flutter tooling is available in CI.
 
 ## Step 6 — Flutter CI/Test Repair
 

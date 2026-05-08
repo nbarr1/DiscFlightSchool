@@ -48,10 +48,11 @@ No persistent schema migration is required for this server slice. Existing local
 - Added validated remote training configuration knobs and tests as the third remote-verifiable Phase 4 follow-up.
 - Hardened upload/export concurrency by moving blocking handlers to FastAPI's thread pool and generating unique temporary export ZIP files.
 - Added the storage backend protocol boundary and verified the filesystem adapter against it as the fourth remote-verifiable Phase 4 follow-up.
+- Started the Flutter data-layer foundation with repository contracts, shared models, and a migration plan.
 
 ## Remaining Phase 4 Work
 
-- Rebuild the Flutter client architecture around Riverpod, Drift, typed repositories, and generated API clients.
+- Finish the Flutter client architecture around Riverpod, Drift implementations, and generated API clients.
 - Add local SQLite migrations from SharedPreferences/JSON storage.
 - Add durable PostgreSQL/object-storage/queue adapters for the server when the deployment environment is ready.
 - Add OpenTelemetry logging/metrics/tracing and request-id propagation.

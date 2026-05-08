@@ -5,10 +5,6 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 - `.claude/settings.local.json`
 - `.github/workflows/build.yml`
 - `.github/workflows/server-tests.yml`
-- `.pytest_cache/.gitignore`
-- `.pytest_cache/CACHEDIR.TAG`
-- `.pytest_cache/README.md`
-- `.pytest_cache/v/cache/nodeids`
 - `.vscode/launch.json`
 - `README.md`
 - `disc_golf_app/.gitignore`
@@ -112,11 +108,19 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 - `disc_golf_app/ios/Runner/Info.plist`
 - `disc_golf_app/ios/Runner/Runner-Bridging-Header.h`
 - `disc_golf_app/ios/RunnerTests/RunnerTests.swift`
+- `disc_golf_app/lib/data/repositories/detector_model_repository.dart`
+- `disc_golf_app/lib/data/repositories/form_history_repository.dart`
+- `disc_golf_app/lib/data/repositories/knowledge_base_repository.dart`
+- `disc_golf_app/lib/data/repositories/repositories.dart`
+- `disc_golf_app/lib/data/repositories/roulette_repository.dart`
+- `disc_golf_app/lib/data/repositories/training_sample_repository.dart`
 - `disc_golf_app/lib/main.dart`
 - `disc_golf_app/lib/manual_tracking.dart`
+- `disc_golf_app/lib/models/detector_model_metadata.dart`
 - `disc_golf_app/lib/models/disc.dart`
 - `disc_golf_app/lib/models/flight_data.dart`
 - `disc_golf_app/lib/models/form_analysis.dart`
+- `disc_golf_app/lib/models/form_session_record.dart`
 - `disc_golf_app/lib/models/knowledge_base.dart`
 - `disc_golf_app/lib/models/roulette_data.dart`
 - `disc_golf_app/lib/models/roulette_scoring.dart`
@@ -220,6 +224,7 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 - `disc_golf_app/python/posture_analysis/init.py`
 - `disc_golf_app/python/posture_analysis/pose_estimator.py`
 - `disc_golf_app/python/requirements.txt`
+- `disc_golf_app/test/data_contracts_test.dart`
 - `disc_golf_app/test/widget_test.dart`
 - `disc_golf_app/web/favicon.png`
 - `disc_golf_app/web/icons/Icon-192.png`
@@ -246,6 +251,7 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 - `disc_golf_app/windows/runner/utils.h`
 - `disc_golf_app/windows/runner/win32_window.cpp`
 - `disc_golf_app/windows/runner/win32_window.h`
+- `docs/flutter-data-layer-migration.md`
 - `docs/phase1-audit.md`
 - `docs/phase2-synthesis.md`
 - `docs/phase3-architecture-decisions.md`
@@ -258,7 +264,6 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 - `server/Dockerfile`
 - `server/Procfile`
 - `server/README.md`
-- `server/dataset/dataset.yaml`
 - `server/dataset/images/train/.gitkeep`
 - `server/dataset/labels/train/.gitkeep`
 - `server/main.py`

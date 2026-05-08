@@ -2,49 +2,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// One saved form analysis session — lightweight record for history display.
-class FormSessionRecord {
-  final String id;
-  final DateTime date;
-  final double score;
-  final String throwType; // 'BH' or 'FH'
-  final String? proPlayer;
-  final int frameCount;
-  final Map<String, double> avgAngles; // per-angle averages for trend charting
-
-  FormSessionRecord({
-    required this.id,
-    required this.date,
-    required this.score,
-    required this.throwType,
-    this.proPlayer,
-    required this.frameCount,
-    required this.avgAngles,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'date': date.toIso8601String(),
-        'score': score,
-        'throwType': throwType,
-        'proPlayer': proPlayer,
-        'frameCount': frameCount,
-        'avgAngles': avgAngles,
-      };
-
-  factory FormSessionRecord.fromJson(Map<String, dynamic> j) =>
-      FormSessionRecord(
-        id: j['id'] as String,
-        date: DateTime.parse(j['date'] as String),
-        score: (j['score'] as num).toDouble(),
-        throwType: (j['throwType'] as String?) ?? 'BH',
-        proPlayer: j['proPlayer'] as String?,
-        frameCount: (j['frameCount'] as num).toInt(),
-        avgAngles: (j['avgAngles'] as Map<String, dynamic>? ?? {}).map(
-          (k, v) => MapEntry(k, (v as num).toDouble()),
-        ),
-      );
-}
+import '../models/form_session_record.dart';
+export '../models/form_session_record.dart';
 
 class FormHistoryService extends ChangeNotifier {
   static const _prefsKey = 'form_session_history';
