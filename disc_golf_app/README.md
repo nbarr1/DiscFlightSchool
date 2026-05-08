@@ -24,3 +24,14 @@ Anthropic API keys for AI knowledge-base search are also stored with platform se
 ## Model updates
 
 Model downloads are checked from **Training Settings**. The app validates the server-provided SHA-256 before saving the downloaded `.tflite` file and reloads the detector after a successful update.
+
+
+## Testing
+
+From the repository root, run:
+
+```bash
+./scripts/test_flutter.sh
+```
+
+The script installs Flutter dependencies, runs `flutter analyze`, and executes `flutter test` inside `disc_golf_app/`. The same checks run remotely in GitHub Actions via `Flutter Tests`.
