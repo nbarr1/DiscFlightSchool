@@ -115,7 +115,7 @@ def create_app(settings: Settings, storage: StorageBackend | None = None) -> Fas
     async def get_model_version():
         info = storage.latest_model_info()
         if info is None:
-            return JSONResponse({"version": "none", "sha256": "", "url": ""}, status_code=200)
+            return {"version": "none", "sha256": "", "url": ""}
         return {"version": info["version"], "sha256": info["sha256"], "url": "/api/model/download"}
 
     @app.get("/api/model/download")
