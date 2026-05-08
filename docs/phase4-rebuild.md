@@ -49,6 +49,7 @@ No persistent schema migration is required for this server slice. Existing local
 - Hardened upload/export concurrency by moving blocking handlers to FastAPI's thread pool and generating unique temporary export ZIP files.
 - Added the storage backend protocol boundary and verified the filesystem adapter against it as the fourth remote-verifiable Phase 4 follow-up.
 - Started the Flutter data-layer foundation with repository contracts, shared models, and a migration plan.
+- Added remote Flutter analyze/test CI and a reusable local Flutter test script before APK builds.
 
 ## Remaining Phase 4 Work
 

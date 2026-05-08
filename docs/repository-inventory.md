@@ -4,6 +4,7 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 
 - `.claude/settings.local.json`
 - `.github/workflows/build.yml`
+- `.github/workflows/flutter-tests.yml`
 - `.github/workflows/server-tests.yml`
 - `.vscode/launch.json`
 - `README.md`
@@ -258,6 +259,7 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 - `docs/phase4-rebuild.md`
 - `docs/remote-sequential-work-plan.md`
 - `docs/repository-inventory.md`
+- `scripts/test_flutter.sh`
 - `scripts/test_server.sh`
 - `server/.dockerignore`
 - `server/.gitignore`

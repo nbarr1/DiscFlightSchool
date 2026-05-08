@@ -74,19 +74,20 @@ This plan breaks the remaining rebuild work into reviewable remote/virtual slice
 
 ## Step 6 — Flutter CI/Test Repair
 
-**Status:** Queued pending Flutter SDK availability.
+**Status:** Implemented in this update.
 
 **Goal:** Replace the stale starter widget test with meaningful smoke/model tests that can run remotely.
 
 **Deliverables:**
 
-- Remove or rewrite the default counter-style widget test.
+- Confirm the stale counter-style widget test has been replaced by app startup routing tests.
 - Add tests for app startup routing and pure model serialization.
 - Update GitHub Actions to run `flutter analyze` and `flutter test` before APK build.
+- Add a reusable remote/local Flutter test script mirroring the CI test workflow.
 
 ## Step 7 — Durable Server Runtime
 
-**Status:** Queued after adapter boundaries are stable.
+**Status:** Next recommended remote slice after Flutter CI validates successfully.
 
 **Goal:** Add production adapters for durable metadata, blob storage, and queued training jobs.
 
