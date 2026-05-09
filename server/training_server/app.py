@@ -131,7 +131,7 @@ def create_app(settings: Settings, storage: StorageBackend | None = None) -> Fas
 
     @app.get("/api/training/stats")
     async def get_training_stats():
-        stats = storage.load_stats()
+    def get_training_stats():
         counts = storage.dataset_counts()
         return {
             "total_samples": stats.get("total_samples", 0),
