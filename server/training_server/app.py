@@ -119,7 +119,7 @@ def create_app(settings: Settings, storage: StorageBackend | None = None) -> Fas
         return {"version": info["version"], "sha256": info["sha256"], "url": "/api/model/download"}
 
     @app.get("/api/model/download")
-    async def download_model():
+    def download_model():
         info = storage.latest_model_info()
         if info is None:
             return JSONResponse({"error": "No model available"}, status_code=404)
