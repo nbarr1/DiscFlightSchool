@@ -65,6 +65,14 @@ jobs:
           done
           echo "All assets present."
 
+      - name: Analyze Flutter app
+        working-directory: disc_golf_app
+        run: flutter analyze
+
+      - name: Run Flutter tests
+        working-directory: disc_golf_app
+        run: flutter test
+
       - name: Build release APK
         working-directory: disc_golf_app
         run: flutter build apk --release
