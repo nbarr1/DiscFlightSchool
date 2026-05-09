@@ -53,9 +53,9 @@ class FileStorage:
 
     def dataset_counts(self) -> DatasetCounts:
         return {
-            "full_images": len(list(self.settings.images_dir.glob("*_full.*"))),
-            "all_images": len(list(self.settings.images_dir.glob("*.*"))),
-            "labels": len(list(self.settings.labels_dir.glob("*.txt"))),
+            "full_images": sum(1 for _ in self.settings.images_dir.glob("*_full.*")), 
+            "all_images": sum(1 for _ in self.settings.images_dir.glob("*.*")), 
+            "labels": sum(1 for _ in self.settings.labels_dir.glob("*.txt")),
         }
 
     def copy_upload_image(self, upload: UploadFile, dest: Path, ext: str) -> int:
