@@ -103,7 +103,8 @@ class FileStorage:
         if not tflite_files:
             return None
         model_path = max(tflite_files, key=lambda path: path.stat().st_mtime)
-        sha256 = hashlib.sha256(model_path.read_bytes()).hexdigest()
+        with model_path.open("rb") as f:
+            sha256 = hashlib.file_digest(f, "sha256").hexdigest()
         return {"path": model_path, "version": model_path.stem, "sha256": sha256}
 
     def build_training_export(self) -> Path:
