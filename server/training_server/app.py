@@ -158,7 +158,7 @@ def create_app(settings: Settings, storage: StorageBackend | None = None) -> Fas
         )
 
     @app.post("/api/training/start")
-    async def start_training(x_app_key: str | None = Header(None)):
+    def start_training(x_app_key: str | None = Header(None)):
         auth_error = require_api_key(x_app_key)
         if auth_error:
             return auth_error
