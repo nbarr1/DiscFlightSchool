@@ -91,7 +91,7 @@ class FileStorage:
         crop_ext = normalized_image_ext(crop_image.filename)
         full_dest = safe_child(self.settings.images_dir, f"{sample_id}_full{full_ext}")
         crop_dest = safe_child(self.settings.images_dir, f"{sample_id}_crop{crop_ext}")
-        label_dest = safe_child(self.settings.labels_dir, f"{sample_id}.txt")
+        label_dest = safe_child(self.settings.labels_dir, f"{sample_id}_full.txt")
 
         self.copy_upload_image(full_image, full_dest, full_ext)
         self.copy_upload_image(crop_image, crop_dest, crop_ext)
