@@ -12,3 +12,4 @@ python -m py_compile \
   server/training_server/*.py
 
 python -m pytest server
+python scripts/validate_durable_runtime.py

@@ -20,6 +20,13 @@ class Settings:
     training_epochs: int = 50
     training_image_size: int = 640
     training_batch_size: int = 16
+    database_url: str | None = None
+    redis_url: str | None = None
+    object_storage_endpoint: str | None = None
+    object_storage_bucket: str | None = None
+    object_storage_access_key: str | None = None
+    object_storage_secret_key: str | None = None
+    object_storage_secure: bool = True
 
     @property
     def dataset_dir(self) -> Path:
@@ -50,7 +57,26 @@ class Settings:
         return self.dataset_dir / "dataset.yaml"
 
     @staticmethod
-    def _positive_int_from_env(name: str, default: int) -> int:
+    def _optional_env(name: str) -> str | None:
+        value = os.environ.get(name)
+        if value is None or value.strip() == "":
+            return None
+        return value.strip()
+
+    @staticmethod
+    def _bool_from_env(name: str, default: bool) -> bool:
+        raw = os.environ.get(name)
+        if raw is None or raw.strip() == "":
+            return default
+        normalized = raw.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+        raise RuntimeError(f"{name} must be a boolean value")
+
+    @staticmethod
+    def positive_int_from_env(name: str, default: int) -> int:
         raw = os.environ.get(name, str(default))
         try:
             value = int(raw)
@@ -71,12 +97,13 @@ class Settings:
             for origin in os.environ.get("CORS_ALLOW_ORIGINS", "").split(",")
             if origin.strip()
         )
-        max_upload_bytes = cls._positive_int_from_env("MAX_UPLOAD_BYTES", 8 * 1024 * 1024)
-        training_timeout_seconds = cls._positive_int_from_env("TRAINING_TIMEOUT_SECONDS", 7200)
-        export_timeout_seconds = cls._positive_int_from_env("MODEL_EXPORT_TIMEOUT_SECONDS", 600)
-        training_epochs = cls._positive_int_from_env("TRAINING_EPOCHS", 50)
-        training_image_size = cls._positive_int_from_env("TRAINING_IMAGE_SIZE", 640)
-        training_batch_size = cls._positive_int_from_env("TRAINING_BATCH_SIZE", 16)
+        max_upload_bytes = cls.positive_int_from_env("MAX_UPLOAD_BYTES", 8 * 1024 * 1024)
+        training_timeout_seconds = cls.positive_int_from_env("TRAINING_TIMEOUT_SECONDS", 7200)
+        export_timeout_seconds = cls.positive_int_from_env("MODEL_EXPORT_TIMEOUT_SECONDS", 600)
+        training_epochs = cls.positive_int_from_env("TRAINING_EPOCHS", 50)
+        training_image_size = cls.positive_int_from_env("TRAINING_IMAGE_SIZE", 640)
+        training_batch_size = cls.positive_int_from_env("TRAINING_BATCH_SIZE", 16)
+        object_storage_secure = cls._bool_from_env("OBJECT_STORAGE_SECURE", True)
         return cls(
             app_api_key=app_api_key,
             base_dir=base_dir or Path(__file__).resolve().parents[1],
@@ -87,4 +114,11 @@ class Settings:
             training_epochs=training_epochs,
             training_image_size=training_image_size,
             training_batch_size=training_batch_size,
+            database_url=cls._optional_env("DATABASE_URL"),
+            redis_url=cls._optional_env("REDIS_URL"),
+            object_storage_endpoint=cls._optional_env("OBJECT_STORAGE_ENDPOINT"),
+            object_storage_bucket=cls._optional_env("OBJECT_STORAGE_BUCKET"),
+            object_storage_access_key=cls._optional_env("OBJECT_STORAGE_ACCESS_KEY"),
+            object_storage_secret_key=cls._optional_env("OBJECT_STORAGE_SECRET_KEY"),
+            object_storage_secure=object_storage_secure,
         )

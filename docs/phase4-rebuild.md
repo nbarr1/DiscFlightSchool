@@ -50,11 +50,12 @@ No persistent schema migration is required for this server slice. Existing local
 - Added the storage backend protocol boundary and verified the filesystem adapter against it as the fourth remote-verifiable Phase 4 follow-up.
 - Started the Flutter data-layer foundation with repository contracts, shared models, and a migration plan.
 - Added remote Flutter analyze/test CI and a reusable local Flutter test script before APK builds.
+- Added a Docker Compose durable runtime scaffold with API, worker, PostgreSQL, Redis, and MinIO services.
 
 ## Remaining Phase 4 Work
 
 - Finish the Flutter client architecture around Riverpod, Drift implementations, and generated API clients.
 - Add local SQLite migrations from SharedPreferences/JSON storage.
-- Add durable PostgreSQL/object-storage/queue adapters for the server when the deployment environment is ready.
+- Finish durable PostgreSQL/object-storage/queue adapters for the server runtime.
 - Add OpenTelemetry logging/metrics/tracing and request-id propagation.
 - Add model-update and upload integration tests that run against a live ASGI server/container.

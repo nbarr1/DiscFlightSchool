@@ -48,3 +48,6 @@ jobs:
 
       - name: Run server unit and contract tests
         run: python -m pytest server
+
+      - name: Validate durable runtime files
+        run: python scripts/validate_durable_runtime.py

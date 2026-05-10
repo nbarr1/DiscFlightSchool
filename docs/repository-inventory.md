@@ -6,6 +6,10 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 - `.github/workflows/build.yml`
 - `.github/workflows/flutter-tests.yml`
 - `.github/workflows/server-tests.yml`
+- `.pytest_cache/.gitignore`
+- `.pytest_cache/CACHEDIR.TAG`
+- `.pytest_cache/README.md`
+- `.pytest_cache/v/cache/nodeids`
 - `.vscode/launch.json`
 - `README.md`
 - `disc_golf_app/.gitignore`
@@ -252,6 +256,8 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 - `disc_golf_app/windows/runner/utils.h`
 - `disc_golf_app/windows/runner/win32_window.cpp`
 - `disc_golf_app/windows/runner/win32_window.h`
+- `docker-compose.yml`
+- `docs/durable-server-runtime.md`
 - `docs/flutter-data-layer-migration.md`
 - `docs/phase1-audit.md`
 - `docs/phase2-synthesis.md`
@@ -261,11 +267,14 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 - `docs/repository-inventory.md`
 - `scripts/test_flutter.sh`
 - `scripts/test_server.sh`
+- `scripts/validate_durable_runtime.py`
 - `server/.dockerignore`
+- `server/.env.example`
 - `server/.gitignore`
 - `server/Dockerfile`
 - `server/Procfile`
 - `server/README.md`
+- `server/dataset/dataset.yaml`
 - `server/dataset/images/train/.gitkeep`
 - `server/dataset/labels/train/.gitkeep`
 - `server/main.py`
@@ -282,3 +291,4 @@ Maintained from the Phase 4 rebuild inventory. Build caches (`.git`, Android `bu
 - `server/training_server/storage.py`
 - `server/training_server/training.py`
 - `server/training_server/validation.py`
+- `server/training_server/worker.py`

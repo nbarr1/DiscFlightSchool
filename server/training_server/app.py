@@ -113,13 +113,13 @@ def create_app(settings: Settings, storage: StorageBackend | None = None) -> Fas
 
     @app.get("/api/model/version")
     async def get_model_version():
-        info = storage.latest_model_info()
+    def get_model_version():
         if info is None:
             return JSONResponse({"version": "none", "sha256": "", "url": ""}, status_code=200)
         return {"version": info["version"], "sha256": info["sha256"], "url": "/api/model/download"}
 
     @app.get("/api/model/download")
-    async def download_model():
+    def download_model():
         info = storage.latest_model_info()
         if info is None:
             return JSONResponse({"error": "No model available"}, status_code=404)
@@ -131,7 +131,7 @@ def create_app(settings: Settings, storage: StorageBackend | None = None) -> Fas
 
     @app.get("/api/training/stats")
     async def get_training_stats():
-        stats = storage.load_stats()
+    def get_training_stats():
         counts = storage.dataset_counts()
         return {
             "total_samples": stats.get("total_samples", 0),
@@ -158,7 +158,7 @@ def create_app(settings: Settings, storage: StorageBackend | None = None) -> Fas
         )
 
     @app.post("/api/training/start")
-    async def start_training(x_app_key: str | None = Header(None)):
+    def start_training(x_app_key: str | None = Header(None)):
         auth_error = require_api_key(x_app_key)
         if auth_error:
             return auth_error

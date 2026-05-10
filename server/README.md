@@ -44,3 +44,16 @@ APP_API_KEY=test-key ../scripts/test_server.sh
 ## Deploy
 
 The existing Dockerfile and Procfile still run `main:app`. Set `APP_API_KEY` and any optional environment variables in the target platform secret/config system before starting the container.
+
+
+## Durable local stack
+
+A root-level Docker Compose stack is available for remote/virtual validation of the API, worker, PostgreSQL, Redis, and MinIO services:
+
+```bash
+cp server/.env.example server/.env
+# Edit server/.env before production-like use.
+docker compose --env-file server/.env up --build
+```
+
+The worker entrypoint currently validates runtime configuration and stays alive; durable queue consumption is planned for a later Phase 4 slice.

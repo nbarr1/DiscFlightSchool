@@ -87,7 +87,7 @@ This plan breaks the remaining rebuild work into reviewable remote/virtual slice
 
 ## Step 7 — Durable Server Runtime
 
-**Status:** Next recommended remote slice after Flutter CI validates successfully.
+**Status:** In progress; compose stack, environment schema, and worker scaffold are implemented.
 
 **Goal:** Add production adapters for durable metadata, blob storage, and queued training jobs.
 
@@ -97,6 +97,7 @@ This plan breaks the remaining rebuild work into reviewable remote/virtual slice
 - S3-compatible blob adapter.
 - Redis/Celery or RQ training job adapter.
 - Docker Compose for API, worker, database, queue, and object storage.
+- Next: replace the worker scaffold with a real Redis-backed training job adapter.
 
 ## Remote Execution Rules
 
