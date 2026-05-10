@@ -27,7 +27,8 @@ class TrainingManager:
     @property
     def status(self) -> dict[str, Any]:
         return self._status
-
+        with self._lock:
+            return self._status.copy()
     def start(self) -> tuple[dict[str, Any], int]:
         with self._lock:
             if self._status["running"]:
