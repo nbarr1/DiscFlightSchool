@@ -1,26 +1,40 @@
-# Flutter Data-Layer Migration Plan
+# Flutter Data-Layer Migration Status
 
-This is the Step 5 remote/virtual foundation for rebuilding the Flutter client data layer. It introduces typed repository boundaries without replacing UI flows yet, so existing screens and services can be migrated incrementally.
+Audited on 2026-05-10.
 
-## Implemented Foundation
+## Current state
 
-- Added repository interfaces for training samples, detector model metadata/downloads, roulette history, form history, and knowledge-base content.
-- Extracted `FormSessionRecord` into `lib/models/form_session_record.dart` so form-history contracts can be shared without importing a `ChangeNotifier` service.
-- Added detector model metadata/version models for local model records and `/api/model/version` responses.
-- Added data-contract tests for training sample YOLO formatting, legacy roulette score parsing, form history legacy defaults, and no-model version responses.
+Repository interfaces exist under `disc_golf_app/lib/data/repositories/` for:
 
-## Migration Sequence
+- Detector model metadata/download boundaries.
+- Form history sessions.
+- Knowledge-base content.
+- Roulette spin history and scored rounds.
+- Training samples.
 
-1. Add Drift/SQLite tables matching the repository interfaces.
-2. Build SharedPreferences/JSON importers for legacy keys and files.
-3. Run importers once during app startup before UI reads repository data.
-4. Keep existing services as adapters over the repositories during transition.
-5. Remove direct SharedPreferences persistence from services only after repository-backed tests cover the same behavior.
+Shared models currently extracted for migration support include:
 
-## Legacy Contracts To Preserve
+- `FormSessionRecord`.
+- `DetectorModelMetadata`.
+- `DetectorModelVersion`.
 
-- `TrainingSample.uploaded` defaults to `false` when absent.
-- `TrainingSample.toYoloLabel()` emits class `0` and six fixed decimal places.
-- `HoleScore.fromJson()` accepts legacy single-`challenge` records.
-- `FormSessionRecord.throwType` defaults to `BH` when absent.
-- `/api/model/version` no-model sentinel remains `version: none`, empty `sha256`, and empty `url`.
+Data-contract tests currently cover:
+
+- `TrainingSample.uploaded` defaulting to `false` for legacy JSON.
+- `TrainingSample.toYoloLabel()` formatting class `0` with six decimal places.
+- Legacy single-challenge `HoleScore` parsing.
+- `FormSessionRecord.throwType` defaulting to `BH` for legacy JSON.
+- The no-model `DetectorModelVersion` sentinel.
+
+## Important limitation
+
+The repository interfaces are not yet wired as concrete persistence adapters for the existing UI flows. Current services still use direct local persistence mechanisms such as SharedPreferences, files, and secure storage.
+
+## Safe migration sequence
+
+1. Add concrete local adapters behind the existing repository interfaces.
+2. Add tests for each adapter using realistic legacy data.
+3. Add one-time import/migration code for existing SharedPreferences/file-backed data.
+4. Update services to depend on repositories while preserving public service behavior.
+5. Update screens only after service-level behavior is covered by tests.
+6. Remove legacy direct persistence paths after migration tests prove compatibility.
