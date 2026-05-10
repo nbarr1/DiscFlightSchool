@@ -112,7 +112,7 @@ def create_app(settings: Settings, storage: StorageBackend | None = None) -> Fas
         return JSONResponse({"status": "ok", "sample_id": sample_id, "message": "Sample received"})
 
     @app.get("/api/model/version")
-    async def get_model_version():
+    def get_model_version():
         info = storage.latest_model_info()
         if info is None:
             return JSONResponse({"version": "none", "sha256": "", "url": ""}, status_code=200)
