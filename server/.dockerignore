@@ -6,3 +6,5 @@ dataset/images/train/*
 dataset/labels/train/*
 training_export.zip
 stats.json
+exports/
+.env

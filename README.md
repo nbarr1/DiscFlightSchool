@@ -1,215 +1,152 @@
 # DiscFlightSchool
 
-A multi-module Flutter application for disc golf players — combining on-device disc flight tracking, professional form analysis, and a continuously improving detection model trained on real tournament footage.
+DiscFlightSchool is a monorepo containing a Flutter client and a FastAPI training/model-distribution server for disc golf analysis workflows.
 
----
+This README reflects an audit of the current repository state on 2026-05-10. It describes only files and behavior that exist in this repository.
 
-## Modules
+## Current repository status
 
-### Flight Tracker
-Real-time disc detection and flight path visualization using an on-device TFLite model. The model is trained on annotated JomezPro tournament footage and updated over-the-air as the training dataset grows.
+### Flutter client (`disc_golf_app/`)
 
-### Form Coach
-Biomechanics analysis of your throwing form. Record or upload a video, and the app detects your pose frame-by-frame using Google ML Kit, calculates joint angles, and compares them against a database of measured professional throws.
+The Flutter app is the end-user application. Its bootstrap lives in `disc_golf_app/lib/main.dart`, registers app services with Provider, and routes first-time users through onboarding before showing the home screen.
 
-**Supported throw types:** Backhand (BH) · Forehand (FH)
-**Left-handed support:** angle analysis mirrors automatically so the throwing arm is always scored as dominant
+Implemented client areas currently present in source:
 
-**Pro reference database (v4.0)** — manually annotated from 120fps slow-motion footage:
-| Player | PDGA Rating | BH | FH |
-|---|---|---|---|
-| Paul McBeth | 1058 | ✓ | ✓ |
-| Ricky Wysocki | 1051 | ✓ | ✓ |
-| Calvin Heimburg | 1045 | ✓ | ✓ |
-| Eagle McMahon | 1040 | ✓ | ✓ |
-| Gannon Buhr | 1040 | ✓ | ✓ |
+- Flight Tracker screens, manual tracking, video playback, overlays, and disc-detection services.
+- Form Coach screens for video trimming, posture analysis, phase selection/comparison, pose correction, and session history.
+- Disc Roulette screens, scoring models, scoring service, and roulette history service.
+- Knowledge Base screens and local JSON-backed content models/services.
+- Training Settings for opt-in sample collection, server URL/API-key configuration, pending upload management, and detector model update checks.
+- Repository interface foundations under `disc_golf_app/lib/data/repositories/`; these are interfaces only and are not yet wired as concrete persistence adapters for the existing UI flows.
 
-**Angles analyzed per phase:** elbow flexion · shoulder flexion · lead/trail knee flexion · trunk lateral tilt · X-factor (hip-shoulder separation) · off-arm position
+Important client facts:
 
-**Throw phases:**
-- Backhand: Reach Back → Power Pocket → Release → Follow Through
-- Forehand: Wind Up → Power Pocket → Release → Follow Through
+- Package name: `disc_golf_app`.
+- Published version in `pubspec.yaml`: `1.0.0+1`.
+- Dart SDK constraint: `>=3.8.0 <4.0.0`.
+- Android application ID: `com.discflightschool.app`.
+- Android compile SDK: `36`.
+- Android NDK version requested by Gradle: `27.0.12077973`.
+- Release builds use a `key.properties` signing config when present; otherwise the release build type falls back to the debug signing config.
+- Bundled runtime assets include JSON data files, `assets/models/disc_detector.tflite`, an SVG basket image, and Flutter material assets.
 
-**Pose correction:** If the auto-detected skeleton is off, three correction modes let you fix it — individual joint drag, move-all skeleton shift, or guided sequential re-placement with Catmull-Rom interpolation between corrected frames.
+### Training server (`server/`)
 
-### Knowledge Base
-In-app articles on disc golf biomechanics, technique cues, and equipment. Articles are linked directly from coaching suggestions so you can read deeper on any flagged issue.
+The server is a FastAPI app. `server/main.py` is the deployment entrypoint and delegates to the `training_server` package.
 
----
+Implemented server endpoints:
 
-## Architecture
+| Method | Endpoint | Auth | Current behavior |
+|---|---|---:|---|
+| `GET` | `/` | No | Lists implemented endpoints. |
+| `GET` | `/health` | No | Returns `{"status":"ok"}`. |
+| `POST` | `/api/training/upload` | `X-App-Key` | Validates sample ID, YOLO class-0 label, positive dimensions, JPEG/PNG signatures, and stores full image, crop image, and label on disk. |
+| `GET` | `/api/training/stats` | No | Returns stored stats and on-disk image/label counts. |
+| `GET` | `/api/training/export` | `X-App-Key` | Builds and returns a ZIP of the dataset directory when data exists. |
+| `POST` | `/api/training/start` | `X-App-Key` | Starts a background YOLOv8 training/export thread if at least 10 full images exist. |
+| `GET` | `/api/training/status` | No | Returns in-memory training status. |
+| `GET` | `/api/model/version` | No | Returns latest `.tflite` model metadata or the no-model sentinel. |
+| `GET` | `/api/model/download` | No | Downloads the latest `.tflite` model or returns 404 when none exists. |
 
-```
-Flutter App (disc_golf_app/)
-│
-├── Flight Tracker          On-device TFLite inference
-│   └── disc_detector.tflite   Updated via server OTA
-│
-├── Form Coach              Google ML Kit pose detection
-│   └── Pro baseline DB     assets/data/pro_baseline_db.json (v4.0)
-│
-└── Knowledge Base          assets/data/knowledge_base.json
+Important server facts:
 
-Python Server (server/)
-├── Training data store     YOLO images + labels
-├── Model versioning        .tflite served to app
-└── Training runner         YOLOv8 → TFLite pipeline
+- `APP_API_KEY` is required to start the server.
+- Filesystem storage is the only implemented storage backend.
+- Optional database, Redis, and object-storage settings are parsed, but no PostgreSQL, Redis queue, or object-storage adapter is implemented yet.
+- `training_server.worker` is a placeholder process that validates configuration and sleeps; it does not consume jobs.
+- `server/dataset/dataset.yaml` is generated at runtime by `FileStorage.initialize()` if it is absent.
 
-Data Pipeline (Discandformdetection — separate repo)
-├── JomezPro ingestion      yt-dlp, 2025 season
-├── Shot segmentation       PySceneDetect + optical flow + audio
-├── CVAT annotation         Bounding boxes → YOLO/COCO export
-├── ViTPose-B extraction    Phase angles, X-factor, timing
-└── sync_to_app.py          Pushes datasets to this server
-```
+### Docker Compose runtime scaffold
 
----
+The root `docker-compose.yml` defines services for:
 
-## Server API
+- `training-api`
+- `training-worker`
+- `postgres`
+- `redis`
+- `minio`
+- `minio-init`
 
-Run with: `uvicorn main:app --host 0.0.0.0 --port 8000`
+The compose stack is a scaffold for remote/local validation. The API and worker currently still use filesystem-backed training data/model/export volumes. PostgreSQL, Redis, and MinIO are provisioned but not yet used by implemented adapters.
 
-### Model distribution
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/api/model/version` | Current model version + SHA-256 |
-| GET | `/api/model/download` | Download latest `.tflite` |
+## Project layout
 
-### Training data
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| POST | `/api/training/upload` | Upload one validated JPEG/PNG sample plus one YOLO label row | `X-App-Key` |
-| GET | `/api/training/stats` | Dataset counts | none |
-| GET | `/api/training/export` | Download full dataset as ZIP | `X-App-Key` |
-| POST | `/api/training/start` | Kick off YOLOv8 training run | `X-App-Key` |
-| GET | `/api/training/status` | Training run status | none |
-
-### Not currently implemented
-The previous README mentioned bulk-import and biomechanics sync endpoints. They are not present in `server/main.py`; treat them as future work unless they are added with tests and OpenAPI documentation.
-
----
-
-## Project Structure
-
-```
+```text
 DiscFlightSchool/
-├── disc_golf_app/
-│   ├── lib/
-│   │   ├── models/
-│   │   │   └── form_analysis.dart
-│   │   ├── screens/
-│   │   │   ├── form_coach/
-│   │   │   │   ├── form_coach_screen.dart
-│   │   │   │   ├── posture_analysis_screen.dart
-│   │   │   │   ├── pose_correction_screen.dart
-│   │   │   │   ├── phase_comparison_screen.dart
-│   │   │   │   ├── phase_frame_selector_screen.dart
-│   │   │   │   ├── form_history_screen.dart
-│   │   │   │   ├── video_trim_screen.dart
-│   │   │   │   └── comparison_screen.dart
-│   │   │   └── knowledge_base/
-│   │   ├── services/
-│   │   │   ├── posture_analysis_service.dart
-│   │   │   ├── disc_detection_service.dart
-│   │   │   ├── training_data_service.dart
-│   │   │   ├── video_service.dart
-│   │   │   ├── video_frame_extractor.dart
-│   │   │   ├── form_history_service.dart
-│   │   │   ├── knowledge_base_service.dart
-│   │   │   └── feedback_service.dart
-│   │   ├── utils/
-│   │   │   ├── pro_data_parser.dart
-│   │   │   ├── angle_calculator.dart
-│   │   │   └── constants.dart
-│   │   └── widgets/
-│   │       └── skeleton_overlay.dart
-│   └── assets/
-│       └── data/
-│           ├── pro_baseline_db.json
-│           └── knowledge_base.json
-└── server/
-    ├── main.py
-    ├── dataset/
-    │   ├── images/train/
-    │   └── labels/train/
-    └── models/
-        └── disc_detector_v*.tflite
+├── .github/workflows/          # GitHub Actions for Flutter build/tests and server tests
+├── disc_golf_app/              # Flutter application
+│   ├── android/                # Android Gradle project
+│   ├── assets/                 # JSON, images, studies, and bundled TFLite model
+│   ├── lib/                    # Dart app code
+│   ├── python/                 # Prototype Flask/Python analysis helpers, not embedded by Flutter
+│   └── test/                   # Flutter widget and data-contract tests
+├── docs/                       # Current audit/status/planning documents
+├── scripts/                    # Local test and validation scripts
+├── server/                     # FastAPI training/model server
+│   ├── training_server/        # App factory, config, storage, training, validation, worker
+│   └── test_*.py               # Server tests
+└── docker-compose.yml          # API/worker/Postgres/Redis/MinIO scaffold
 ```
 
----
+## Local development
 
-## Setup
+### Server checks
 
-### Flutter app
+```bash
+python -m pip install -r server/requirements.txt
+APP_API_KEY=test-key ./scripts/test_server.sh
+```
+
+### Flutter checks
+
+```bash
+./scripts/test_flutter.sh
+```
+
+The Flutter script requires `flutter` on `PATH` and runs `flutter pub get`, `flutter analyze`, and `flutter test` inside `disc_golf_app/`.
+
+## Building a testable Android APK
+
+A testable Android APK is currently built from the Flutter project, not from the server.
+
+Prerequisites:
+
+1. Flutter SDK compatible with Dart `>=3.8.0 <4.0.0`.
+2. Android SDK with compile SDK 36 installed.
+3. Android NDK `27.0.12077973` installed or installable by the Android tooling.
+4. Java 17 available to Gradle/Android tooling.
+5. Network access for first-time dependency resolution unless dependencies are already cached.
+
+Recommended validation/build sequence:
 
 ```bash
 cd disc_golf_app
+flutter doctor -v
 flutter pub get
-flutter run
+flutter analyze
+flutter test
+flutter build apk --debug
 ```
 
-Requires Flutter 3.x. Tested on Android; iOS compatible.
+Expected debug APK output:
 
-### Server
+```text
+disc_golf_app/build/app/outputs/flutter-apk/app-debug.apk
+```
+
+For a signed release APK, add `disc_golf_app/android/key.properties` with `keyAlias`, `keyPassword`, `storeFile`, and `storePassword`, then run:
 
 ```bash
-cd server
-pip install -r requirements.txt
-export APP_API_KEY=replace-with-a-long-random-secret
-uvicorn main:app --host 0.0.0.0 --port 8000
+cd disc_golf_app
+flutter build apk --release
 ```
 
-The server refuses to start without `APP_API_KEY`. Enter the same private key in the app's Training Settings > Advanced section before uploading training samples. Do not commit or publish production API keys.
+Without `key.properties`, the current Gradle configuration falls back to debug signing for the release build type, which can be useful for local testing but is not suitable for store distribution.
 
-### Environment variables (server)
+## Current next steps
 
-| Variable | Required | Description |
-|---|---|---|
-| `APP_API_KEY` | Yes | Private key required by upload/export/training endpoints. No default is provided. |
-| `CORS_ALLOW_ORIGINS` | No | Comma-separated browser origins allowed by FastAPI CORS. Empty by default. |
-| `MAX_UPLOAD_BYTES` | No | Maximum bytes per uploaded image; defaults to 8 MiB. |
-
----
-
-## Data Pipeline
-
-The disc detection model and pro-reference data are built and maintained by a separate pipeline repo: [Discandformdetection](https://github.com/nbarr1/Discandformdetection).
-
-That pipeline ingests JomezPro 2025 tournament footage, segments individual throws, annotates bounding boxes via CVAT, and runs ViTPose-B pose extraction. Outputs sync to this server via:
-
-```bash
-python scripts/sync_to_app.py --all --server http://your-server:8000
-```
-
-After syncing annotations, retrain the disc detector:
-
-```bash
-curl -X POST http://your-server:8000/api/training/start \
-  -H "X-App-Key: $APP_API_KEY"
-```
-
-The app can check `/api/model/version` from Training Settings, verifies the downloaded model's SHA-256, and reloads the model after a successful update.
-
----
-
-## Releases
-
-| Version | Notes |
-|---|---|
-| v1.1.0 | Fix flight tracker OOM crash, banner persistence, async safety |
-| v1.0.0 | Initial release |
-
----
-
-## Notes on the pro reference database
-
-`pro_baseline_db.json` (v4.0) contains manually annotated phase snapshots from 120fps slow-motion footage. Angles are computed geometrically (atan2/dot-product from normalized 2D landmarks) with ANSUR II anthropometric depth estimation.
-
-Known limitations:
-- All pros are right-handed — left-handed comparison mirrors angle keys automatically
-- Ricky Wysocki FH power pocket and release: lead leg occluded, some angles fall back to group mean
-- Eagle McMahon FH: mirror-image camera angle — angles are valid but R/L landmark mapping differs
-- Calvin Heimburg FH: posterior camera view — trunk tilt not directly comparable to side-view measurements
-- FH baselines have higher variance than BH due to mixed camera angles across players
-
-Deviation scoring compares your joint angles against the pro mean ± SD at each measured phase. Suggestions are flagged when your angle exceeds 1 SD from the reference range.
+1. Keep docs synchronized with source whenever endpoints, assets, build settings, or runtime services change.
+2. Add concrete repository implementations for the Flutter repository interfaces, then migrate services/screens behind those interfaces with tests.
+3. Add server durable adapters before claiming PostgreSQL, Redis, or MinIO persistence is implemented.
+4. Add integration tests for Docker Compose once durable adapters exist.
+5. Add Android build validation to CI if an APK artifact is required from every merge.
