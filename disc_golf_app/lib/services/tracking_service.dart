@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'disc_detection_service.dart';
 
@@ -143,17 +145,19 @@ class TrackingService extends ChangeNotifier {
     final startPoint = points.first;
     final endPoint = points.last;
     
-    // Calculate total distance
+    // Calculate total path length.
     double totalDistance = 0;
     for (int i = 0; i < points.length - 1; i++) {
       final dx = points[i + 1].dx - points[i].dx;
       final dy = points[i + 1].dy - points[i].dy;
-      totalDistance += dx * dx + dy * dy;
+      totalDistance += sqrt(dx * dx + dy * dy);
     }
 
-    // Calculate straight-line distance
-    final straightDistance = (endPoint.dx - startPoint.dx) * (endPoint.dx - startPoint.dx) +
-                             (endPoint.dy - startPoint.dy) * (endPoint.dy - startPoint.dy);
+    // Calculate straight-line distance.
+    final straightDx = endPoint.dx - startPoint.dx;
+    final straightDy = endPoint.dy - startPoint.dy;
+    final straightDistance =
+        sqrt(straightDx * straightDx + straightDy * straightDy);
 
     // Calculate turn/fade
     final horizontalMovement = endPoint.dx - startPoint.dx;

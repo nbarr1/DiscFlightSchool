@@ -40,6 +40,7 @@ class TrainingDataService extends ChangeNotifier {
   static const String _defaultServerUrl = 'https://discflightschool.onrender.com';
   static const double _defaultBoxSize = 0.03; // Normalized bounding box size
   static const int _cropPixels = 64; // Crop region size in pixels
+  static const Duration _httpTimeout = Duration(seconds: 30);
 
   List<TrainingSample> _samples = [];
   bool _isOptedIn = false;
@@ -222,8 +223,9 @@ class TrainingDataService extends ChangeNotifier {
   /// Upload all pending (un-uploaded) samples to the server.
   /// Returns the number successfully uploaded.
   Future<int> uploadPending() async {
-    if (_serverUrl.isEmpty) {
-      debugPrint('No server URL configured for training data upload');
+    final uploadUri = _serverEndpoint('/api/training/upload');
+    if (uploadUri == null) {
+      debugPrint('No valid HTTPS training server URL configured for upload');
       return 0;
     }
     if (_apiKey.isEmpty) {
@@ -235,7 +237,7 @@ class TrainingDataService extends ChangeNotifier {
     if (pending.isEmpty) return 0;
 
     int uploaded = 0;
-    final client = HttpClient();
+    final client = HttpClient()..connectionTimeout = _httpTimeout;
 
     try {
       for (final sample in pending) {
@@ -247,8 +249,7 @@ class TrainingDataService extends ChangeNotifier {
             continue;
           }
 
-          final uri = Uri.parse('$_serverUrl/api/training/upload');
-          final request = await client.postUrl(uri);
+          final request = await client.postUrl(uploadUri).timeout(_httpTimeout);
 
           final boundary = '----FormBoundary${_generateId()}';
           request.headers.set(
@@ -292,27 +293,27 @@ class TrainingDataService extends ChangeNotifier {
           // Closing boundary
           final closing = '\r\n--$boundary--\r\n';
 
-          // Calculate content length
-          final fullBytes = await fullFile.readAsBytes();
-          final cropBytes = await cropFile.readAsBytes();
+          // Calculate content length without loading files into memory.
+          final fullLength = await fullFile.length();
+          final cropLength = await cropFile.length();
           final preambleBytes = utf8.encode(preamble.toString());
           final middleBytes = utf8.encode(middle.toString());
           final closingBytes = utf8.encode(closing);
 
           request.contentLength = preambleBytes.length +
-              fullBytes.length +
+              fullLength +
               middleBytes.length +
-              cropBytes.length +
+              cropLength +
               closingBytes.length;
 
-          // Write all parts
+          // Stream file parts so large batches do not pressure mobile memory.
           request.add(preambleBytes);
-          request.add(fullBytes);
+          await request.addStream(fullFile.openRead());
           request.add(middleBytes);
-          request.add(cropBytes);
+          await request.addStream(cropFile.openRead());
           request.add(closingBytes);
 
-          final response = await request.close();
+          final response = await request.close().timeout(_httpTimeout);
 
           if (response.statusCode == 200) {
             final idx = _samples.indexWhere((s) => s.id == sample.id);
@@ -322,7 +323,7 @@ class TrainingDataService extends ChangeNotifier {
             uploaded++;
           }
 
-          await response.drain<void>();
+          await response.drain<void>().timeout(_httpTimeout);
         } catch (e) {
           debugPrint('Failed to upload sample ${sample.id}: $e');
         }
@@ -423,16 +424,19 @@ class TrainingDataService extends ChangeNotifier {
   /// Check server for a newer model version.
   /// Returns true if an update is available.
   Future<bool> checkForModelUpdate() async {
-    if (_serverUrl.isEmpty) return false;
+    final uri = _serverEndpoint('/api/model/version');
+    if (uri == null) return false;
 
+    final client = HttpClient()..connectionTimeout = _httpTimeout;
     try {
-      final client = HttpClient();
-      final uri = Uri.parse('$_serverUrl/api/model/version');
-      final request = await client.getUrl(uri);
-      final response = await request.close();
+      final request = await client.getUrl(uri).timeout(_httpTimeout);
+      final response = await request.close().timeout(_httpTimeout);
 
       if (response.statusCode == 200) {
-        final body = await response.transform(utf8.decoder).join();
+        final body = await response
+            .transform(utf8.decoder)
+            .join()
+            .timeout(_httpTimeout);
         final data = jsonDecode(body) as Map<String, dynamic>;
         final remoteVersion = data['version'] as String? ?? 'none';
         final remoteUrl = data['url'] as String? ?? '';
@@ -444,27 +448,32 @@ class TrainingDataService extends ChangeNotifier {
       client.close();
     } catch (e) {
       debugPrint('Failed to check model version: $e');
+    } finally {
+      client.close(force: true);
     }
     return false;
   }
 
   /// Download the latest model from the server.
   Future<bool> downloadModel() async {
-    if (_serverUrl.isEmpty) return false;
+    final versionUri = _serverEndpoint('/api/model/version');
+    if (versionUri == null) return false;
 
+    final client = HttpClient()..connectionTimeout = _httpTimeout;
     try {
       // Get version info
-      final client = HttpClient();
-      final versionUri = Uri.parse('$_serverUrl/api/model/version');
-      final versionReq = await client.getUrl(versionUri);
-      final versionResp = await versionReq.close();
+      final versionReq = await client.getUrl(versionUri).timeout(_httpTimeout);
+      final versionResp = await versionReq.close().timeout(_httpTimeout);
 
       if (versionResp.statusCode != 200) {
         client.close();
         return false;
       }
 
-      final versionBody = await versionResp.transform(utf8.decoder).join();
+      final versionBody = await versionResp
+          .transform(utf8.decoder)
+          .join()
+          .timeout(_httpTimeout);
       final versionData = jsonDecode(versionBody) as Map<String, dynamic>;
       final modelUrl = versionData['url'] as String? ?? '';
       final version = versionData['version'] as String? ?? 'none';
@@ -477,15 +486,15 @@ class TrainingDataService extends ChangeNotifier {
       // Download model file. Server normally returns a relative path; reject
       // absolute URLs that point at a different host.
       final serverUri = Uri.parse(_serverUrl);
-      final fullUrl = modelUrl.startsWith('http') ? modelUrl : '$_serverUrl$modelUrl';
-      final modelUri = Uri.parse(fullUrl);
-      if (modelUri.host != serverUri.host || modelUri.scheme != serverUri.scheme) {
+      final modelUri = serverUri.resolve(modelUrl);
+      if (modelUri.host != serverUri.host ||
+          modelUri.scheme != serverUri.scheme) {
         client.close();
-        debugPrint('Rejected model URL outside configured server: $fullUrl');
+        debugPrint('Rejected model URL outside configured server: $modelUri');
         return false;
       }
-      final modelReq = await client.getUrl(modelUri);
-      final modelResp = await modelReq.close();
+      final modelReq = await client.getUrl(modelUri).timeout(_httpTimeout);
+      final modelResp = await modelReq.close().timeout(_httpTimeout);
 
       if (modelResp.statusCode != 200) {
         client.close();
@@ -499,7 +508,7 @@ class TrainingDataService extends ChangeNotifier {
       final downloadedBytes = await modelResp.fold<BytesBuilder>(
         BytesBuilder(copy: false),
         (builder, chunk) => builder..add(chunk),
-      );
+      ).timeout(_httpTimeout);
       final modelBytes = downloadedBytes.takeBytes();
       final actualSha256 = sha256.convert(modelBytes).toString();
       if (actualSha256.toLowerCase() != expectedSha256.toLowerCase()) {
@@ -522,6 +531,8 @@ class TrainingDataService extends ChangeNotifier {
     } catch (e) {
       debugPrint('Failed to download model: $e');
       return false;
+    } finally {
+      client.close(force: true);
     }
   }
 
@@ -551,6 +562,26 @@ class TrainingDataService extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   // Internal
   // ---------------------------------------------------------------------------
+
+  Uri? _serverEndpoint(String path) {
+    final serverUri = Uri.tryParse(_serverUrl.trim());
+    if (serverUri == null || !_isAllowedServerUri(serverUri)) {
+      return null;
+    }
+    return serverUri.resolve(path);
+  }
+
+  @visibleForTesting
+  static bool isAllowedServerUri(Uri uri) {
+    return _isAllowedServerUri(uri);
+  }
+
+  static bool _isAllowedServerUri(Uri uri) {
+    if (uri.scheme == 'https') return true;
+    if (uri.scheme != 'http') return false;
+    final host = uri.host.toLowerCase();
+    return host == 'localhost' || host == '127.0.0.1' || host == '::1';
+  }
 
   Future<Directory> _getDataDir() async {
     final appDir = await getApplicationDocumentsDirectory();

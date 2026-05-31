@@ -1,14 +1,24 @@
 import asyncio
+import io
 import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
 
+from PIL import Image
+
 os.environ.setdefault("APP_API_KEY", "test-key")
 
 from training_server import Settings, create_app  # noqa: E402
 
+def image_bytes(format_name: str) -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", (1, 1), color=(255, 0, 0)).save(buffer, format=format_name)
+    return buffer.getvalue()
+
+JPEG_1X1 = image_bytes("JPEG")
+PNG_1X1 = image_bytes("PNG")
 
 class AsgiResponse:
     def __init__(self, status_code: int, headers: list[tuple[bytes, bytes]], body: bytes) -> None:
@@ -25,7 +35,6 @@ class AsgiResponse:
             if key.lower() == target:
                 return value.decode()
         return None
-
 
 async def call_asgi(app, method: str, path: str, *, headers: dict[str, str] | None = None, body: bytes = b"") -> AsgiResponse:
     request_sent = False
@@ -65,7 +74,6 @@ async def call_asgi(app, method: str, path: str, *, headers: dict[str, str] | No
     )
     return AsgiResponse(start["status"], start.get("headers", []), response_body)
 
-
 def multipart_body(fields: dict[str, str], files: dict[str, tuple[str, bytes, str]]) -> tuple[bytes, str]:
     boundary = "----DiscFlightSchoolBoundary"
     chunks: list[bytes] = []
@@ -90,7 +98,6 @@ def multipart_body(fields: dict[str, str], files: dict[str, tuple[str, bytes, st
         )
     chunks.append(f"--{boundary}--\r\n".encode())
     return b"".join(chunks), f"multipart/form-data; boundary={boundary}"
-
 
 class TrainingServerContractTests(unittest.TestCase):
     def build_app(self):
@@ -139,8 +146,8 @@ class TrainingServerContractTests(unittest.TestCase):
         body, content_type = multipart_body(
             {"sample_id": "sample-1", "label": "0 0.5 0.5 0.1 0.1", "image_width": "100", "image_height": "100"},
             {
-                "full_image": ("full.jpg", b"\xff\xd8\xff\x00", "image/jpeg"),
-                "crop_image": ("crop.jpg", b"\xff\xd8\xff\x00", "image/jpeg"),
+                "full_image": ("full.jpg", JPEG_1X1, "image/jpeg"),
+                "crop_image": ("crop.jpg", JPEG_1X1, "image/jpeg"),
             },
         )
         response = self.request(app, "POST", "/api/training/upload", headers={"content-type": content_type}, body=body)
@@ -152,8 +159,8 @@ class TrainingServerContractTests(unittest.TestCase):
         body, content_type = multipart_body(
             {"sample_id": "sample-1", "label": "1 0.5 0.5 0.1 0.1", "image_width": "100", "image_height": "100"},
             {
-                "full_image": ("full.jpg", b"\xff\xd8\xff\x00", "image/jpeg"),
-                "crop_image": ("crop.jpg", b"\xff\xd8\xff\x00", "image/jpeg"),
+                "full_image": ("full.jpg", JPEG_1X1, "image/jpeg"),
+                "crop_image": ("crop.jpg", JPEG_1X1, "image/jpeg"),
             },
         )
         response = self.request(
@@ -166,13 +173,34 @@ class TrainingServerContractTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"error": "label must be a single YOLO class-0 row with normalized values"})
 
+    def test_upload_rejects_corrupt_image_without_partial_files(self):
+        app = self.build_app()
+        body, content_type = multipart_body(
+            {"sample_id": "sample-1", "label": "0 0.5 0.5 0.1 0.1", "image_width": "100", "image_height": "100"},
+            {
+                "full_image": ("full.jpg", b"\xff\xd8\xffnot-a-real-jpeg", "image/jpeg"),
+                "crop_image": ("crop.jpg", JPEG_1X1, "image/jpeg"),
+            },
+        )
+        response = self.request(
+            app,
+            "POST",
+            "/api/training/upload",
+            headers={"content-type": content_type, "x-app-key": "test-key"},
+            body=body,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(any(app.state.settings.images_dir.glob("sample-1*")))
+        self.assertFalse(any(app.state.settings.labels_dir.glob("sample-1*")))
+
     def test_upload_accepts_valid_sample_and_updates_stats(self):
         app = self.build_app()
         body, content_type = multipart_body(
             {"sample_id": "sample-1", "label": "0 0.5 0.5 0.1 0.1", "image_width": "100", "image_height": "100"},
             {
-                "full_image": ("full.jpg", b"\xff\xd8\xff\x00", "image/jpeg"),
-                "crop_image": ("crop.png", b"\x89PNG\r\n\x1a\n\x00", "image/png"),
+                "full_image": ("full.jpg", JPEG_1X1, "image/jpeg"),
+                "crop_image": ("crop.png", PNG_1X1, "image/png"),
             },
         )
         response = self.request(
@@ -189,6 +217,54 @@ class TrainingServerContractTests(unittest.TestCase):
         self.assertEqual(stats["total_samples"], 1)
         self.assertEqual(stats["images_on_disk"], 1)
         self.assertEqual(stats["labels_on_disk"], 1)
+
+    def test_duplicate_sample_id_is_rejected_without_overwriting_existing_files(self):
+        app = self.build_app()
+        fields = {
+            "sample_id": "sample-1",
+            "label": "0 0.5 0.5 0.1 0.1",
+            "image_width": "100",
+            "image_height": "100",
+        }
+        first_body, first_content_type = multipart_body(
+            fields,
+            {
+                "full_image": ("full.jpg", JPEG_1X1, "image/jpeg"),
+                "crop_image": ("crop.png", PNG_1X1, "image/png"),
+            },
+        )
+        first = self.request(
+            app,
+            "POST",
+            "/api/training/upload",
+            headers={"content-type": first_content_type, "x-app-key": "test-key"},
+            body=first_body,
+        )
+        self.assertEqual(first.status_code, 200)
+        original = (app.state.settings.images_dir / "sample-1_full.jpg").read_bytes()
+
+        duplicate_body, duplicate_content_type = multipart_body(
+            fields,
+            {
+                "full_image": ("full.jpg", b"\xff\xd8\xffnot-a-real-jpeg", "image/jpeg"),
+                "crop_image": ("crop.jpg", JPEG_1X1, "image/jpeg"),
+            },
+        )
+        duplicate = self.request(
+            app,
+            "POST",
+            "/api/training/upload",
+            headers={"content-type": duplicate_content_type, "x-app-key": "test-key"},
+            body=duplicate_body,
+        )
+
+        self.assertEqual(duplicate.status_code, 400)
+        self.assertEqual(
+            (app.state.settings.images_dir / "sample-1_full.jpg").read_bytes(),
+            original,
+        )
+        stats = self.request(app, "GET", "/api/training/stats").json()
+        self.assertEqual(stats["total_samples"], 1)
 
 
 if __name__ == "__main__":

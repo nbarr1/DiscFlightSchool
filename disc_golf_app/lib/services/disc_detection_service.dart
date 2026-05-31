@@ -435,10 +435,10 @@ class DiscDetectionService extends ChangeNotifier {
 
           bestDetection = DiscDetection(
             frameIndex: frameIndex,
-            x: output[0][0][i].clamp(0.0, 1.0),
-            y: output[0][1][i].clamp(0.0, 1.0),
-            width: output[0][2][i].clamp(0.0, 1.0),
-            height: output[0][3][i].clamp(0.0, 1.0),
+            x: _normalizeModelValue(output[0][0][i]),
+            y: _normalizeModelValue(output[0][1][i]),
+            width: _normalizeModelValue(output[0][2][i]),
+            height: _normalizeModelValue(output[0][3][i]),
             confidence: conf,
             timestamp:
                 Duration(milliseconds: (frameIndex * 1000 / fps).round()),
@@ -457,10 +457,10 @@ class DiscDetectionService extends ChangeNotifier {
           bestConfidence = conf;
           bestDetection = DiscDetection(
             frameIndex: frameIndex,
-            x: output[0][i][0].clamp(0.0, 1.0),
-            y: output[0][i][1].clamp(0.0, 1.0),
-            width: output[0][i][2].clamp(0.0, 1.0),
-            height: output[0][i][3].clamp(0.0, 1.0),
+            x: _normalizeModelValue(output[0][i][0]),
+            y: _normalizeModelValue(output[0][i][1]),
+            width: _normalizeModelValue(output[0][i][2]),
+            height: _normalizeModelValue(output[0][i][3]),
             confidence: conf,
             timestamp:
                 Duration(milliseconds: (frameIndex * 1000 / fps).round()),
@@ -478,6 +478,21 @@ class DiscDetectionService extends ChangeNotifier {
     }
 
     return bestDetection;
+  }
+
+  double _normalizeModelValue(double value) {
+    final normalized = value > 1.0 ? value / _inputSize : value;
+    return normalized.clamp(0.0, 1.0).toDouble();
+  }
+
+  @visibleForTesting
+  DiscDetection? parseBestDetectionForTesting(
+    List<List<List<double>>> output,
+    List<int> shape,
+    int frameIndex,
+    double fps,
+  ) {
+    return _parseBestDetection(output, shape, frameIndex, fps);
   }
 
   /// Find the longest spatially-coherent chain of detections.
