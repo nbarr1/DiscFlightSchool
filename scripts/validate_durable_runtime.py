@@ -41,6 +41,21 @@ def main() -> None:
     if missing_env:
         raise SystemExit(f"Missing .env.example keys: {', '.join(missing_env)}")
 
+    forbidden_defaults = (
+        "postgresql://discflight:discflight@",
+        "POSTGRES_PASSWORD: discflight",
+        "MINIO_ROOT_USER: minioadmin",
+        "MINIO_ROOT_PASSWORD: minioadmin",
+        "OBJECT_STORAGE_ACCESS_KEY: minioadmin",
+        "OBJECT_STORAGE_SECRET_KEY: minioadmin",
+    )
+    found_defaults = [value for value in forbidden_defaults if value in compose]
+    if found_defaults:
+        raise SystemExit(
+            "Compose file contains unsafe default credentials: "
+            + ", ".join(found_defaults)
+        )
+
     if "python -m training_server.worker" not in compose:
         raise SystemExit("training-worker must run the training_server.worker module")
 

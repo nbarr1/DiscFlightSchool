@@ -77,7 +77,7 @@ Expected APK path:
 build/app/outputs/flutter-apk/app-debug.apk
 ```
 
-For a release APK, create `android/key.properties` with `keyAlias`, `keyPassword`, `storeFile`, and `storePassword`, then run `flutter build apk --release`. If `key.properties` is absent, the current Android Gradle file uses debug signing for the release build type.
+For a release APK, create `android/key.properties` with `keyAlias`, `keyPassword`, `storeFile`, and `storePassword`, then run `flutter build apk --release`. If `key.properties` is absent or incomplete, the release build fails fast; use `flutter build apk --debug` for local unsigned testing.
 
 ## Security-sensitive settings
 

@@ -72,7 +72,17 @@ class TrainingSample {
         uploaded: uploaded ?? this.uploaded,
       );
 
-  /// YOLO format label line: "class_id center_x center_y width height"
-  String toYoloLabel() =>
-      '0 ${centerX.toStringAsFixed(6)} ${centerY.toStringAsFixed(6)} ${boxWidth.toStringAsFixed(6)} ${boxHeight.toStringAsFixed(6)}';
+  /// YOLO format label line: "class_id center_x center_y width height".
+  /// Values are clamped to normalized YOLO bounds so persisted legacy samples
+  /// cannot generate labels the training server rejects.
+  String toYoloLabel() {
+    final safeCenterX = centerX.clamp(0.0, 1.0);
+    final safeCenterY = centerY.clamp(0.0, 1.0);
+    final safeBoxWidth = boxWidth.clamp(0.000001, 1.0);
+    final safeBoxHeight = boxHeight.clamp(0.000001, 1.0);
+    return '0 ${safeCenterX.toStringAsFixed(6)} '
+        '${safeCenterY.toStringAsFixed(6)} '
+        '${safeBoxWidth.toStringAsFixed(6)} '
+        '${safeBoxHeight.toStringAsFixed(6)}';
+  }
 }

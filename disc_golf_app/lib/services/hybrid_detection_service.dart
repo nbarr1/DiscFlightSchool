@@ -46,7 +46,23 @@ class HybridDetectionService extends ChangeNotifier {
     required double videoHeight,
     Color? discColor,
   }) async {
-    assert(seedKeyframes.length >= 3, 'Need at least 3 seed keyframes');
+    if (seedKeyframes.length < 3) {
+      throw ArgumentError.value(
+        seedKeyframes.length,
+        'seedKeyframes',
+        'Need at least 3 seed keyframes',
+      );
+    }
+    if (fps <= 0) {
+      throw ArgumentError.value(fps, 'fps', 'Must be greater than zero');
+    }
+    if (totalFrames <= 0) {
+      throw ArgumentError.value(
+        totalFrames,
+        'totalFrames',
+        'Must be greater than zero',
+      );
+    }
 
     _isProcessing = true;
     _progress = 0.0;
@@ -59,7 +75,25 @@ class HybridDetectionService extends ChangeNotifier {
       // ---------------------------------------------------------------
       final anchors = <int, Offset>{};
       for (final kf in seedKeyframes) {
-        anchors[kf.frameIndex] = kf.offset;
+        if (kf.frameIndex < 0 || kf.frameIndex >= totalFrames) {
+          throw RangeError.range(
+            kf.frameIndex,
+            0,
+            totalFrames - 1,
+            'seedKeyframes.frameIndex',
+          );
+        }
+        anchors[kf.frameIndex] = Offset(
+          kf.x.clamp(0.0, 1.0),
+          kf.y.clamp(0.0, 1.0),
+        );
+      }
+      if (anchors.length < 3) {
+        throw ArgumentError.value(
+          anchors.length,
+          'seedKeyframes',
+          'Need at least 3 unique seed frames',
+        );
       }
 
       final sortedKeys = anchors.keys.toList()..sort();

@@ -73,13 +73,13 @@ jobs:
         working-directory: disc_golf_app
         run: flutter test
 
-      - name: Build release APK
+      - name: Build debug APK
         working-directory: disc_golf_app
-        run: flutter build apk --release
+        run: flutter build apk --debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: disc-flight-school-${{ github.run_number }}
-          path: disc_golf_app/build/app/outputs/flutter-apk/app-release.apk
+          name: disc-flight-school-debug-${{ github.run_number }}
+          path: disc_golf_app/build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 30
