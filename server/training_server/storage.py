@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import threading
 import uuid
@@ -25,6 +26,7 @@ class FileStorage:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._stats_lock = threading.Lock()
+        self._model_info_lock = threading.Lock()
         self._model_info_cache: tuple[Path, float, int, str] | None = None
 
     def initialize(self) -> None:
@@ -48,7 +50,9 @@ class FileStorage:
 
     def save_stats(self, stats: dict[str, Any]) -> None:
         self.settings.stats_file.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = self.settings.stats_file.with_suffix(f"{self.settings.stats_file.suffix}.tmp")
+        tmp_path = self.settings.stats_file.with_suffix(
+            f"{self.settings.stats_file.suffix}.{uuid.uuid4().hex}.tmp"
+        )
         tmp_path.write_text(json.dumps(stats, indent=2))
         tmp_path.replace(self.settings.stats_file)
 
@@ -118,12 +122,24 @@ class FileStorage:
         full_dest = safe_child(self.settings.images_dir, f"{sample_id}_full{full_ext}")
         crop_dest = safe_child(self.settings.images_dir, f"{sample_id}_crop{crop_ext}")
         label_dest = safe_child(self.settings.labels_dir, f"{sample_id}_full.txt")
+        final_paths = [full_dest, crop_dest, label_dest]
+        lock_path = safe_child(self.settings.labels_dir, f".{sample_id}.lock")
+        try:
+            lock_fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(lock_fd)
+        except FileExistsError as exc:
+            raise ValueError("sample_id already exists or is being uploaded") from exc
+
+        existing_paths = [path for path in final_paths if path.exists()]
+        if existing_paths:
+            lock_path.unlink(missing_ok=True)
+            raise ValueError("sample_id already exists")
+
         temp_paths = [
             full_dest.with_name(f".{full_dest.name}.{uuid.uuid4().hex}.tmp"),
             crop_dest.with_name(f".{crop_dest.name}.{uuid.uuid4().hex}.tmp"),
             label_dest.with_name(f".{label_dest.name}.{uuid.uuid4().hex}.tmp"),
         ]
-        final_paths = [full_dest, crop_dest, label_dest]
 
         try:
             self.copy_upload_image(full_image, temp_paths[0], full_ext)
@@ -138,6 +154,8 @@ class FileStorage:
             for path in (*temp_paths, *final_paths):
                 path.unlink(missing_ok=True)
             raise
+        finally:
+            lock_path.unlink(missing_ok=True)
 
     def latest_model_info(self) -> ModelInfo | None:
         tflite_files = list(self.settings.models_dir.glob("*.tflite"))
@@ -145,11 +163,12 @@ class FileStorage:
             return None
         model_path = max(tflite_files, key=lambda path: path.stat().st_mtime)
         stat = model_path.stat()
-        cache = self._model_info_cache
-        if cache is not None and cache[:3] == (model_path, stat.st_mtime, stat.st_size):
-            sha256 = cache[3]
-        else:
-            sha256 = hashlib.sha256(model_path.read_bytes()).hexdigest()
+        with self._model_info_lock:
+            cache = self._model_info_cache
+            if cache is not None and cache[:3] == (model_path, stat.st_mtime, stat.st_size):
+                return {"path": model_path, "version": model_path.stem, "sha256": cache[3]}
+        sha256 = hashlib.sha256(model_path.read_bytes()).hexdigest()
+        with self._model_info_lock:
             self._model_info_cache = (model_path, stat.st_mtime, stat.st_size, sha256)
         return {"path": model_path, "version": model_path.stem, "sha256": sha256}
 

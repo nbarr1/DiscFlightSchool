@@ -218,5 +218,54 @@ class TrainingServerContractTests(unittest.TestCase):
         self.assertEqual(stats["images_on_disk"], 1)
         self.assertEqual(stats["labels_on_disk"], 1)
 
+    def test_duplicate_sample_id_is_rejected_without_overwriting_existing_files(self):
+        app = self.build_app()
+        fields = {
+            "sample_id": "sample-1",
+            "label": "0 0.5 0.5 0.1 0.1",
+            "image_width": "100",
+            "image_height": "100",
+        }
+        first_body, first_content_type = multipart_body(
+            fields,
+            {
+                "full_image": ("full.jpg", JPEG_1X1, "image/jpeg"),
+                "crop_image": ("crop.png", PNG_1X1, "image/png"),
+            },
+        )
+        first = self.request(
+            app,
+            "POST",
+            "/api/training/upload",
+            headers={"content-type": first_content_type, "x-app-key": "test-key"},
+            body=first_body,
+        )
+        self.assertEqual(first.status_code, 200)
+        original = (app.state.settings.images_dir / "sample-1_full.jpg").read_bytes()
+
+        duplicate_body, duplicate_content_type = multipart_body(
+            fields,
+            {
+                "full_image": ("full.jpg", b"\xff\xd8\xffnot-a-real-jpeg", "image/jpeg"),
+                "crop_image": ("crop.jpg", JPEG_1X1, "image/jpeg"),
+            },
+        )
+        duplicate = self.request(
+            app,
+            "POST",
+            "/api/training/upload",
+            headers={"content-type": duplicate_content_type, "x-app-key": "test-key"},
+            body=duplicate_body,
+        )
+
+        self.assertEqual(duplicate.status_code, 400)
+        self.assertEqual(
+            (app.state.settings.images_dir / "sample-1_full.jpg").read_bytes(),
+            original,
+        )
+        stats = self.request(app, "GET", "/api/training/stats").json()
+        self.assertEqual(stats["total_samples"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
