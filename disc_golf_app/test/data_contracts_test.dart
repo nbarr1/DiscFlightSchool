@@ -1,11 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:disc_golf_app/models/detector_model_metadata.dart';
 import 'package:disc_golf_app/models/form_session_record.dart';
 import 'package:disc_golf_app/models/roulette_data.dart';
 import 'package:disc_golf_app/models/roulette_scoring.dart';
 import 'package:disc_golf_app/models/training_sample.dart';
+import 'package:disc_golf_app/services/disc_detection_service.dart';
+import 'package:disc_golf_app/services/training_data_service.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   test('TrainingSample preserves legacy uploaded default and YOLO formatting', () {
     final sample = TrainingSample.fromJson({
       'id': 'sample-1',
@@ -57,6 +66,60 @@ void main() {
 
     expect(record.throwType, 'BH');
     expect(record.avgAngles['elbow'], 123.4);
+  });
+
+  test('TrainingSample clamps YOLO labels to normalized bounds', () {
+    final sample = TrainingSample(
+      id: 'sample-2',
+      imagePath: '/tmp/full.jpg',
+      cropPath: '/tmp/crop.jpg',
+      centerX: 1.5,
+      centerY: -0.2,
+      boxWidth: 2.0,
+      boxHeight: 0.0,
+      frameIndex: 1,
+      imageWidth: 640,
+      imageHeight: 360,
+      createdAt: DateTime.utc(2026, 5, 31),
+    );
+
+    expect(sample.toYoloLabel(), '0 1.000000 0.000000 1.000000 0.000001');
+  });
+
+  test('DiscDetectionService parser normalizes pixel-space model output', () {
+    final service = DiscDetectionService();
+
+    final detection = service.parseBestDetectionForTesting(
+      [
+        [
+          [160.0, 96.0, 64.0, 32.0, 0.9],
+        ],
+      ],
+      [1, 1, 5],
+      3,
+      10,
+    );
+
+    expect(detection, isNotNull);
+    expect(detection!.x, closeTo(0.5, 0.0001));
+    expect(detection.y, closeTo(0.3, 0.0001));
+    expect(detection.width, closeTo(0.2, 0.0001));
+    expect(detection.height, closeTo(0.1, 0.0001));
+  });
+
+  test('TrainingDataService only allows HTTPS or localhost HTTP server URLs', () {
+    expect(
+      TrainingDataService.isAllowedServerUri(Uri.parse('https://example.com')),
+      isTrue,
+    );
+    expect(
+      TrainingDataService.isAllowedServerUri(Uri.parse('http://localhost:8000')),
+      isTrue,
+    );
+    expect(
+      TrainingDataService.isAllowedServerUri(Uri.parse('http://example.com')),
+      isFalse,
+    );
   });
 
   test('DetectorModelVersion exposes no-model sentinel', () {

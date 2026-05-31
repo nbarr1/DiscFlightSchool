@@ -54,11 +54,14 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (hasSigningConfig) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            if (!hasSigningConfig) {
+                throw GradleException(
+                    "Release builds require android/key.properties with keyAlias, " +
+                        "keyPassword, storeFile, and storePassword. Use a debug " +
+                        "build for local unsigned testing."
+                )
             }
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
         }

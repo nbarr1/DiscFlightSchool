@@ -27,7 +27,7 @@ Important client facts:
 - Android application ID: `com.discflightschool.app`.
 - Android compile SDK: `36`.
 - Android NDK version requested by Gradle: `27.0.12077973`.
-- Release builds use a `key.properties` signing config when present; otherwise the release build type falls back to the debug signing config.
+- Release builds require a complete `key.properties` signing config; unsigned local testing should use debug builds.
 - Bundled runtime assets include JSON data files, `assets/models/disc_detector.tflite`, an SVG basket image, and Flutter material assets.
 
 ### Training server (`server/`)
@@ -141,7 +141,7 @@ cd disc_golf_app
 flutter build apk --release
 ```
 
-Without `key.properties`, the current Gradle configuration falls back to debug signing for the release build type, which can be useful for local testing but is not suitable for store distribution.
+Without `key.properties`, release builds now fail fast; use `flutter build apk --debug` for local unsigned testing.
 
 ## Current next steps
 

@@ -26,9 +26,13 @@ class TrainingManager:
 
     @property
     def status(self) -> dict[str, Any]:
-        return self._status
         with self._lock:
             return self._status.copy()
+
+    def _set_status(self, **updates: Any) -> None:
+        with self._lock:
+            self._status.update(updates)
+
     def start(self) -> tuple[dict[str, Any], int]:
         with self._lock:
             if self._status["running"]:
@@ -50,7 +54,7 @@ class TrainingManager:
 
     def _run_training(self) -> None:
         try:
-            self._status["result"] = "training"
+            self._set_status(result="training")
             result = subprocess.run(
                 [
                     "yolo",
@@ -71,7 +75,7 @@ class TrainingManager:
             )
 
             if result.returncode != 0:
-                self._status["result"] = f"failed: {result.stderr[-500:]}"
+                self._set_status(result=f"failed: {result.stderr[-500:]}")
                 return
 
             best_pt = self._settings.base_dir / "runs" / "disc_detector" / "weights" / "best.pt"
@@ -89,22 +93,22 @@ class TrainingManager:
                     timeout=self._settings.export_timeout_seconds,
                 )
                 if export_result.returncode != 0:
-                    self._status["result"] = f"failed export: {export_result.stderr[-500:]}"
+                    self._set_status(result=f"failed export: {export_result.stderr[-500:]}")
                     return
 
                 for tflite in best_pt.parent.glob("*.tflite"):
                     version = f"disc_detector_v{datetime.now().strftime('%Y%m%d%H%M')}"
                     dest = self._settings.models_dir / f"{version}.tflite"
                     shutil.copy2(tflite, dest)
-                    self._status["result"] = f"success: {version}"
+                    self._set_status(result=f"success: {version}")
                     return
 
-            self._status["result"] = "failed: no TFLite model produced"
+            self._set_status(result="failed: no TFLite model produced")
         except subprocess.TimeoutExpired:
-            self._status["result"] = "failed: training timed out"
+            self._set_status(result="failed: training timed out")
         except Exception as exc:
             logger.error("Unexpected error during training", exc_info=True)
-            self._status["result"] = f"failed: {exc}"
+            self._set_status(result=f"failed: {exc}")
         finally:
             with self._lock:
                 self._status["running"] = False
