@@ -3,7 +3,7 @@ import '../services/flight_data_service.dart';
 import '../widgets/flight_path_painter.dart';
 
 class FlightAnalysisScreen extends StatefulWidget {
-  const FlightAnalysisScreen({Key? key}) : super(key: key);
+  const FlightAnalysisScreen({super.key});
 
   @override
   State<FlightAnalysisScreen> createState() => _FlightAnalysisScreenState();

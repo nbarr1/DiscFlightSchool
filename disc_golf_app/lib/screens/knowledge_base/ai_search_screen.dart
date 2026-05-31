@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../services/knowledge_base_service.dart';
 
 class AISearchScreen extends StatefulWidget {
-  const AISearchScreen({Key? key}) : super(key: key);
+  const AISearchScreen({super.key});
 
   @override
   State<AISearchScreen> createState() => _AISearchScreenState();

@@ -681,12 +681,14 @@ class _TrainingSettingsScreenState extends State<TrainingSettingsScreen> {
           ),
         );
 
+        final detectionService = context.read<DiscDetectionService>();
         final success = await service.downloadModel();
-        if (success && context.mounted) {
+        if (success) {
           final customPath = await service.getCustomModelPath();
-          await context
-              .read<DiscDetectionService>()
-              .loadModel(customModelPath: customPath, forceReload: true);
+          await detectionService.loadModel(
+            customModelPath: customPath,
+            forceReload: true,
+          );
         }
 
         if (context.mounted) {

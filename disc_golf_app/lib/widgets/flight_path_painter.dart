@@ -75,7 +75,7 @@ class FlightPathPainter extends CustomPainter {
 class FlightPathWidget extends StatefulWidget {
   final String jsonCoordinates;
 
-  const FlightPathWidget({Key? key, required this.jsonCoordinates}) : super(key: key);
+  const FlightPathWidget({super.key, required this.jsonCoordinates});
 
   @override
   State<FlightPathWidget> createState() => _FlightPathWidgetState();

@@ -7,7 +7,6 @@ import '../../services/knowledge_base_service.dart';
 import '../knowledge_base/article_detail_screen.dart';
 import '../../services/video_frame_extractor.dart';
 import '../../models/form_analysis.dart';
-import '../../utils/constants.dart';
 import '../../utils/pro_data_parser.dart';
 import '../../widgets/skeleton_overlay.dart';
 import '../../services/form_history_service.dart';
@@ -27,7 +26,7 @@ class PostureAnalysisScreen extends StatefulWidget {
   final bool isLeftHanded;
 
   const PostureAnalysisScreen({
-    Key? key,
+    super.key,
     this.videoPath,
     this.analysis,
     this.proPlayer,
@@ -37,7 +36,7 @@ class PostureAnalysisScreen extends StatefulWidget {
     this.phaseTimestamps,
     this.throwType = 'BH',
     this.isLeftHanded = false,
-  }) : super(key: key);
+  });
 
   @override
   State<PostureAnalysisScreen> createState() => _PostureAnalysisScreenState();
@@ -657,7 +656,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2)))
             else
               DropdownButtonFormField<String>(
-                value: _selectedPro,
+                initialValue: _selectedPro,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   hintText: 'Select a pro player',

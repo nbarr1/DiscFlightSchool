@@ -8,7 +8,7 @@ import 'posture_analysis_screen.dart';
 import 'video_trim_screen.dart';
 
 class FormCoachScreen extends StatefulWidget {
-  const FormCoachScreen({Key? key}) : super(key: key);
+  const FormCoachScreen({super.key});
 
   @override
   State<FormCoachScreen> createState() => _FormCoachScreenState();
@@ -122,7 +122,7 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
                       )
                     else
                       DropdownButtonFormField<String>(
-                        value: _selectedPro,
+                        initialValue: _selectedPro,
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           hintText: 'Select a pro player (optional)',

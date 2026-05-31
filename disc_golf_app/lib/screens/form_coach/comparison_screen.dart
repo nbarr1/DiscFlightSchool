@@ -12,11 +12,11 @@ class ComparisonScreen extends StatefulWidget {
   final String proName;
 
   const ComparisonScreen({
-    Key? key,
+    super.key,
     required this.userAnalysis,
     required this.proAnalysis,
     required this.proName,
-  }) : super(key: key);
+  });
 
   @override
   State<ComparisonScreen> createState() => _ComparisonScreenState();
