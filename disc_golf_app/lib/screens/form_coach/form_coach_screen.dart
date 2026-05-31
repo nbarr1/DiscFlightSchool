@@ -122,7 +122,7 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
                       )
                     else
                       DropdownButtonFormField<String>(
-                        initialValue: _selectedPro,
+                        value: _selectedPro,
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           hintText: 'Select a pro player (optional)',
