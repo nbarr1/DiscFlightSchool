@@ -166,10 +166,10 @@ class FileStorage:
         with self._model_info_lock:
             cache = self._model_info_cache
             if cache is not None and cache[:3] == (model_path, stat.st_mtime, stat.st_size):
-                sha256 = cache[3]
-            else:
-                sha256 = hashlib.sha256(model_path.read_bytes()).hexdigest()
-                self._model_info_cache = (model_path, stat.st_mtime, stat.st_size, sha256)
+                return {"path": model_path, "version": model_path.stem, "sha256": cache[3]}
+        sha256 = hashlib.sha256(model_path.read_bytes()).hexdigest()
+        with self._model_info_lock:
+            self._model_info_cache = (model_path, stat.st_mtime, stat.st_size, sha256)
         return {"path": model_path, "version": model_path.stem, "sha256": sha256}
 
     def build_training_export(self) -> Path:
