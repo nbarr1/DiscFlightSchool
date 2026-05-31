@@ -14,13 +14,13 @@ class VideoTrimScreen extends StatefulWidget {
   final void Function(int startMs, int endMs, int frameCount)? onTrimComplete;
 
   const VideoTrimScreen({
-    Key? key,
+    super.key,
     required this.videoPath,
     this.proPlayer,
     this.throwType = 'BH',
     this.isLeftHanded = false,
     this.onTrimComplete,
-  }) : super(key: key);
+  });
 
   @override
   State<VideoTrimScreen> createState() => _VideoTrimScreenState();

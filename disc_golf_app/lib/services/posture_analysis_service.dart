@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/form_analysis.dart';
 import '../utils/angle_calculator.dart';
@@ -336,14 +335,18 @@ class PostureAnalysisService extends ChangeNotifier {
   void _smoothFrameAngles(List<FormFrame> frames) {
     if (frames.length < 3) return;
     final angleNames = <String>{};
-    for (final f in frames) angleNames.addAll(f.angles.keys);
+    for (final f in frames) {
+      angleNames.addAll(f.angles.keys);
+    }
     for (final name in angleNames) {
       var data = frames.map((f) => f.angles[name] ?? double.nan).toList();
       data = _sparseMedianFilter(data, 3);
       data = _sparseMovingAverage(data, 9);
       data = _sparseMovingAverage(data, 7);
       for (int i = 0; i < frames.length; i++) {
-        if (!data[i].isNaN) frames[i].angles[name] = data[i];
+        if (!data[i].isNaN) {
+          frames[i].angles[name] = data[i];
+        }
       }
     }
   }
@@ -351,7 +354,9 @@ class PostureAnalysisService extends ChangeNotifier {
   void _smoothKeyPoints(List<FormFrame> frames) {
     if (frames.length < 3) return;
     final pointNames = <String>{};
-    for (final f in frames) pointNames.addAll(f.keyPoints.keys);
+    for (final f in frames) {
+      pointNames.addAll(f.keyPoints.keys);
+    }
     for (final name in pointNames) {
       final xData = frames.map((f) => f.keyPoints[name]?.dx ?? double.nan).toList();
       final yData = frames.map((f) => f.keyPoints[name]?.dy ?? double.nan).toList();
@@ -515,11 +520,11 @@ class PostureAnalysisService extends ChangeNotifier {
           refLabel = proName ?? 'pro';
           // Get SD from baseline even when comparing vs specific pro
           final jsonKey = _reverseAngleKey(appKey, throwType);
-          final stats   = phaseStats[jsonKey] as Map<String, dynamic>?;
+          final stats   = phaseStats[jsonKey];
           refSD = (stats?['sd'] as num?)?.toDouble();
         } else {
           final jsonKey = _reverseAngleKey(appKey, throwType);
-          final stats   = phaseStats[jsonKey] as Map<String, dynamic>?;
+          final stats   = phaseStats[jsonKey];
           if (stats == null) continue;
           refAngle = (stats['mean'] as num?)?.toDouble();
           refSD    = (stats['sd'] as num?)?.toDouble();
@@ -544,7 +549,7 @@ class PostureAnalysisService extends ChangeNotifier {
           userAngle:   userAngle,
           refAngle:    refAngle,
           refSD:       refSD,
-          refLabel:    refLabel!,
+          refLabel:    refLabel,
           deviationSD: deviationSD,
         );
         if (suggestion != null) suggestions.add(suggestion);

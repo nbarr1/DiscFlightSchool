@@ -8,7 +8,7 @@ import 'roulette_history_screen.dart';
 import 'start_round_screen.dart';
 
 class RouletteScreen extends StatefulWidget {
-  const RouletteScreen({Key? key}) : super(key: key);
+  const RouletteScreen({super.key});
 
   @override
   State<RouletteScreen> createState() => _RouletteScreenState();

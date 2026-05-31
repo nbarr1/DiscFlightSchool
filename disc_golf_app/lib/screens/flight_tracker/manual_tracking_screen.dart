@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class ManualTrackingScreen extends StatelessWidget {
-  const ManualTrackingScreen({Key? key}) : super(key: key);
+  const ManualTrackingScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

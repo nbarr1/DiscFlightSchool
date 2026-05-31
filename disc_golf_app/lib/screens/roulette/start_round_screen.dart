@@ -5,7 +5,7 @@ import '../../models/roulette_scoring.dart';
 import 'play_round_screen.dart';
 
 class StartRoundScreen extends StatefulWidget {
-  const StartRoundScreen({Key? key}) : super(key: key);
+  const StartRoundScreen({super.key});
 
   @override
   State<StartRoundScreen> createState() => _StartRoundScreenState();
@@ -100,7 +100,7 @@ class _StartRoundScreenState extends State<StartRoundScreen> {
                           ],
                         ),
                       );
-                    }).toList(),
+                    }),
                   ],
                 ),
               ),

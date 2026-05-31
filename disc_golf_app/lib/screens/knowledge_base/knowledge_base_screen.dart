@@ -6,7 +6,7 @@ import 'ai_search_screen.dart';
 import 'category_screen.dart';
 
 class KnowledgeBaseScreen extends StatefulWidget {
-  const KnowledgeBaseScreen({Key? key}) : super(key: key);
+  const KnowledgeBaseScreen({super.key});
 
   @override
   State<KnowledgeBaseScreen> createState() => _KnowledgeBaseScreenState();
