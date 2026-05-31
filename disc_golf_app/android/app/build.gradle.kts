@@ -19,6 +19,20 @@ val hasSigningConfig = keystorePropertiesFile.exists() &&
     keystoreProperties["storeFile"] != null &&
     keystoreProperties["storePassword"] != null
 
+gradle.taskGraph.whenReady {
+    val releaseTaskSelected = allTasks.any { task ->
+        task.name.lowercase().contains("release")
+    }
+
+    if (releaseTaskSelected && !hasSigningConfig) {
+        throw GradleException(
+            "Release builds require android/key.properties with keyAlias, " +
+                "keyPassword, storeFile, and storePassword. Use a debug " +
+                "build for local unsigned testing."
+        )
+    }
+}
+
 android {
     namespace = "com.discflightschool.app"
     compileSdk = 36
@@ -54,14 +68,9 @@ android {
 
     buildTypes {
         release {
-            if (!hasSigningConfig) {
-                throw GradleException(
-                    "Release builds require android/key.properties with keyAlias, " +
-                        "keyPassword, storeFile, and storePassword. Use a debug " +
-                        "build for local unsigned testing."
-                )
+            if (hasSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
             }
-            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
         }
