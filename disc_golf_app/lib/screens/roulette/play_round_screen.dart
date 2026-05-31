@@ -8,7 +8,7 @@ import 'dart:math';
 import 'scorecard_screen.dart';
 
 class PlayRoundScreen extends StatefulWidget {
-  const PlayRoundScreen({Key? key}) : super(key: key);
+  const PlayRoundScreen({super.key});
 
   @override
   State<PlayRoundScreen> createState() => _PlayRoundScreenState();

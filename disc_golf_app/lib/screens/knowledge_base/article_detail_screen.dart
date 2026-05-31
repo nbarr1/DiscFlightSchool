@@ -6,8 +6,7 @@ import '../../services/knowledge_base_service.dart';
 class ArticleDetailScreen extends StatelessWidget {
   final KBArticle article;
 
-  const ArticleDetailScreen({Key? key, required this.article})
-      : super(key: key);
+  const ArticleDetailScreen({super.key, required this.article});
 
   @override
   Widget build(BuildContext context) {

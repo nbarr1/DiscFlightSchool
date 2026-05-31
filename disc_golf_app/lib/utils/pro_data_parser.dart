@@ -191,7 +191,7 @@ class ProBaselineParser {
         } else if (jsonKey != null) {
           // Fall back to cross-player mean
           final phaseStats = summary[phaseName];
-          final stats = phaseStats?[jsonKey] as Map<String, dynamic>?;
+          final stats = phaseStats?[jsonKey];
           final mean  = stats?['mean'];
           if (mean != null) {
             final fallback = _convertAngle(jsonKey, (mean as num).toDouble());
@@ -263,7 +263,7 @@ class ProBaselineParser {
     if (jsonKey == null) return null;
 
     final phaseStats  = summary[phaseName];
-    final stats = phaseStats?[jsonKey] as Map<String, dynamic>?;
+    final stats = phaseStats?[jsonKey];
     if (stats == null) return null;
 
     final mean = (stats['mean'] as num?)?.toDouble();
@@ -302,7 +302,7 @@ class ProBaselineParser {
     final jsonKey    = reverseMap[appAngleKey];
     if (jsonKey == null) return null;
 
-    final stats = summary[phaseName]?[jsonKey] as Map<String, dynamic>?;
+    final stats = summary[phaseName]?[jsonKey];
     if (stats == null) return null;
 
     final mean = (stats['mean'] as num?)?.toDouble();

@@ -4,7 +4,7 @@ import '../../services/scoring_service.dart';
 import '../../models/roulette_scoring.dart';
 
 class ScorecardScreen extends StatelessWidget {
-  const ScorecardScreen({Key? key}) : super(key: key);
+  const ScorecardScreen({super.key});
 
   String _formatScore(int score) {
     if (score == 0) return 'E';

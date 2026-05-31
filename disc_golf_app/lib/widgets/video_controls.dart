@@ -6,10 +6,10 @@ class VideoControls extends StatelessWidget {
   final VoidCallback? onPlayPause;
 
   const VideoControls({
-    Key? key,
+    super.key,
     required this.controller,
     this.onPlayPause,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

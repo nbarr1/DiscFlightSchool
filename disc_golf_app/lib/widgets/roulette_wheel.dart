@@ -4,7 +4,7 @@ import 'dart:math';
 class RouletteWheel extends StatelessWidget {
   final bool isSpinning;
 
-  const RouletteWheel({Key? key, required this.isSpinning}) : super(key: key);
+  const RouletteWheel({super.key, required this.isSpinning});
 
   @override
   Widget build(BuildContext context) {
