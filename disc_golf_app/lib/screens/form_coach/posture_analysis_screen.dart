@@ -656,7 +656,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2)))
             else
               DropdownButtonFormField<String>(
-                initialValue: _selectedPro,
+                value: _selectedPro,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   hintText: 'Select a pro player',
