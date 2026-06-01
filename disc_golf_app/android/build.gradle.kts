@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension
+
 allprojects {
     repositories {
         google()
@@ -17,6 +19,27 @@ subprojects {
 }
 subprojects {
     project.evaluationDependsOn(":app")
+}
+
+subprojects {
+    if (name == "tflite_flutter") {
+        plugins.withId("kotlin-android") {
+            extensions.configure<KotlinAndroidProjectExtension>("kotlin") {
+                jvmToolchain(17)
+            }
+        }
+
+        plugins.withId("org.jetbrains.kotlin.android") {
+            extensions.configure<KotlinAndroidProjectExtension>("kotlin") {
+                jvmToolchain(17)
+            }
+        }
+
+        tasks.withType<JavaCompile>().configureEach {
+            sourceCompatibility = JavaVersion.VERSION_17.toString()
+            targetCompatibility = JavaVersion.VERSION_17.toString()
+        }
+    }
 }
 
 tasks.register<Delete>("clean") {
