@@ -60,6 +60,7 @@ class _PhaseFrameSelectorScreenState extends State<PhaseFrameSelectorScreen> {
     await _controller!
         .seekTo(Duration(milliseconds: widget.analysisStartMs));
     _controller!.addListener(_onTick);
+    if (!mounted) return;
     setState(() => _isInitialized = true);
   }
 

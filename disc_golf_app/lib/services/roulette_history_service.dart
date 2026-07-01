@@ -10,9 +10,10 @@ class RouletteHistoryService extends ChangeNotifier {
 
   List<RouletteResult> _history = [];
   List<RouletteResult> get history => List.unmodifiable(_history);
+  late final Future<void> _loadFuture;
 
   RouletteHistoryService() {
-    _load();
+    _loadFuture = _load();
   }
 
   Future<void> _load() async {
@@ -22,7 +23,14 @@ class RouletteHistoryService extends ChangeNotifier {
     try {
       final list = jsonDecode(raw) as List<dynamic>;
       _history = list
-          .map((e) => RouletteResult.fromJson(e as Map<String, dynamic>))
+          .map((e) {
+            try {
+              return RouletteResult.fromJson(e as Map<String, dynamic>);
+            } catch (_) {
+              return null;
+            }
+          })
+          .whereType<RouletteResult>()
           .toList();
       notifyListeners();
     } catch (e) {
@@ -31,6 +39,10 @@ class RouletteHistoryService extends ChangeNotifier {
   }
 
   Future<void> addResult(RouletteResult result) async {
+    // Ensure the initial load has finished before mutating _history, so a
+    // spin added shortly after startup can't be clobbered by the load's
+    // unconditional overwrite once it resolves.
+    await _loadFuture;
     _history.insert(0, result); // newest first
     if (_history.length > _maxEntries) {
       _history = _history.sublist(0, _maxEntries);
@@ -40,6 +52,7 @@ class RouletteHistoryService extends ChangeNotifier {
   }
 
   Future<void> clearHistory() async {
+    await _loadFuture;
     _history.clear();
     notifyListeners();
     await _persist();

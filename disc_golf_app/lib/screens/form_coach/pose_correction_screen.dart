@@ -125,6 +125,7 @@ class _PoseCorrectionScreenState extends State<PoseCorrectionScreen> {
     if (widget.initialFrame != null) {
       _seekToFrame(widget.initialFrame!);
     }
+    if (!mounted) return;
     setState(() => _isInitialized = true);
   }
 

@@ -35,6 +35,7 @@ class _PhaseComparisonScreenState extends State<PhaseComparisonScreen> {
       widget.proName,
       widget.throwType,
     );
+    if (!mounted) return;
     setState(() {
       _proPhaseAngles = proAngles;
       _isLoading = false;

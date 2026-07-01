@@ -85,6 +85,7 @@ class FormAnalysis {
       'videoPath': videoPath,
       'frames': frames.map((f) => f.toJson()).toList(),
       'score': score,
+      'isMock': isMock,
     };
   }
 
@@ -97,6 +98,7 @@ class FormAnalysis {
           .map((f) => FormFrame.fromJson(f as Map<String, dynamic>))
           .toList(),
       score: json['score'] as double,
+      isMock: json['isMock'] as bool? ?? false,
     );
   }
 }

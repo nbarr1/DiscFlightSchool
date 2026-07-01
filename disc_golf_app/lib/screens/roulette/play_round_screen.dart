@@ -21,6 +21,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
   int _currentHoleNumber = 1;
   bool _isSpinning = false;
   bool _isPutting = false;
+  bool _navigatingToScorecard = false;
 
   // Per-throw state for current player
   RouletteResult? _currentThrowChallenge;
@@ -56,6 +57,7 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
     });
 
     _animationController.forward(from: 0).then((_) {
+      if (!mounted) return;
       setState(() {
         if (_isPutting) {
           _currentThrowChallenge =
@@ -189,14 +191,18 @@ class _PlayRoundScreenState extends State<PlayRoundScreen>
     // Check if round is complete
     if (_currentHoleNumber > round.coursePars.length &&
         _completedPlayers.length == round.playerNames.length) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const ScorecardScreen(),
-          ),
-        );
-      });
+      if (!_navigatingToScorecard) {
+        _navigatingToScorecard = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ScorecardScreen(),
+            ),
+          );
+        });
+      }
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );

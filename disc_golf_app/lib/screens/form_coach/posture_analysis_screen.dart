@@ -115,6 +115,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   Future<void> _initializeVideo() async {
     _controller = VideoPlayerController.file(File(widget.videoPath!));
     await _controller!.initialize();
+    if (!mounted) return;
     setState(() => _isInitialized = true);
     _controller!.addListener(() {
       if (_analysis != null) {
@@ -144,6 +145,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
       isLeftHanded: widget.isLeftHanded,
       throwType:   widget.throwType,
     );
+    if (!mounted) return;
     setState(() { _analysis = analysis; _isAnalyzing = false; });
 
     // Persist session

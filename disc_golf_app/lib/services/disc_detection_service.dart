@@ -131,12 +131,6 @@ class DiscDetectionService extends ChangeNotifier {
     if (_isModelLoaded && !forceReload) return;
 
     try {
-      if (forceReload) {
-        _interpreter?.close();
-        _interpreter = null;
-        _isModelLoaded = false;
-      }
-
       File modelFile;
       final resolvedCustomPath = customModelPath ?? await _getDownloadedModelPath();
 
@@ -152,8 +146,15 @@ class DiscDetectionService extends ChangeNotifier {
         debugPrint('Loading bundled disc detection model');
       }
 
-      _interpreter = Interpreter.fromFile(modelFile);
+      // Build the replacement interpreter before swapping it in, and close
+      // the old one only after the swap. This keeps _interpreter non-null
+      // at every point a concurrent processVideo()/_detectDisc() call could
+      // observe it, instead of nulling it out for the duration of the load.
+      final newInterpreter = Interpreter.fromFile(modelFile);
+      final oldInterpreter = _interpreter;
+      _interpreter = newInterpreter;
       _isModelLoaded = true;
+      oldInterpreter?.close();
       debugPrint('Disc detection model loaded successfully');
     } catch (e) {
       debugPrint('Error loading disc detection model: $e');

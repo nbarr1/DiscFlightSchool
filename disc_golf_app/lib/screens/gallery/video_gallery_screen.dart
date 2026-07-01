@@ -146,9 +146,11 @@ class _VideoGalleryScreenState extends State<VideoGalleryScreen> {
       } catch (_) {}
     }
 
-    // Update prefs
+    if (!mounted) return;
+    // Remove by identity rather than the captured index, which may be
+    // stale if another delete completed first and shifted the list.
     setState(() {
-      _videos.removeAt(index);
+      _videos.remove(video);
     });
     await _saveRegistry();
   }

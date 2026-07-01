@@ -11,9 +11,10 @@ class FormHistoryService extends ChangeNotifier {
 
   List<FormSessionRecord> _sessions = [];
   List<FormSessionRecord> get sessions => List.unmodifiable(_sessions);
+  late final Future<void> _loadFuture;
 
   FormHistoryService() {
-    _load();
+    _loadFuture = _load();
   }
 
   Future<void> _load() async {
@@ -35,6 +36,10 @@ class FormHistoryService extends ChangeNotifier {
   }
 
   Future<void> saveSession(FormSessionRecord record) async {
+    // Ensure the initial load has finished before mutating _sessions, so a
+    // session saved shortly after startup can't be clobbered by the load's
+    // unconditional overwrite once it resolves.
+    await _loadFuture;
     _sessions.insert(0, record);
     if (_sessions.length > _maxRecords) {
       _sessions = _sessions.sublist(0, _maxRecords);
@@ -52,6 +57,7 @@ class FormHistoryService extends ChangeNotifier {
   }
 
   Future<void> clearHistory() async {
+    await _loadFuture;
     _sessions.clear();
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();

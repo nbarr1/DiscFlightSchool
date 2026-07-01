@@ -25,7 +25,8 @@ class _FlightAnalysisScreenState extends State<FlightAnalysisScreen> {
     try {
       final pathData = await FlightDataService.loadFlightPath();
       final results = await FlightDataService.loadAnalysisResults();
-      
+
+      if (!mounted) return;
       setState(() {
         flightPathData = pathData;
         analysisResults = results;
@@ -33,6 +34,7 @@ class _FlightAnalysisScreenState extends State<FlightAnalysisScreen> {
       });
     } catch (e) {
       debugPrint('Error loading $e');
+      if (!mounted) return;
       setState(() {
         errorMessage = 'Failed to load analysis data. Please run the Python analysis first.';
         isLoading = false;

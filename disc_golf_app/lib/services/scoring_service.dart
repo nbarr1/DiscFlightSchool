@@ -7,13 +7,14 @@ class ScoringService extends ChangeNotifier {
   ScoredRound? _currentRound;
   List<ScoredRound> _savedRounds = [];
   String? _currentPlayer;
+  late final Future<void> _loadFuture;
 
   ScoredRound? get currentRound => _currentRound;
   List<ScoredRound> get savedRounds => List.unmodifiable(_savedRounds);
   String? get currentPlayer => _currentPlayer;
 
   ScoringService() {
-    _loadRounds();
+    _loadFuture = _loadRounds();
   }
 
   void startNewRound({
@@ -82,11 +83,16 @@ class ScoringService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _saveRound() {
+  Future<void> _saveRound() async {
     if (_currentRound == null || !_currentRound!.isComplete) return;
-    
+
+    // Ensure the initial load has finished before mutating _savedRounds, so
+    // a round saved shortly after startup can't be clobbered by the load's
+    // unconditional overwrite once it resolves.
+    await _loadFuture;
+
     _savedRounds.add(_currentRound!);
-    _persistRounds();
+    await _persistRounds();
   }
 
   Future<void> _persistRounds() async {
@@ -106,9 +112,10 @@ class ScoringService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void deleteRound(String id) {
+  Future<void> deleteRound(String id) async {
+    await _loadFuture;
     _savedRounds.removeWhere((r) => r.id == id);
-    _persistRounds();
+    await _persistRounds();
     notifyListeners();
   }
 

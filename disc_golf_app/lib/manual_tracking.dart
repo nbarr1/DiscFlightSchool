@@ -38,6 +38,7 @@ class _ManualTrackingPageState extends State<ManualTrackingPage> {
       // Most phone cameras shoot at 30 or 60 fps; default to 30.
       _videoFps = 30.0;
     }
+    if (!mounted) return;
     setState(() {});
   }
 
