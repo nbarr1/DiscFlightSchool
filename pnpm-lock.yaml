@@ -1,0 +1,55 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      flutter:
+        specifier: ^0.0.5
+        version: 0.0.5
+
+packages:
+
+  debug@2.6.9:
+    resolution: {integrity: sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA==}
+    peerDependencies:
+      supports-color: '*'
+    peerDependenciesMeta:
+      supports-color:
+        optional: true
+
+  flutter@0.0.5:
+    resolution: {integrity: sha512-tPqt4+RdIJgmR6pbVtupVUlyPgIAWhOizGtn8gAMHUcKu98tHrUY/l9Ozpb7EEgvgxMUCEjYcU1SipcgZP8egw==}
+
+  ms@2.0.0:
+    resolution: {integrity: sha512-Tpp60P6IUJDTuOq/5Z8cdskzJujfwqfOTkrwIwj7IRISpnkJnT6SyJ4PCPnGMoFjC9ddhal5KVIYtAt97ix05A==}
+
+  oauth@0.9.15:
+    resolution: {integrity: sha512-a5ERWK1kh38ExDEfoO6qUHJb32rd7aYmPHuyCu3Fta/cnICvYmgd2uhuKXvPD+PXB+gCEYYEaQdIRAjCOwAKNA==}
+
+  redis@0.12.1:
+    resolution: {integrity: sha512-DtqxdmgmVAO7aEyxaXBiUTvhQPOYznTIvmPzs9AwWZqZywM50JlFxQjFhicI+LVbaun7uwfO3izuvc1L8NlPKQ==}
+
+snapshots:
+
+  debug@2.6.9:
+    dependencies:
+      ms: 2.0.0
+
+  flutter@0.0.5:
+    dependencies:
+      debug: 2.6.9
+      oauth: 0.9.15
+      redis: 0.12.1
+    transitivePeerDependencies:
+      - supports-color
+
+  ms@2.0.0: {}
+
+  oauth@0.9.15: {}
+
+  redis@0.12.1: {}
