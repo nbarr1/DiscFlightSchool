@@ -10,6 +10,13 @@ class FormHistoryScreen extends StatelessWidget {
     final history = Provider.of<FormHistoryService>(context);
     final sessions = history.sessions;
 
+    if (!history.isLoaded) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Form History')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Form History'),

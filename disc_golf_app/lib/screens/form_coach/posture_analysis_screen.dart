@@ -57,6 +57,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   // Phase verification
   bool _isVerifying          = false;
   int _verificationPhaseIndex = 0;
+  bool _isCorrectingPose      = false;
 
   // Pro selector
   String? _selectedPro;
@@ -148,36 +149,37 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
     if (!mounted) return;
     setState(() { _analysis = analysis; _isAnalyzing = false; });
 
-    // Persist session
+    // Load pro data if pre-selected (also computes _proDeviationScore)
+    if (_selectedPro != null) {
+      await _loadProData(_selectedPro!, _selectedThrowType);
+    } else {
+      // Still generate baseline-only suggestions
+      await _refreshSuggestions();
+    }
+
+    // Persist session — after pro data loads, so the real deviation score
+    // (rather than the FormAnalysis placeholder score) is what gets saved.
     if (!analysis.isMock && mounted) {
       final avgAngles = <String, double>{};
-      if (analysis.frames.isNotEmpty) {
-        for (final f in analysis.frames) {
-          for (final e in f.angles.entries) {
-            avgAngles[e.key] = (avgAngles[e.key] ?? 0) + e.value;
-          }
+      final counts = <String, int>{};
+      for (final f in analysis.frames) {
+        for (final e in f.angles.entries) {
+          avgAngles[e.key] = (avgAngles[e.key] ?? 0) + e.value;
+          counts[e.key] = (counts[e.key] ?? 0) + 1;
         }
-        avgAngles.updateAll((k, v) => v / analysis.frames.length);
       }
+      avgAngles.updateAll((k, v) => v / counts[k]!);
       Provider.of<FormHistoryService>(context, listen: false).saveSession(
         FormSessionRecord(
           id: analysis.id,
           date: analysis.date,
-          score: analysis.score,
+          score: _proDeviationScore ?? analysis.score,
           throwType: widget.throwType,
           proPlayer: widget.proPlayer,
           frameCount: analysis.frames.length,
           avgAngles: avgAngles,
         ),
       );
-    }
-
-    // Load pro data if pre-selected
-    if (_selectedPro != null) {
-      await _loadProData(_selectedPro!, _selectedThrowType);
-    } else {
-      // Still generate baseline-only suggestions
-      await _refreshSuggestions();
     }
 
     // Phase verification
@@ -265,7 +267,10 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
   }
 
   Future<void> _fixCurrentPhase() async {
-    if (_analysis == null || widget.videoPath == null) return;
+    if (_analysis == null || widget.videoPath == null || _isCorrectingPose) {
+      return;
+    }
+    _isCorrectingPose = true;
     final sorted      = _sortedPhases;
     final phaseMs     = sorted[_verificationPhaseIndex].value;
     final initialFrame = _frameForPhase(phaseMs);
@@ -295,6 +300,7 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
       }
       await _refreshSuggestions();
     }
+    _isCorrectingPose = false;
     if (mounted) _approveCurrentPhase();
   }
 

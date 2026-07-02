@@ -18,6 +18,7 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
   String? _selectedPro;
   String _throwType    = 'BH';
   bool _isLeftHanded   = false;
+  bool _isPickingVideo = false;
 
   // Player list loaded from pro_baseline_db.json
   List<String> _availablePlayers   = [];
@@ -156,18 +157,23 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
             const SizedBox(height: 20),
 
             ElevatedButton.icon(
-              onPressed: () async {
-                final videoPath = await videoService.selectVideo();
-                if (videoPath != null && context.mounted) {
-                  _navigateToAnalysis(videoPath);
-                } else if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(videoService.lastError ??
-                        'Could not open gallery. Check storage permission in Settings.'),
-                    duration: const Duration(seconds: 6),
-                  ));
-                }
-              },
+              onPressed: _isPickingVideo
+                  ? null
+                  : () async {
+                      setState(() => _isPickingVideo = true);
+                      final videoPath = await videoService.selectVideo();
+                      if (!context.mounted) return;
+                      setState(() => _isPickingVideo = false);
+                      if (videoPath != null) {
+                        _navigateToAnalysis(videoPath);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(videoService.lastError ??
+                              'Could not open gallery. Check storage permission in Settings.'),
+                          duration: const Duration(seconds: 6),
+                        ));
+                      }
+                    },
               icon: const Icon(Icons.video_library),
               label: const Text('Upload Form Video'),
               style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
@@ -176,18 +182,23 @@ class _FormCoachScreenState extends State<FormCoachScreen> {
             const SizedBox(height: 12),
 
             ElevatedButton.icon(
-              onPressed: () async {
-                final videoPath = await videoService.captureVideo();
-                if (videoPath != null && context.mounted) {
-                  _navigateToAnalysis(videoPath);
-                } else if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(videoService.lastError ??
-                        'Could not open camera. Check camera permission in Settings.'),
-                    duration: const Duration(seconds: 6),
-                  ));
-                }
-              },
+              onPressed: _isPickingVideo
+                  ? null
+                  : () async {
+                      setState(() => _isPickingVideo = true);
+                      final videoPath = await videoService.captureVideo();
+                      if (!context.mounted) return;
+                      setState(() => _isPickingVideo = false);
+                      if (videoPath != null) {
+                        _navigateToAnalysis(videoPath);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(videoService.lastError ??
+                              'Could not open camera. Check camera permission in Settings.'),
+                          duration: const Duration(seconds: 6),
+                        ));
+                      }
+                    },
               icon: const Icon(Icons.videocam),
               label: const Text('Record Form Video'),
               style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),

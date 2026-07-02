@@ -260,11 +260,13 @@ class _PhaseComparisonScreenState extends State<PhaseComparisonScreen> {
   }
 
   String _formatAngleName(String name) {
-    final result = name.replaceAllMapped(
-      RegExp(r'([A-Z])'),
-      (match) => ' ${match.group(0)}',
-    );
-    return result[0].toUpperCase() +
-        result.substring(1).replaceAll('Angle', '').trim();
+    final spaced = name
+        .replaceAllMapped(
+          RegExp(r'([A-Z])'),
+          (match) => ' ${match.group(0)}',
+        )
+        .replaceAll('Angle', '')
+        .trim();
+    return spaced[0].toUpperCase() + spaced.substring(1);
   }
 }

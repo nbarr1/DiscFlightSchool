@@ -12,6 +12,11 @@ class FormHistoryService extends ChangeNotifier {
   List<FormSessionRecord> _sessions = [];
   List<FormSessionRecord> get sessions => List.unmodifiable(_sessions);
   late final Future<void> _loadFuture;
+  bool _isLoaded = false;
+  /// True once the persisted history has finished loading from disk.
+  /// Callers can use this to distinguish "genuinely empty" from
+  /// "not loaded yet" instead of reading [sessions] before it settles.
+  bool get isLoaded => _isLoaded;
 
   FormHistoryService() {
     _loadFuture = _load();
@@ -29,9 +34,11 @@ class FormHistoryService extends ChangeNotifier {
           return null;
         }
       }).whereType<FormSessionRecord>().toList();
-      notifyListeners();
     } catch (e) {
       debugPrint('FormHistoryService load error: $e');
+    } finally {
+      _isLoaded = true;
+      notifyListeners();
     }
   }
 

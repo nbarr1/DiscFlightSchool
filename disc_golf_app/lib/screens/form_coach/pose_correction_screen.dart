@@ -121,11 +121,11 @@ class _PoseCorrectionScreenState extends State<PoseCorrectionScreen> {
   Future<void> _initVideo() async {
     _controller = VideoPlayerController.file(File(widget.videoPath));
     await _controller.initialize();
+    if (!mounted) return;
     _controller.addListener(_onVideoTick);
     if (widget.initialFrame != null) {
       _seekToFrame(widget.initialFrame!);
     }
-    if (!mounted) return;
     setState(() => _isInitialized = true);
   }
 
@@ -450,7 +450,8 @@ class _PoseCorrectionScreenState extends State<PoseCorrectionScreen> {
       date: _analysis.date,
       videoPath: _analysis.videoPath,
       frames: _analysis.frames,
-      score: 0.0,
+      score: _analysis.score,
+      isMock: _analysis.isMock,
     );
 
     Navigator.pop(context, corrected);

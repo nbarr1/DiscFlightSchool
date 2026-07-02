@@ -562,24 +562,6 @@ class PostureAnalysisService extends ChangeNotifier {
     return suggestions;
   }
 
-  /// Synchronous fallback for compatibility with existing call sites.
-  /// Returns generic suggestions only — call [generateSuggestionsAsync] for
-  /// data-driven feedback.
-  List<FormSuggestion> generateSuggestions({String throwType = 'BH'}) {
-    if (_currentAnalysis == null || _currentAnalysis!.frames.isEmpty) {
-      return _genericSuggestions(throwType);
-    }
-    // Compute avg angles for threshold-based fallback
-    final avgAngles = <String, double>{};
-    for (var frame in _currentAnalysis!.frames) {
-      for (var entry in frame.angles.entries) {
-        avgAngles[entry.key] = (avgAngles[entry.key] ?? 0) + entry.value;
-      }
-    }
-    avgAngles.updateAll((k, v) => v / _currentAnalysis!.frames.length);
-    return _thresholdSuggestions(avgAngles, throwType);
-  }
-
   // ── Suggestion helpers ─────────────────────────────────────────────────────
 
   /// Extract average user angles at each throw phase.
@@ -759,74 +741,6 @@ class PostureAnalysisService extends ChangeNotifier {
 
   // ── Threshold fallback suggestions (no pro data) ──────────────────────────
 
-  List<FormSuggestion> _thresholdSuggestions(
-      Map<String, double> avgAngles, String throwType) {
-    final suggestions = <FormSuggestion>[];
-    if (throwType == 'FH') {
-      if ((avgAngles['rightElbowAngle'] ?? 180) > 120) {
-        suggestions.add(const FormSuggestion(
-          'Keep your throwing elbow bent (~90°) — a straight arm loses snap on forehand',
-          kbArticleId: 'bio_tip_1',
-        ));
-      }
-      if ((avgAngles['rightShoulderAngle'] ?? 0) < 70) {
-        suggestions.add(const FormSuggestion(
-          'Open your throwing shoulder toward the target through release',
-          kbArticleId: 'bio_tip_3',
-        ));
-      }
-      if ((avgAngles['rightKneeAngle'] ?? 0) < 140) {
-        suggestions.add(const FormSuggestion(
-          'Drive off your back foot to add power to your forehand',
-          kbArticleId: 'bio_faq_4',
-        ));
-      }
-      if ((avgAngles['spineAngle'] ?? 0) < 78) {
-        suggestions.add(const FormSuggestion(
-          'Stay tall — excessive forward lean reduces forehand accuracy',
-          kbArticleId: 'bio_tip_4',
-        ));
-      }
-      if ((avgAngles['leftShoulderAngle'] ?? 0) < 85) {
-        suggestions.add(const FormSuggestion(
-          'Keep your off-arm close to prevent premature shoulder opening',
-          kbArticleId: 'bio_faq_2',
-        ));
-      }
-    } else {
-      if ((avgAngles['rightShoulderAngle'] ?? 0) < 80) {
-        suggestions.add(const FormSuggestion(
-          'Increase shoulder rotation for more power',
-          kbArticleId: 'bio_tip_5',
-        ));
-      }
-      if ((avgAngles['rightElbowAngle'] ?? 0) > 140) {
-        suggestions.add(const FormSuggestion(
-          'Keep your elbow at 90-120° during pull-through',
-          kbArticleId: 'bio_tip_1',
-        ));
-      }
-      if ((avgAngles['rightKneeAngle'] ?? 0) < 140) {
-        suggestions.add(const FormSuggestion(
-          'Keep your knees less bent for better balance',
-          kbArticleId: 'bio_faq_4',
-        ));
-      }
-      if ((avgAngles['spineAngle'] ?? 0) < 75) {
-        suggestions.add(const FormSuggestion(
-          'Maintain a more upright spine position',
-          kbArticleId: 'bio_tip_4',
-        ));
-      }
-      if ((avgAngles['xFactor'] ?? 0) < 30) {
-        suggestions.add(const FormSuggestion(
-          'Increase hip-shoulder separation (X-factor) in your backswing',
-          kbArticleId: 'bio_tip_5',
-        ));
-      }
-    }
-    return suggestions.isEmpty ? _positiveSuggestions() : suggestions;
-  }
 
   List<FormSuggestion> _genericSuggestions(String throwType) {
     return [

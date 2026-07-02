@@ -85,6 +85,7 @@ class _VideoTrimScreenState extends State<VideoTrimScreen> {
     await _controller!.play();
 
     // Stop at end of selection
+    _controller!.removeListener(_playbackListener);
     _controller!.addListener(_playbackListener);
   }
 

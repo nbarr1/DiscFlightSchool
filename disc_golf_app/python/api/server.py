@@ -26,19 +26,6 @@ def track_flight():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/analyze-form', methods=['POST'])
-def analyze_form():
-    try:
-        if 'video' not in request.files:
-            return jsonify({'error': 'No video file provided'}), 400
-        
-        return jsonify({
-            'success': True,
-            'message': 'Form analysis endpoint ready'
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 if __name__ == '__main__':
     print("=" * 50)
     print("  Disc Golf API Server")
