@@ -394,6 +394,76 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     });
   }
 
+  /// Refine the flight path using real per-frame disc detection (YOLO +
+  /// color-blob matching) instead of pure geometric interpolation.
+  /// Requires at least 3 keyframes — see [HybridDiscTracker].
+  Future<void> _processKeyframesWithDetection() async {
+    if (_keyframes.length < 3) return;
+
+    final detector = Provider.of<DiscDetectionService>(context, listen: false);
+    final tracker = HybridDiscTracker(detector);
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Detecting disc in frames...'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    try {
+      final result = await tracker.track(
+        session: TrackerSession(
+          videoPath: widget.videoPath,
+          fps: _frameFps,
+          totalFrames:
+              (_controller.value.duration.inMilliseconds * _frameFps / 1000)
+                  .round(),
+          videoWidth: _controller.value.size.width,
+          videoHeight: _controller.value.size.height,
+        ),
+        seedPoints: _keyframes
+            .map((kf) => TrackerSeedPoint(
+                  frameIndex: kf.frameIndex,
+                  x: kf.x,
+                  y: kf.y,
+                ))
+            .toList(),
+      );
+
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop(); // dismiss dialog
+
+      setState(() {
+        _trackingResult = result;
+        _phase = _SetupPhase.result;
+      });
+
+      _collectTrainingData();
+
+      Future.delayed(const Duration(seconds: 3), () {
+        if (!mounted || _trackingResult == null) return;
+        _showFlightVerificationBanner();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop(); // dismiss dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Detection failed: $e')),
+      );
+    } finally {
+      tracker.dispose();
+    }
+  }
+
   void _showFlightVerificationBanner() {
     ScaffoldMessenger.of(context).showMaterialBanner(
       MaterialBanner(
@@ -1184,6 +1254,16 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: _keyframes.length >= 2 ? Colors.green : null,
                 foregroundColor: _keyframes.length >= 2 ? Colors.white : null,
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed:
+                  _keyframes.length >= 3 ? _processKeyframesWithDetection : null,
+              icon: const Icon(Icons.center_focus_strong, size: 16),
+              label: const Text('Auto-Refine', style: TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _keyframes.length >= 3 ? Colors.deepPurple : null,
+                foregroundColor: _keyframes.length >= 3 ? Colors.white : null,
               ),
             ),
             ElevatedButton.icon(
