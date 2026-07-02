@@ -7,6 +7,7 @@ import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:gal/gal.dart';
 import 'package:provider/provider.dart';
 import '../../services/disc_detection_service.dart';
+import '../../services/disc_tracker.dart';
 import '../../services/feedback_service.dart';
 import '../../services/training_data_service.dart';
 import '../../services/video_service.dart';
@@ -354,57 +355,32 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   /// Generate smooth flight path from keyframes using Catmull-Rom spline.
-  void _processKeyframes() {
+  Future<void> _processKeyframes() async {
     if (_keyframes.length < 2) return;
 
-    final detections = <DiscDetection>[];
-
-    for (int i = 0; i < _keyframes.length - 1; i++) {
-      final kfStart = _keyframes[i];
-      final kfEnd = _keyframes[i + 1];
-
-      final p0 = i > 0 ? _keyframes[i - 1] : kfStart;
-      final p3 = i < _keyframes.length - 2 ? _keyframes[i + 2] : kfEnd;
-
-      final frameSpan = kfEnd.frameIndex - kfStart.frameIndex;
-      if (frameSpan <= 0) continue;
-
-      final isLastSegment = i == _keyframes.length - 2;
-      final endF = isLastSegment ? frameSpan : frameSpan - 1;
-
-      for (int f = 0; f <= endF; f++) {
-        final t = f / frameSpan;
-        final x = _catmullRom(p0.x, kfStart.x, kfEnd.x, p3.x, t);
-        final y = _catmullRom(p0.y, kfStart.y, kfEnd.y, p3.y, t);
-        final frameIdx = kfStart.frameIndex + f;
-
-        final isKeyframe =
-            _keyframes.any((kf) => kf.frameIndex == frameIdx);
-
-        detections.add(DiscDetection(
-          frameIndex: frameIdx,
-          x: x.clamp(0.0, 1.0),
-          y: y.clamp(0.0, 1.0),
-          width: 0.03,
-          height: 0.03,
-          confidence: isKeyframe ? 1.0 : 0.5,
-          timestamp: Duration(
-            milliseconds: (frameIdx * 1000 / _frameFps).round(),
-          ),
-        ));
-      }
-    }
-
-    setState(() {
-      _trackingResult = FlightTrackingResult(
-        detections: detections,
-        videoWidth: _controller.value.size.width,
-        videoHeight: _controller.value.size.height,
+    final tracker = GeometricSplineTracker();
+    final result = await tracker.track(
+      session: TrackerSession(
+        videoPath: widget.videoPath,
         fps: _frameFps,
         totalFrames:
             (_controller.value.duration.inMilliseconds * _frameFps / 1000)
                 .round(),
-      );
+        videoWidth: _controller.value.size.width,
+        videoHeight: _controller.value.size.height,
+      ),
+      seedPoints: _keyframes
+          .map((kf) => TrackerSeedPoint(
+                frameIndex: kf.frameIndex,
+                x: kf.x,
+                y: kf.y,
+              ))
+          .toList(),
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _trackingResult = result;
       _phase = _SetupPhase.result;
     });
 
@@ -488,17 +464,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         trainingService.uploadPending();
       }
     }
-  }
-
-  double _catmullRom(
-      double p0, double p1, double p2, double p3, double t) {
-    final t2 = t * t;
-    final t3 = t2 * t;
-    return 0.5 *
-        ((2 * p1) +
-            (-p0 + p2) * t +
-            (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
-            (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
   }
 
   // ---------------------------------------------------------------------------
