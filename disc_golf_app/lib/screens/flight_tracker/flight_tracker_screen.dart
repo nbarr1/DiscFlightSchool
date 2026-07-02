@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../services/tracking_service.dart';
-import '../../manual_tracking.dart';
 import '../../services/video_service.dart';
 import '../form_coach/video_trim_screen.dart';
 import 'video_player_screen.dart';
@@ -40,7 +38,6 @@ class _FlightTrackerScreenState extends State<FlightTrackerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final trackingService = Provider.of<TrackingService>(context);
     final videoService = Provider.of<VideoService>(context);
 
     return Scaffold(
@@ -69,7 +66,7 @@ class _FlightTrackerScreenState extends State<FlightTrackerScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               _buildActionCard(
                 context,
                 title: 'Record Video',
@@ -112,59 +109,6 @@ class _FlightTrackerScreenState extends State<FlightTrackerScreen> {
                   }
                 },
               ),
-              const SizedBox(height: 16),
-              
-              _buildActionCard(
-                context,
-                title: 'Manual Tracking',
-                description: 'Select a video and mark disc points manually',
-                icon: Icons.touch_app,
-                color: Colors.green,
-                onTap: () async {
-                  final videoPath = await videoService.selectVideo();
-                  if (videoPath != null && context.mounted) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ManualTrackingPage(
-                          videoPath: videoPath,
-                        ),
-                      ),
-                    );
-                  } else if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(videoService.lastError ??
-                            'Select a video before manual tracking.'),
-                        duration: const Duration(seconds: 6),
-                      ),
-                    );
-                  }
-                },
-              ),
-              
-              const SizedBox(height: 32),
-              
-              if (trackingService.trackingPoints.isNotEmpty) ...[
-                const Divider(),
-                const SizedBox(height: 16),
-                const Text(
-                  'Recent Results',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _buildRecentResults(trackingService),
-                const SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    trackingService.clearPoints();
-                  },
-                  child: const Text('Clear Points'),
-                ),
-              ],
             ],
           ),
         ),
@@ -231,52 +175,6 @@ class _FlightTrackerScreenState extends State<FlightTrackerScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildRecentResults(TrackingService trackingService) {
-    final points = trackingService.trackingPoints;
-    
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildResultRow('Points Tracked', '${points.length}'),
-            if (points.length >= 2) ...[
-              _buildResultRow('Start Point', '(${points.first.dx.toStringAsFixed(0)}, ${points.first.dy.toStringAsFixed(0)})'),
-              _buildResultRow('End Point', '(${points.last.dx.toStringAsFixed(0)}, ${points.last.dy.toStringAsFixed(0)})'),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildResultRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 16,
-              color: Colors.blue,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
       ),
     );
   }

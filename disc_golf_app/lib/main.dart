@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'services/tracking_service.dart';
 import 'services/video_service.dart';
 import 'services/posture_analysis_service.dart';
 import 'services/scoring_service.dart';
@@ -39,7 +38,6 @@ class _DiscGolfAppState extends State<DiscGolfApp> {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => TrackingService()),
         ChangeNotifierProvider(create: (_) => VideoService()),
         ChangeNotifierProvider.value(value: _postureAnalysisService),
         ChangeNotifierProvider(create: (_) => ScoringService()),
