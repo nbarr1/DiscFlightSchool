@@ -1,4 +1,5 @@
 import 'disc_detection_service.dart';
+import 'hybrid_detection_service.dart';
 
 /// A single user-placed seed point marking the disc's position at a frame.
 class TrackerSeedPoint {
@@ -149,4 +150,55 @@ class GeometricSplineTracker implements DiscTracker {
 
   @override
   void dispose() {}
+}
+
+/// Detection-refined tracker: predicts a spline through the seed points,
+/// then refines each frame against the actual video using YOLO (and
+/// optionally color-blob matching) in a narrow search window. Requires at
+/// least 3 seed points — delegates to [HybridDetectionService].
+class HybridDiscTracker implements DiscTracker {
+  final HybridDetectionService _service;
+
+  HybridDiscTracker(DiscDetectionService detector)
+      : _service = HybridDetectionService(detector);
+
+  @override
+  double get progress => _service.progress;
+
+  @override
+  String get statusMessage => _service.statusMessage;
+
+  @override
+  Future<FlightTrackingResult> track({
+    required TrackerSession session,
+    required List<TrackerSeedPoint> seedPoints,
+  }) {
+    if (seedPoints.length < 3) {
+      throw ArgumentError.value(
+        seedPoints.length,
+        'seedPoints',
+        'HybridDiscTracker needs at least 3 seed points',
+      );
+    }
+
+    return _service.detect(
+      seedKeyframes: seedPoints
+          .map((s) => SeedKeyframe(
+                frameIndex: s.frameIndex,
+                x: s.x,
+                y: s.y,
+              ))
+          .toList(),
+      videoPath: session.videoPath,
+      fps: session.fps,
+      totalFrames: session.totalFrames,
+      videoWidth: session.videoWidth,
+      videoHeight: session.videoHeight,
+    );
+  }
+
+  @override
+  void dispose() {
+    _service.dispose();
+  }
 }
