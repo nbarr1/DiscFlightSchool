@@ -112,14 +112,24 @@ class _SimilarityTransform {
   }
 }
 
+class _TrailPoint {
+  final Offset position;
+  final int frameIndex;
+
+  const _TrailPoint({
+    required this.position,
+    required this.frameIndex,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // FollowFlightPainter
 // ---------------------------------------------------------------------------
 
 /// Renders a production-quality flight trail overlay on top of a video player.
 ///
-/// The trail is drawn as a smooth midpoint-quadratic-bezier curve with a soft
-/// glow layer underneath, giving a broadcast-style look.
+/// The trail is drawn as adjacent stroke segments with a soft glow layer
+/// underneath, giving a broadcast-style comet-tail look.
 ///
 /// When [anchorFrames] contains ≥ 2 entries each trail point is world-locked
 /// via a 2-D similarity transform, compensating for camera pan, zoom, and
@@ -201,10 +211,15 @@ class FollowFlightPainter extends CustomPainter {
         : trackingResult.detectionsUpToFrame(currentFrame);
     if (allDetections.isEmpty) return;
 
-    final points = allDetections.map((d) => _toCanvas(d, size)).toList();
+    final trailPoints = allDetections
+        .map((d) => _TrailPoint(
+              position: _toCanvas(d, size),
+              frameIndex: d.frameIndex,
+            ))
+        .toList();
 
-    if (showTrail && points.length >= 2) {
-      _drawTrail(canvas, points);
+    if (showTrail && trailPoints.length >= 2) {
+      _drawTrail(canvas, trailPoints);
     }
 
     if (showCurrentDisc) {
@@ -213,59 +228,72 @@ class FollowFlightPainter extends CustomPainter {
   }
 
   // ---------------------------------------------------------------------------
-  // Trail — smooth bezier with glow
+  // Trail — segmented strokes with age-based glow
   // ---------------------------------------------------------------------------
 
-  void _drawTrail(Canvas canvas, List<Offset> points) {
-    // Build smooth path: midpoint quadratic bezier through detection points.
-    // Each detection point acts as a bezier control; midpoints between adjacent
-    // points are the on-curve endpoints, producing a C1-continuous smooth curve.
-    final path = Path()..moveTo(points[0].dx, points[0].dy);
+  void _drawTrail(Canvas canvas, List<_TrailPoint> points) {
+    final oldestFrame = points
+        .where((p) => p.frameIndex <= currentFrame)
+        .fold<int?>(null, (oldest, p) {
+      if (oldest == null || p.frameIndex < oldest) return p.frameIndex;
+      return oldest;
+    }) ?? points.first.frameIndex;
+    final ageSpan = max(1, currentFrame - oldestFrame);
+
     for (int i = 0; i < points.length - 1; i++) {
-      final mid = Offset(
-        (points[i].dx + points[i + 1].dx) / 2,
-        (points[i].dy + points[i + 1].dy) / 2,
+      final start = points[i];
+      final end = points[i + 1];
+      final path = Path()
+        ..moveTo(start.position.dx, start.position.dy)
+        ..lineTo(end.position.dx, end.position.dy);
+
+      final pathPosition = i / max(1, points.length - 2);
+      final color = _trailColorAt(pathPosition);
+      final segmentFrame = max(start.frameIndex, end.frameIndex);
+      final opacity = _segmentOpacity(segmentFrame, oldestFrame, ageSpan);
+
+      // Glow layer — wide, blurred, lower-alpha version of the same age fade.
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = color.withAlpha(
+            (55 * opacity).round().clamp(0, 255).toInt(),
+          )
+          ..strokeWidth = 14.0
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
       );
-      path.quadraticBezierTo(points[i].dx, points[i].dy, mid.dx, mid.dy);
+
+      // Main line — sharp, high-alpha version of the same age fade.
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = color.withAlpha(
+            (230 * opacity).round().clamp(0, 255).toInt(),
+          )
+          ..strokeWidth = 3.0
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
     }
-    path.lineTo(points.last.dx, points.last.dy);
-
-    final bounds = path.getBounds();
-    if (bounds.isEmpty) return;
-
-    // Glow layer — wide, blurred, semi-transparent
-    canvas.drawPath(
-      path,
-      Paint()
-        ..shader = _trailGradient(bounds, alpha: 55)
-        ..strokeWidth = 14.0
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
-    );
-
-    // Main line — sharp, full-opacity gradient
-    canvas.drawPath(
-      path,
-      Paint()
-        ..shader = _trailGradient(bounds, alpha: 230)
-        ..strokeWidth = 3.0
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
-    );
   }
 
-  Shader _trailGradient(Rect bounds, {required int alpha}) {
-    final a = alpha / 255.0;
-    return LinearGradient(
-      colors: [
-        HSLColor.fromAHSL(a, 120, 0.9, 0.5).toColor(), // green (start)
-        HSLColor.fromAHSL(a,  60, 0.9, 0.5).toColor(), // yellow (mid)
-        HSLColor.fromAHSL(a,   0, 0.9, 0.5).toColor(), // red (end)
-      ],
-    ).createShader(bounds);
+  double _segmentOpacity(int segmentFrame, int oldestFrame, int ageSpan) {
+    const minOpacity = 0.10;
+    if (segmentFrame >= currentFrame) return 1.0;
+
+    final recency = ((segmentFrame - oldestFrame) / ageSpan).clamp(0.0, 1.0);
+    return minOpacity + ((1.0 - minOpacity) * recency);
+  }
+
+  Color _trailColorAt(double t) {
+    final hue = t < 0.5
+        ? 120.0 + ((60.0 - 120.0) * (t / 0.5))
+        : 60.0 + ((0.0 - 60.0) * ((t - 0.5) / 0.5));
+    return HSLColor.fromAHSL(1.0, hue, 0.9, 0.5).toColor();
   }
 
   // ---------------------------------------------------------------------------
