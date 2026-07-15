@@ -24,10 +24,30 @@ jobs:
         run: python -m pip install --upgrade pip pip-audit
 
       - name: Audit server dependencies
-        run: python -m pip_audit -r server/requirements.txt
+        run: >-
+          python -m pip_audit
+          --progress-spinner off
+          --format=json
+          --output=server-pip-audit.json
+          -r server/requirements.txt
 
       - name: Audit prototype Python dependencies
-        run: python -m pip_audit -r disc_golf_app/python/requirements.txt
+        run: >-
+          python -m pip_audit
+          --progress-spinner off
+          --format=json
+          --output=prototype-pip-audit.json
+          -r disc_golf_app/python/requirements.txt
+
+      - name: Upload pip-audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-reports
+          path: |
+            server-pip-audit.json
+            prototype-pip-audit.json
+          if-no-files-found: ignore
 
   osv-lockfile-audit:
     name: OSV lockfile audit
@@ -37,8 +57,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Scan lockfiles and manifests
-        uses: google/osv-scanner-action@main
+        uses: google/osv-scanner-action@v2.3.8
         with:
           scan-args: |-
-            --recursive
-            .
+            --lockfile=pnpm-lock.yaml
+            --lockfile=disc_golf_app/pubspec.lock
+            --lockfile=requirements.txt:server/requirements.txt
+            --lockfile=requirements.txt:disc_golf_app/python/requirements.txt
