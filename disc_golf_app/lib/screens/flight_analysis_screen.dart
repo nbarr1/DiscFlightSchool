@@ -36,7 +36,10 @@ class _FlightAnalysisScreenState extends State<FlightAnalysisScreen> {
       debugPrint('Error loading $e');
       if (!mounted) return;
       setState(() {
-        errorMessage = 'Failed to load analysis data. Please run the Python analysis first.';
+        // These come from JSON bundled with the app, not from any external
+        // analysis step, so a failure here is a packaging/read problem.
+        errorMessage = 'Could not load the bundled flight analysis data. '
+            'Try reinstalling the app if this keeps happening.';
         isLoading = false;
       });
     }

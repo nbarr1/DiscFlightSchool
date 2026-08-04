@@ -39,14 +39,6 @@ jobs:
           --output=server-test-pip-audit.json
           -r server/requirements-test.txt
 
-      - name: Audit prototype Python dependencies
-        run: >-
-          python -m pip_audit
-          --progress-spinner off
-          --format=json
-          --output=prototype-pip-audit.json
-          -r disc_golf_app/python/requirements.txt
-
       - name: Upload pip-audit reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -55,7 +47,6 @@ jobs:
           path: |
             server-pip-audit.json
             server-test-pip-audit.json
-            prototype-pip-audit.json
           if-no-files-found: ignore
 
   # Python dependency coverage lives in the pip-audit job above, not here --

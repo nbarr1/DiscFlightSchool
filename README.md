@@ -80,7 +80,6 @@ DiscFlightSchool/
 │   ├── android/                # Android Gradle project
 │   ├── assets/                 # JSON, images, studies, and bundled TFLite model
 │   ├── lib/                    # Dart app code
-│   ├── python/                 # Prototype Flask/Python analysis helpers, orphaned (see below)
 │   └── test/                   # Flutter unit, widget, and data-contract tests
 ├── docs/                       # Current audit/status/planning documents
 ├── scripts/                    # Local test and validation scripts
@@ -92,10 +91,12 @@ DiscFlightSchool/
 └── docker-compose.yml          # API/worker/Postgres/Redis/MinIO scaffold
 ```
 
-`disc_golf_app/python/` is a prototype Flask service that nothing calls. The
-Dart client that used to talk to it (`python_bridge_service.dart`) has been
-removed as dead code, so this directory is now fully orphaned — keep it only if
-you intend to revive that path.
+There is no Python code in the Flutter app. A prototype Flask service formerly
+lived at `disc_golf_app/python/`, reachable through `python_bridge_service.dart`;
+neither was called by anything, and both have been removed. The Flight Analysis
+screen reads `assets/data/output_coordinates.json` and
+`assets/data/analysis_results.json` bundled with the app — it never called that
+service. Recover either from git history if you want to revive that path.
 
 ## Local development
 

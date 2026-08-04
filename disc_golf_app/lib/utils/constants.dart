@@ -1,7 +1,4 @@
 class AppConstants {
-  // API Configuration
-  static const String pythonApiUrl = 'http://localhost:5000/api';
-  
   // Video Configuration
   static const int defaultFps = 30;
   static const int maxVideoLengthSeconds = 60;
