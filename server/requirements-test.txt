@@ -1,0 +1,12 @@
+# Dependencies needed to import and exercise `training_server` in tests.
+#
+# Deliberately excludes `ultralytics` — it pulls in torch (~2GB) and is only
+# needed to actually run a YOLO training job, which the tests never do. Every
+# other pin here MUST match server/requirements.txt exactly; test_requirements.py
+# enforces that so CI can never validate against a version production forbids.
+fastapi>=0.104.0,<1.0.0
+python-multipart>=0.0.6,<1.0.0
+Pillow>=12.3.0
+
+# Test-only tooling (not part of the production runtime).
+pytest>=8.0.0

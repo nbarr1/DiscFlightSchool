@@ -85,11 +85,36 @@ class TrainingDataService extends ChangeNotifier {
   }
 
   /// Set the server URL for uploads and model updates.
+  ///
+  /// Changing the server origin clears the stored API key: the key was issued
+  /// by the previous server, and silently forwarding it to a new host would
+  /// leak the user's credential to whatever they just pointed the app at.
   Future<void> setServerUrl(String url) async {
+    final previousOrigin = _originOf(_serverUrl);
+    final nextOrigin = _originOf(url);
+
     _serverUrl = url;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_serverUrlKey, url);
+
+    if (previousOrigin != nextOrigin && _apiKey.isNotEmpty) {
+      debugPrint('Training server origin changed; clearing stored API key');
+      await setApiKey('');
+      return; // setApiKey already notified listeners
+    }
+
     notifyListeners();
+  }
+
+  /// Scheme + host + port, or null when [url] does not parse. Used to decide
+  /// whether a URL edit crossed a trust boundary.
+  @visibleForTesting
+  static String? originOf(String url) => _originOf(url);
+
+  static String? _originOf(String url) {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null || uri.host.isEmpty) return null;
+    return '${uri.scheme.toLowerCase()}://${uri.host.toLowerCase()}:${uri.port}';
   }
 
   /// Store the private training API key used for uploads/admin operations.
@@ -484,11 +509,12 @@ class TrainingDataService extends ChangeNotifier {
       }
 
       // Download model file. Server normally returns a relative path; reject
-      // absolute URLs that point at a different host.
+      // absolute URLs that point anywhere other than the configured origin.
+      // Scheme, host *and* port must all match — a same-host redirect to
+      // another port is still a different service.
       final serverUri = Uri.parse(_serverUrl);
       final modelUri = serverUri.resolve(modelUrl);
-      if (modelUri.host != serverUri.host ||
-          modelUri.scheme != serverUri.scheme) {
+      if (!_isSameOrigin(serverUri, modelUri)) {
         client.close();
         debugPrint('Rejected model URL outside configured server: $modelUri');
         return false;
@@ -574,6 +600,20 @@ class TrainingDataService extends ChangeNotifier {
   @visibleForTesting
   static bool isAllowedServerUri(Uri uri) {
     return _isAllowedServerUri(uri);
+  }
+
+  /// Whether [candidate] is on the same origin as [base] (scheme, host, port).
+  ///
+  /// `Uri.port` resolves the scheme default, so an explicit `:443` on an https
+  /// URL compares equal to an omitted port.
+  @visibleForTesting
+  static bool isSameOrigin(Uri base, Uri candidate) =>
+      _isSameOrigin(base, candidate);
+
+  static bool _isSameOrigin(Uri base, Uri candidate) {
+    return candidate.scheme.toLowerCase() == base.scheme.toLowerCase() &&
+        candidate.host.toLowerCase() == base.host.toLowerCase() &&
+        candidate.port == base.port;
   }
 
   static bool _isAllowedServerUri(Uri uri) {

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/roulette_scoring.dart';
@@ -14,7 +15,12 @@ class ScoringService extends ChangeNotifier {
   String? get currentPlayer => _currentPlayer;
 
   ScoringService() {
-    _loadFuture = _loadRounds();
+    // Swallow load failures here so a corrupt store can't surface as an
+    // unhandled async error from the constructor. `_loadRounds` already
+    // reports per-entry problems and leaves `_savedRounds` usable.
+    _loadFuture = _loadRounds().catchError((Object e, StackTrace s) {
+      debugPrint('Failed to load saved rounds: $e');
+    });
   }
 
   void startNewRound({
@@ -59,7 +65,12 @@ class ScoringService extends ChangeNotifier {
     );
 
     if (_currentRound!.isComplete) {
-      _saveRound();
+      // Fire-and-forget: the UI does not block on persistence, but the future
+      // still needs a terminal handler or a storage failure becomes an
+      // unhandled async error.
+      unawaited(_saveRound().catchError((Object e, StackTrace s) {
+        debugPrint('Failed to save completed round: $e');
+      }));
     }
 
     notifyListeners();
@@ -91,7 +102,18 @@ class ScoringService extends ChangeNotifier {
     // unconditional overwrite once it resolves.
     await _loadFuture;
 
-    _savedRounds.add(_currentRound!);
+    final round = _currentRound;
+    if (round == null || !round.isComplete) return;
+
+    // Save by id, not by append. Completing a round, undoing the last hole,
+    // and re-entering it re-triggers this path — appending would persist the
+    // same round twice and double-count it in getStatistics().
+    final existing = _savedRounds.indexWhere((r) => r.id == round.id);
+    if (existing == -1) {
+      _savedRounds.add(round);
+    } else {
+      _savedRounds[existing] = round;
+    }
     await _persistRounds();
   }
 
@@ -104,11 +126,26 @@ class ScoringService extends ChangeNotifier {
   Future<void> _loadRounds() async {
     final prefs = await SharedPreferences.getInstance();
     final roundsJson = prefs.getStringList('saved_rounds') ?? [];
-    
-    _savedRounds = roundsJson
-        .map((json) => ScoredRound.fromJson(jsonDecode(json)))
-        .toList();
-    
+
+    // Decode entry by entry: one corrupt record must not discard the rest of
+    // the user's round history.
+    final loaded = <ScoredRound>[];
+    var skipped = 0;
+    for (final entry in roundsJson) {
+      try {
+        loaded.add(ScoredRound.fromJson(
+            jsonDecode(entry) as Map<String, dynamic>));
+      } catch (e) {
+        skipped++;
+        debugPrint('Skipping unreadable saved round: $e');
+      }
+    }
+
+    _savedRounds = loaded;
+    if (skipped > 0) {
+      debugPrint('Dropped $skipped unreadable round(s) of ${roundsJson.length}');
+    }
+
     notifyListeners();
   }
 

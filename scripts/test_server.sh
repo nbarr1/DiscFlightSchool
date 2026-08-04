@@ -9,6 +9,8 @@ python -m py_compile \
   server/test_http_contracts.py \
   server/test_config.py \
   server/test_storage.py \
+  server/test_requirements.py \
+  server/test_training_manager.py \
   server/training_server/*.py
 
 python -m pytest server

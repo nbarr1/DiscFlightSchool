@@ -452,6 +452,7 @@ class _PoseCorrectionScreenState extends State<PoseCorrectionScreen> {
       frames: _analysis.frames,
       score: _analysis.score,
       isMock: _analysis.isMock,
+      failureReason: _analysis.failureReason,
     );
 
     Navigator.pop(context, corrected);

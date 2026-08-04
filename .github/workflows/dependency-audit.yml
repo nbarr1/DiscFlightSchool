@@ -31,6 +31,14 @@ jobs:
           --output=server-pip-audit.json
           -r server/requirements.txt
 
+      - name: Audit server test dependencies
+        run: >-
+          python -m pip_audit
+          --progress-spinner off
+          --format=json
+          --output=server-test-pip-audit.json
+          -r server/requirements-test.txt
+
       - name: Audit prototype Python dependencies
         run: >-
           python -m pip_audit
@@ -46,6 +54,7 @@ jobs:
           name: pip-audit-reports
           path: |
             server-pip-audit.json
+            server-test-pip-audit.json
             prototype-pip-audit.json
           if-no-files-found: ignore
 
@@ -56,11 +65,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # No pnpm-lock.yaml entry: the repo has no JavaScript source, and the
+      # empty lockfile that used to sit at the root was committed by accident.
       - name: Scan lockfiles and manifests
         uses: google/osv-scanner-action@v2.3.8
         with:
           scan-args: |-
-            --lockfile=pnpm-lock.yaml
             --lockfile=disc_golf_app/pubspec.lock
             --lockfile=requirements.txt:server/requirements.txt
+            --lockfile=requirements.txt:server/requirements-test.txt
             --lockfile=requirements.txt:disc_golf_app/python/requirements.txt

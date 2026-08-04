@@ -69,6 +69,11 @@ class FormAnalysis {
   /// True when pose detection failed and mock data was substituted.
   bool isMock;
 
+  /// Why the analysis fell back to mock data, when it did. Null means either
+  /// a real analysis, or a fallback because no pose was found in any frame
+  /// (as opposed to the analysis throwing).
+  String? failureReason;
+
   FormAnalysis({
     required this.id,
     required this.date,
@@ -76,6 +81,7 @@ class FormAnalysis {
     required this.frames,
     required this.score,
     this.isMock = false,
+    this.failureReason,
   });
 
   Map<String, dynamic> toJson() {
@@ -86,6 +92,7 @@ class FormAnalysis {
       'frames': frames.map((f) => f.toJson()).toList(),
       'score': score,
       'isMock': isMock,
+      'failureReason': failureReason,
     };
   }
 
@@ -99,6 +106,7 @@ class FormAnalysis {
           .toList(),
       score: json['score'] as double,
       isMock: json['isMock'] as bool? ?? false,
+      failureReason: json['failureReason'] as String?,
     );
   }
 }
