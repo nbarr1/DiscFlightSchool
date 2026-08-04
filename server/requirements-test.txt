@@ -5,7 +5,9 @@
 # other pin here MUST match server/requirements.txt exactly; test_requirements.py
 # enforces that so CI can never validate against a version production forbids.
 fastapi>=0.104.0,<1.0.0
-python-multipart>=0.0.6,<1.0.0
+# Floor raised past PYSEC-2026-1851/1852/3036-3041: >=0.0.6 permitted 0.0.9,
+# which carries several high-severity multipart parsing CVEs.
+python-multipart>=0.0.31,<1.0.0
 Pillow>=12.3.0
 
 # Test-only tooling (not part of the production runtime).
