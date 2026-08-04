@@ -14,11 +14,10 @@ Future<KnowledgeBaseService> serviceWith(
   String apiKey = 'sk-ant-test',
 }) async {
   final service = KnowledgeBaseService(client: MockClient(handler));
-  // Let the constructor's _loadApiKey() settle before overriding the key,
-  // otherwise it can null it out after we set it.
-  for (var i = 0; i < 4; i++) {
-    await Future<void>.delayed(Duration.zero);
-  }
+  // Wait on the constructor's key load explicitly. Draining a fixed number of
+  // microtasks instead is a race: when the load lands late the request is
+  // never sent, and the test fails on an unassigned `late` variable.
+  await service.initialized;
   await service.setApiKey(apiKey);
   return service;
 }
@@ -333,10 +332,42 @@ void main() {
       final service = KnowledgeBaseService(
         client: MockClient((_) async => throw StateError('should not be called')),
       );
-      for (var i = 0; i < 4; i++) {
-        await Future<void>.delayed(Duration.zero);
-      }
+      await service.initialized;
       expect(await service.askQuestion('q'), contains('add your Anthropic API key'));
+    });
+  });
+
+  group('API key loading', () {
+    test('initialized completes even when secure storage is unavailable', () async {
+      // flutter_secure_storage throws MissingPluginException in unit tests,
+      // which is the same shape as a real storage failure on device.
+      final service = KnowledgeBaseService(
+        client: MockClient((_) async => http.Response(messageBody(), 200)),
+      );
+      await expectLater(service.initialized, completes);
+    });
+
+    test('a key set during startup is not clobbered by the load finishing',
+        () async {
+      // Regression: the load's error path unconditionally set _apiKey = null,
+      // so a key set while the constructor's load was still in flight was
+      // silently discarded and AI search stayed disabled.
+      final service = KnowledgeBaseService(
+        client: MockClient((_) async => http.Response(messageBody(), 200)),
+      );
+      // Deliberately do NOT await initialized first.
+      await service.setApiKey('set-during-startup');
+      await service.initialized;
+
+      expect(service.hasApiKey, isTrue);
+    });
+
+    test('hasApiKey is false before any key is set', () async {
+      final service = KnowledgeBaseService(
+        client: MockClient((_) async => http.Response(messageBody(), 200)),
+      );
+      await service.initialized;
+      expect(service.hasApiKey, isFalse);
     });
   });
 

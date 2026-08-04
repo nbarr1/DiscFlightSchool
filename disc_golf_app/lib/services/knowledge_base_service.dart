@@ -27,12 +27,21 @@ class KnowledgeBaseService extends ChangeNotifier {
   bool get isLoaded => _isLoaded;
   bool get hasApiKey => _apiKey != null && _apiKey!.isNotEmpty;
 
+  /// Completes once the stored API key has been loaded (or the load has
+  /// failed and been reported).
+  ///
+  /// Constructor-launched async work is otherwise unobservable: nothing can
+  /// tell whether [hasApiKey] reflects stored state yet, which makes any
+  /// caller that reads or writes the key during startup racy.
+  Future<void> get initialized => _initialized;
+  late final Future<void> _initialized;
+
   /// Pass [client] from tests to stub the Anthropic API; production callers
   /// use the default constructor and get a client owned by this service.
   KnowledgeBaseService({http.Client? client})
       : _client = client ?? http.Client(),
         _ownsClient = client == null {
-    _loadApiKey();
+    _initialized = _loadApiKey();
   }
 
   Future<void> loadData() async {
@@ -92,21 +101,32 @@ class KnowledgeBaseService extends ChangeNotifier {
   // ---- API key management ----
 
   Future<void> _loadApiKey() async {
-    final prefs = await SharedPreferences.getInstance();
     try {
-      _apiKey = await _secureStorage.read(key: 'anthropic_api_key');
+      // getInstance() is inside the try: if it throws, an uncaught error
+      // escapes the constructor with nothing to attach a handler to.
+      final prefs = await SharedPreferences.getInstance();
+
+      final stored = await _secureStorage.read(key: 'anthropic_api_key');
       final legacyKey = prefs.getString('anthropic_api_key');
-      if ((_apiKey == null || _apiKey!.isEmpty) &&
-          legacyKey != null &&
-          legacyKey.isNotEmpty) {
-        _apiKey = legacyKey;
-        await _secureStorage.write(key: 'anthropic_api_key', value: legacyKey);
+
+      // Never overwrite a key set by the caller while this load was in
+      // flight — startup would silently discard it.
+      if (_apiKey == null || _apiKey!.isEmpty) {
+        if (stored != null && stored.isNotEmpty) {
+          _apiKey = stored;
+        } else if (legacyKey != null && legacyKey.isNotEmpty) {
+          _apiKey = legacyKey;
+          await _secureStorage.write(
+              key: 'anthropic_api_key', value: legacyKey);
+        }
       }
+
       await prefs.remove('anthropic_api_key');
       notifyListeners();
     } catch (e) {
+      // Leave whatever is already in memory alone; a storage failure is not
+      // evidence that the caller's key is wrong.
       debugPrint('Secure storage unavailable for Anthropic API key: $e');
-      _apiKey = null;
     }
   }
 
