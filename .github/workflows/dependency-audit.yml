@@ -67,8 +67,11 @@ jobs:
 
       # No pnpm-lock.yaml entry: the repo has no JavaScript source, and the
       # empty lockfile that used to sit at the root was committed by accident.
+      # The action lives in a subdirectory; the repo root has no action.yml, so
+      # `google/osv-scanner-action@v2.3.8` fails to load with
+      # "Top level 'runs:' section is required" before the scan even starts.
       - name: Scan lockfiles and manifests
-        uses: google/osv-scanner-action@v2.3.8
+        uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
         with:
           scan-args: |-
             --lockfile=disc_golf_app/pubspec.lock

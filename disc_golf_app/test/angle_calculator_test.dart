@@ -1,6 +1,7 @@
 import 'dart:math';
-import 'dart:ui';
 
+// Offset comes from flutter_test's re-export of dart:ui; importing dart:ui
+// directly trips the unnecessary_import lint.
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:disc_golf_app/utils/angle_calculator.dart';
