@@ -14,6 +14,7 @@ from typing import Any
 
 from fastapi import UploadFile
 from PIL import Image, UnidentifiedImageError
+from PIL.Image import DecompressionBombError
 
 from .config import Settings
 from .protocols import DatasetCounts, ModelInfo
@@ -97,11 +98,24 @@ class FileStorage:
         expected_format = "PNG" if ext == ".png" else "JPEG"
         try:
             with Image.open(path) as image:
+                # Read dimensions and format before verify(): verify() closes
+                # the underlying file, and touching attributes afterwards is
+                # undefined per Pillow's docs.
+                width, height = image.size
+                image_format = image.format
                 image.verify()
-                if image.format != expected_format:
-                    raise ValueError("Uploaded image type does not match its file extension")
-                if image.width <= 0 or image.height <= 0:
-                    raise ValueError("Uploaded image dimensions must be positive")
+
+            if image_format != expected_format:
+                raise ValueError("Uploaded image type does not match its file extension")
+            if width <= 0 or height <= 0:
+                raise ValueError("Uploaded image dimensions must be positive")
+        except DecompressionBombError as exc:
+            # A small file can declare enormous dimensions. Pillow refuses to
+            # decode it, and DecompressionBombError is NOT an OSError, so
+            # without this branch it escapes as an unhandled 500 instead of a
+            # 400. Regression covered by test_storage.py.
+            path.unlink(missing_ok=True)
+            raise ValueError("Uploaded image dimensions exceed the decode limit") from exc
         except (UnidentifiedImageError, OSError, SyntaxError) as exc:
             path.unlink(missing_ok=True)
             raise ValueError("Uploaded image could not be decoded as JPEG/PNG") from exc
@@ -158,11 +172,20 @@ class FileStorage:
             lock_path.unlink(missing_ok=True)
 
     def latest_model_info(self) -> ModelInfo | None:
-        tflite_files = list(self.settings.models_dir.glob("*.tflite"))
-        if not tflite_files:
+        # stat() each candidate defensively: a training run can publish or
+        # replace a model between the glob and the stat, and an unguarded
+        # max(key=...) would raise FileNotFoundError out of a read-only
+        # endpoint.
+        candidates: list[tuple[Path, os.stat_result]] = []
+        for path in self.settings.models_dir.glob("*.tflite"):
+            try:
+                candidates.append((path, path.stat()))
+            except OSError:
+                continue
+        if not candidates:
             return None
-        model_path = max(tflite_files, key=lambda path: path.stat().st_mtime)
-        stat = model_path.stat()
+
+        model_path, stat = max(candidates, key=lambda item: item[1].st_mtime)
         with self._model_info_lock:
             cache = self._model_info_cache
             if cache is not None and cache[:3] == (model_path, stat.st_mtime, stat.st_size):

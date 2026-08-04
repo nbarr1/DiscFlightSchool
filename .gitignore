@@ -1,0 +1,33 @@
+# Root ignores only — do not duplicate rules that already live in
+# disc_golf_app/.gitignore, disc_golf_app/android/.gitignore, or
+# server/.gitignore, so there is one owner per rule.
+
+# Build output (Flutter, Gradle)
+build/
+**/build/
+.gradle/
+
+# Node — this repo has no JavaScript source. These directories only ever
+# appear by accident; a stray empty pnpm lockfile was previously committed
+# and scanned by the dependency-audit workflow.
+node_modules/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Python (server/.gitignore covers server runtime state)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Local environment
+.env
+.env.local
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp

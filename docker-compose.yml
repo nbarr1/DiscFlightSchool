@@ -6,6 +6,11 @@ services:
     env_file:
       - ./server/.env.example
     environment:
+      # Must be supplied by the operator. Without this override the API key
+      # would fall through to the placeholder in the committed .env.example,
+      # leaving upload/export/train endpoints open to anyone who has read the
+      # repository.
+      APP_API_KEY: ${APP_API_KEY:?set APP_API_KEY to a long random secret}
       DATABASE_URL: postgresql://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
       OBJECT_STORAGE_ENDPOINT: http://minio:9000
@@ -34,6 +39,11 @@ services:
     env_file:
       - ./server/.env.example
     environment:
+      # Must be supplied by the operator. Without this override the API key
+      # would fall through to the placeholder in the committed .env.example,
+      # leaving upload/export/train endpoints open to anyone who has read the
+      # repository.
+      APP_API_KEY: ${APP_API_KEY:?set APP_API_KEY to a long random secret}
       DATABASE_URL: postgresql://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
       OBJECT_STORAGE_ENDPOINT: http://minio:9000

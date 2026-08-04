@@ -42,14 +42,30 @@ class TrainingManager:
                 }, 409
             self._status["running"] = True
 
-        image_count = self._storage.dataset_counts()["full_images"]
-        if image_count < 10:
+        # Everything from here until the worker thread is running must clear
+        # the flag on failure. Without this, a storage error or a thread that
+        # cannot be spawned leaves `running` stuck True and every later call
+        # to this endpoint returns 409 until the process restarts.
+        try:
+            image_count = self._storage.dataset_counts()["full_images"]
+            if image_count < 10:
+                with self._lock:
+                    self._status["running"] = False
+                return {
+                    "status": "insufficient_data",
+                    "count": image_count,
+                    "minimum": 10,
+                }, 400
+
+            thread = threading.Thread(target=self._run_training, daemon=True)
+            thread.start()
+        except Exception as exc:
+            logger.error("Failed to start training", exc_info=True)
             with self._lock:
                 self._status["running"] = False
-            return {"status": "insufficient_data", "count": image_count, "minimum": 10}, 400
+                self._status["result"] = f"failed to start: {exc}"
+            return {"status": "error", "message": "Failed to start training"}, 500
 
-        thread = threading.Thread(target=self._run_training, daemon=True)
-        thread.start()
         return {"status": "started", "message": f"Training started with {image_count} samples"}, 200
 
     def _run_training(self) -> None:

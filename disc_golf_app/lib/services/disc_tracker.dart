@@ -1,3 +1,4 @@
+import '../utils/angle_calculator.dart';
 import 'disc_detection_service.dart';
 import 'hybrid_detection_service.dart';
 
@@ -104,8 +105,8 @@ class GeometricSplineTracker implements DiscTracker {
 
       for (int f = 0; f <= endF; f++) {
         final t = f / frameSpan;
-        final x = _catmullRom(p0.x, kfStart.x, kfEnd.x, p3.x, t);
-        final y = _catmullRom(p0.y, kfStart.y, kfEnd.y, p3.y, t);
+        final x = AngleCalculator.catmullRom(p0.x, kfStart.x, kfEnd.x, p3.x, t);
+        final y = AngleCalculator.catmullRom(p0.y, kfStart.y, kfEnd.y, p3.y, t);
         final frameIdx = kfStart.frameIndex + f;
 
         final isSeed = sorted.any((s) => s.frameIndex == frameIdx);
@@ -136,16 +137,6 @@ class GeometricSplineTracker implements DiscTracker {
       fps: session.fps,
       totalFrames: session.totalFrames,
     );
-  }
-
-  double _catmullRom(double p0, double p1, double p2, double p3, double t) {
-    final t2 = t * t;
-    final t3 = t2 * t;
-    return 0.5 *
-        ((2 * p1) +
-            (-p0 + p2) * t +
-            (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
-            (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
   }
 
   @override

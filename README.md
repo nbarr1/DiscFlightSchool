@@ -2,7 +2,7 @@
 
 DiscFlightSchool is a monorepo containing a Flutter client and a FastAPI training/model-distribution server for disc golf analysis workflows.
 
-This README reflects an audit of the current repository state on 2026-05-10. It describes only files and behavior that exist in this repository.
+This README reflects an audit of the current repository state on 2026-08-04. It describes only files and behavior that exist in this repository.
 
 ## Current repository status
 
@@ -17,7 +17,9 @@ Implemented client areas currently present in source:
 - Disc Roulette screens, scoring models, scoring service, and roulette history service.
 - Knowledge Base screens and local JSON-backed content models/services.
 - Training Settings for opt-in sample collection, server URL/API-key configuration, pending upload management, and detector model update checks.
-- Repository interface foundations under `disc_golf_app/lib/data/repositories/`; these are interfaces only and are not yet wired as concrete persistence adapters for the existing UI flows.
+
+There is no repository/persistence abstraction layer; services own their own
+storage (SharedPreferences, secure storage, or the app documents directory).
 
 Important client facts:
 
@@ -78,22 +80,33 @@ DiscFlightSchool/
 │   ├── android/                # Android Gradle project
 │   ├── assets/                 # JSON, images, studies, and bundled TFLite model
 │   ├── lib/                    # Dart app code
-│   ├── python/                 # Prototype Flask/Python analysis helpers, not embedded by Flutter
-│   └── test/                   # Flutter widget and data-contract tests
+│   └── test/                   # Flutter unit, widget, and data-contract tests
 ├── docs/                       # Current audit/status/planning documents
 ├── scripts/                    # Local test and validation scripts
 ├── server/                     # FastAPI training/model server
 │   ├── training_server/        # App factory, config, storage, training, validation, worker
+│   ├── requirements.txt        # Production runtime pins
+│   ├── requirements-test.txt   # Test env pins (must agree; enforced by test_requirements.py)
 │   └── test_*.py               # Server tests
 └── docker-compose.yml          # API/worker/Postgres/Redis/MinIO scaffold
 ```
+
+There is no Python code in the Flutter app. A prototype Flask service formerly
+lived at `disc_golf_app/python/`, reachable through `python_bridge_service.dart`;
+neither was called by anything, and both have been removed. The Flight Analysis
+screen reads `assets/data/output_coordinates.json` and
+`assets/data/analysis_results.json` bundled with the app — it never called that
+service. Recover either from git history if you want to revive that path.
 
 ## Local development
 
 ### Server checks
 
 ```bash
-python -m pip install -r server/requirements.txt
+# requirements-test.txt omits ultralytics (torch) but pins every shared
+# dependency identically to requirements.txt; test_requirements.py fails the
+# build if the two ever drift.
+python -m pip install -r server/requirements-test.txt
 APP_API_KEY=test-key ./scripts/test_server.sh
 ```
 
@@ -146,7 +159,21 @@ Without `key.properties`, release builds now fail fast; use `flutter build apk -
 ## Current next steps
 
 1. Keep docs synchronized with source whenever endpoints, assets, build settings, or runtime services change.
-2. Add concrete repository implementations for the Flutter repository interfaces, then migrate services/screens behind those interfaces with tests.
+2. Move disc detection off the UI isolate — see `docs/testing.md` for what is
+   still unverified and why.
 3. Add server durable adapters before claiming PostgreSQL, Redis, or MinIO persistence is implemented.
 4. Add integration tests for Docker Compose once durable adapters exist.
 5. Add Android build validation to CI if an APK artifact is required from every merge.
+
+## Running the compose stack
+
+`docker-compose.yml` reads `server/.env.example` for non-secret defaults but
+requires every credential to be supplied by your shell, so the committed
+placeholders can never become live credentials:
+
+```bash
+export APP_API_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+export POSTGRES_DB=discflight POSTGRES_USER=discflight
+export POSTGRES_PASSWORD='...' MINIO_ROOT_USER='...' MINIO_ROOT_PASSWORD='...'
+docker compose up
+```

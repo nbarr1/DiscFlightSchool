@@ -31,13 +31,13 @@ jobs:
           --output=server-pip-audit.json
           -r server/requirements.txt
 
-      - name: Audit prototype Python dependencies
+      - name: Audit server test dependencies
         run: >-
           python -m pip_audit
           --progress-spinner off
           --format=json
-          --output=prototype-pip-audit.json
-          -r disc_golf_app/python/requirements.txt
+          --output=server-test-pip-audit.json
+          -r server/requirements-test.txt
 
       - name: Upload pip-audit reports
         if: always()
@@ -46,9 +46,11 @@ jobs:
           name: pip-audit-reports
           path: |
             server-pip-audit.json
-            prototype-pip-audit.json
+            server-test-pip-audit.json
           if-no-files-found: ignore
 
+  # Python dependency coverage lives in the pip-audit job above, not here --
+  # see the comment on the scan step for why.
   osv-lockfile-audit:
     name: OSV lockfile audit
     runs-on: ubuntu-latest
@@ -56,11 +58,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Scan lockfiles and manifests
-        uses: google/osv-scanner-action@v2.3.8
+      # Scans real lockfiles only.
+      #
+      # The Python requirements files are deliberately NOT listed here. They
+      # are manifests with version ranges, not lockfiles, and OSV resolves each
+      # range to its *lowest* satisfying version before matching advisories --
+      # so it reports CVEs against versions pip would never install. Those
+      # findings are unfixable from this repo: they come from transitive deps
+      # whose parents floor them low (h11 via uvicorn, torch via ultralytics,
+      # idna via requests), and even the newest uvicorn still allows h11>=0.8.
+      #
+      # The `python-dependency-audit` job above covers all three Python files
+      # with pip-audit, which resolves them the way pip actually does. Coverage
+      # is not reduced by their absence here; contradictory results are.
+      #
+      # No pnpm-lock.yaml entry either: the repo has no JavaScript source, and
+      # the empty lockfile that used to sit at the root was committed by
+      # accident.
+      #
+      # The action lives in a subdirectory; the repo root has no action.yml, so
+      # `google/osv-scanner-action@v2.3.8` fails to load with
+      # "Top level 'runs:' section is required" before the scan even starts.
+      - name: Scan lockfiles
+        uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
         with:
           scan-args: |-
-            --lockfile=pnpm-lock.yaml
             --lockfile=disc_golf_app/pubspec.lock
-            --lockfile=requirements.txt:server/requirements.txt
-            --lockfile=requirements.txt:disc_golf_app/python/requirements.txt

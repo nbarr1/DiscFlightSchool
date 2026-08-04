@@ -113,6 +113,21 @@ class PostureAnalysisService extends ChangeNotifier {
       if (frames.isEmpty) {
         final mock = _generateMockAnalysis(videoPath);
         mock.isMock = true;
+        mock.failureReason =
+            'No frames could be extracted from this video. Check that the '
+            'clip is a supported format and long enough to analyse.';
+        return mock;
+      }
+
+      // Frames exist but no pose was detected in any of them — the thrower is
+      // probably out of frame, too small, or the lighting is too poor. This is
+      // a real result, not a crash, but it must not be scored as a throw.
+      if (frames.every((f) => f.keyPoints.isEmpty)) {
+        final mock = _generateMockAnalysis(videoPath);
+        mock.isMock = true;
+        mock.failureReason =
+            'No body pose was detected in any frame. Record with your whole '
+            'body in frame, in good light, and try again.';
         return mock;
       }
 
@@ -130,10 +145,14 @@ class PostureAnalysisService extends ChangeNotifier {
       _currentAnalysis = analysis;
       notifyListeners();
       return analysis;
-    } catch (e) {
-      debugPrint('Error analyzing form: $e');
+    } catch (e, stack) {
+      // Analysis genuinely failed. Still return a FormAnalysis so the screen
+      // has something to render, but flag *why* — the caller shows this text
+      // instead of presenting the synthesized angles as a measurement.
+      debugPrint('Error analyzing form: $e\n$stack');
       final mock = _generateMockAnalysis(videoPath);
       mock.isMock = true;
+      mock.failureReason = 'Analysis failed: $e';
       return mock;
     } finally {
       if (framePaths != null) {
@@ -312,6 +331,18 @@ class PostureAnalysisService extends ChangeNotifier {
   };
 
   static const double _kRomTolerance = 10.0;
+
+  /// Clamp angles into physiological range, *dropping* any that sit further
+  /// than [_kRomTolerance] outside it.
+  ///
+  /// Dropping rather than clamping is deliberate: a knee angle of 15 degrees
+  /// is not a tight knee, it is a bad landmark, and carrying it forward as a
+  /// clamped 30 would silently corrupt the score. Downstream code must treat a
+  /// missing key as "not measured".
+  @visibleForTesting
+  static Map<String, double> clampToPhysiologicalLimits(
+          Map<String, double> angles) =>
+      _clampToPhysiologicalLimits(angles);
 
   static Map<String, double> _clampToPhysiologicalLimits(
       Map<String, double> angles) {
@@ -611,7 +642,14 @@ class PostureAnalysisService extends ChangeNotifier {
   }
 
   /// Reverse-look up the JSON angle key from an app angle key.
-  String? _reverseAngleKey(String appKey, String throwType) {
+  ///
+  /// Static and pure: it depends only on its arguments, and being static keeps
+  /// it (and [kneeSideLabel]) testable without constructing a PoseDetector.
+  @visibleForTesting
+  static String? reverseAngleKey(String appKey, String throwType) =>
+      _reverseAngleKey(appKey, throwType);
+
+  static String? _reverseAngleKey(String appKey, String throwType) {
     const bh = {
       'rightElbowAngle':    'elbow_angle_deg',
       'rightShoulderAngle': 'shoulder_flexion_deg',
@@ -633,6 +671,27 @@ class PostureAnalysisService extends ChangeNotifier {
       'xFactor':            'x_factor_deg',
     };
     return throwType == 'BH' ? bh[appKey] : fh[appKey];
+  }
+
+  /// Whether an app knee-angle key refers to the lead or the trail leg for a
+  /// given throw type.
+  ///
+  /// Derived from the same mapping [_reverseAngleKey] uses to select pro
+  /// baseline data, so the label in a suggestion can never disagree with the
+  /// data the suggestion was computed from. (For a forehand, the right knee is
+  /// the *trail* leg; a hardcoded `right == lead` mislabels every FH tip.)
+  ///
+  /// Returns null when [appKey] is not a knee angle.
+  @visibleForTesting
+  static String? kneeSideLabel(String appKey, String throwType) {
+    switch (_reverseAngleKey(appKey, throwType)) {
+      case 'lead_knee_flexion_deg':
+        return 'lead';
+      case 'trail_knee_flexion_deg':
+        return 'trail';
+      default:
+        return null;
+    }
   }
 
   /// Build a specific coaching suggestion for one angle deviation.
@@ -701,7 +760,8 @@ class PostureAnalysisService extends ChangeNotifier {
 
       case 'rightKneeAngle':
       case 'leftKneeAngle':
-        final side = appKey == 'rightKneeAngle' ? 'lead' : 'trail';
+        final side = kneeSideLabel(appKey, throwType);
+        if (side == null) return null;
         return FormSuggestion(
           'Your $side knee at $phaseLabel ($user°) is $direction the $refLabel range ($ref°) — '
           '${deviationSD < -1 ? "bend more to load the legs for power" : "straighten to drive through the throw"}',

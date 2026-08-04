@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import time
@@ -73,7 +74,12 @@ def create_app(settings: Settings, storage: StorageBackend | None = None) -> Fas
         return response
 
     def require_api_key(x_app_key: str | None) -> JSONResponse | None:
-        if x_app_key != settings.app_api_key:
+        # compare_digest keeps the comparison constant-time with respect to the
+        # secret, so a caller cannot recover the key byte-by-byte from response
+        # timing. It requires str/bytes, hence the None guard.
+        if x_app_key is None or not hmac.compare_digest(
+            x_app_key, settings.app_api_key
+        ):
             return JSONResponse({"error": "Invalid or missing API key"}, status_code=403)
         return None
 

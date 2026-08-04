@@ -59,6 +59,29 @@ def main() -> None:
     if "python -m training_server.worker" not in compose:
         raise SystemExit("training-worker must run the training_server.worker module")
 
+    # The compose stack reads server/.env.example for defaults, so every secret
+    # must additionally be a required shell override. Otherwise the committed
+    # placeholder becomes a live credential the moment someone runs the stack.
+    required_overrides = ("APP_API_KEY", "POSTGRES_PASSWORD", "MINIO_ROOT_PASSWORD")
+    missing_overrides = [
+        name for name in required_overrides if f"${{{name}:?" not in compose
+    ]
+    if missing_overrides:
+        raise SystemExit(
+            "Compose file must require these as shell overrides (${NAME:?...}), "
+            "otherwise the .env.example placeholder is used: "
+            + ", ".join(missing_overrides)
+        )
+
+    # Both services that run application code need the API key override, not
+    # just the first one that happens to be defined.
+    api_key_overrides = compose.count("APP_API_KEY: ${APP_API_KEY:?")
+    if api_key_overrides < 2:
+        raise SystemExit(
+            "Both training-api and training-worker must override APP_API_KEY "
+            f"(found {api_key_overrides} of 2)"
+        )
+
     print("Durable runtime files validated.")
 
 

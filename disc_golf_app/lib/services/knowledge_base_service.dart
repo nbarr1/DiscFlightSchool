@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -15,14 +16,32 @@ class KnowledgeBaseService extends ChangeNotifier {
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
   bool _isLoaded = false;
 
+  /// HTTP client used for AI search. Injectable so tests can exercise the
+  /// request/response handling without network access.
+  final http.Client _client;
+  final bool _ownsClient;
+
   List<KBStudy> get studies => _studies;
   List<KBArticle> get articles => _articles;
   List<KBCategory> get categories => _categories;
   bool get isLoaded => _isLoaded;
   bool get hasApiKey => _apiKey != null && _apiKey!.isNotEmpty;
 
-  KnowledgeBaseService() {
-    _loadApiKey();
+  /// Completes once the stored API key has been loaded (or the load has
+  /// failed and been reported).
+  ///
+  /// Constructor-launched async work is otherwise unobservable: nothing can
+  /// tell whether [hasApiKey] reflects stored state yet, which makes any
+  /// caller that reads or writes the key during startup racy.
+  Future<void> get initialized => _initialized;
+  late final Future<void> _initialized;
+
+  /// Pass [client] from tests to stub the Anthropic API; production callers
+  /// use the default constructor and get a client owned by this service.
+  KnowledgeBaseService({http.Client? client})
+      : _client = client ?? http.Client(),
+        _ownsClient = client == null {
+    _initialized = _loadApiKey();
   }
 
   Future<void> loadData() async {
@@ -82,21 +101,32 @@ class KnowledgeBaseService extends ChangeNotifier {
   // ---- API key management ----
 
   Future<void> _loadApiKey() async {
-    final prefs = await SharedPreferences.getInstance();
     try {
-      _apiKey = await _secureStorage.read(key: 'anthropic_api_key');
+      // getInstance() is inside the try: if it throws, an uncaught error
+      // escapes the constructor with nothing to attach a handler to.
+      final prefs = await SharedPreferences.getInstance();
+
+      final stored = await _secureStorage.read(key: 'anthropic_api_key');
       final legacyKey = prefs.getString('anthropic_api_key');
-      if ((_apiKey == null || _apiKey!.isEmpty) &&
-          legacyKey != null &&
-          legacyKey.isNotEmpty) {
-        _apiKey = legacyKey;
-        await _secureStorage.write(key: 'anthropic_api_key', value: legacyKey);
+
+      // Never overwrite a key set by the caller while this load was in
+      // flight — startup would silently discard it.
+      if (_apiKey == null || _apiKey!.isEmpty) {
+        if (stored != null && stored.isNotEmpty) {
+          _apiKey = stored;
+        } else if (legacyKey != null && legacyKey.isNotEmpty) {
+          _apiKey = legacyKey;
+          await _secureStorage.write(
+              key: 'anthropic_api_key', value: legacyKey);
+        }
       }
+
       await prefs.remove('anthropic_api_key');
       notifyListeners();
     } catch (e) {
+      // Leave whatever is already in memory alone; a storage failure is not
+      // evidence that the caller's key is wrong.
       debugPrint('Secure storage unavailable for Anthropic API key: $e');
-      _apiKey = null;
     }
   }
 
@@ -195,6 +225,66 @@ class KnowledgeBaseService extends ChangeNotifier {
 
   // ---- Claude API ----
 
+  /// Model used for AI search. Kept as a named constant so the migration
+  /// point is obvious the next time the model line moves.
+  static const String claudeModel = 'claude-sonnet-5';
+
+  /// Output cap for an answer. The system prompt asks for <200 words
+  /// (~300 tokens); the headroom absorbs citation-heavy replies without
+  /// truncating mid-sentence.
+  static const int claudeMaxTokens = 1024;
+
+  static const Duration claudeTimeout = Duration(seconds: 45);
+
+  /// Pull the answer text out of a `/v1/messages` response body.
+  ///
+  /// `content` is a heterogeneous block list — with adaptive thinking enabled
+  /// the first block can be a `thinking` block that carries no `text` field,
+  /// so blocks must be selected by `type` rather than by position.
+  /// Multiple text blocks are concatenated (citations can split them).
+  ///
+  /// Returns null when the response carries no text block at all.
+  @visibleForTesting
+  static String? extractAnswerText(Map<String, dynamic> body) {
+    final content = body['content'];
+    if (content is! List) return null;
+
+    final buffer = StringBuffer();
+    for (final block in content) {
+      if (block is! Map) continue;
+      if (block['type'] != 'text') continue;
+      final text = block['text'];
+      if (text is String) buffer.write(text);
+    }
+
+    final joined = buffer.toString().trim();
+    return joined.isEmpty ? null : joined;
+  }
+
+  /// Map a non-200 response to a user-facing message.
+  @visibleForTesting
+  static String messageForErrorStatus(int statusCode) {
+    switch (statusCode) {
+      case 401:
+        return 'Invalid API key. Please check your key in Settings.';
+      case 403:
+        return 'This API key is not permitted to use AI search. Check the '
+            'key\'s permissions in the Anthropic Console.';
+      case 429:
+        return 'Rate limited by the Anthropic API. Please wait a moment and '
+            'try again.';
+      case 529:
+        return 'The Anthropic API is temporarily overloaded. Please try again '
+            'in a moment.';
+      default:
+        if (statusCode >= 500) {
+          return 'Anthropic API server error ($statusCode). Please try again '
+              'later.';
+        }
+        return 'API error ($statusCode). Please try again later.';
+    }
+  }
+
   Future<String> askQuestion(String question) async {
     if (!hasApiKey) {
       return 'Please add your Anthropic API key in Settings to use AI search.';
@@ -216,37 +306,67 @@ Guidelines:
 - Keep answers under 200 words''';
 
     try {
-      final response = await http.post(
-        Uri.parse('https://api.anthropic.com/v1/messages'),
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': _apiKey!,
-          'anthropic-version': '2023-06-01',
-        },
-        body: json.encode({
-          'model': 'claude-sonnet-4-20250514',
-          'max_tokens': 512,
-          'system': systemPrompt,
-          'messages': [
-            {'role': 'user', 'content': question},
-          ],
-        }),
-      );
+      final response = await _client
+          .post(
+            Uri.parse('https://api.anthropic.com/v1/messages'),
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': _apiKey!,
+              'anthropic-version': '2023-06-01',
+            },
+            body: json.encode({
+              'model': claudeModel,
+              'max_tokens': claudeMaxTokens,
+              // Grounded Q&A over a small supplied corpus with a <200-word
+              // answer: thinking buys little here and costs the user latency
+              // and tokens on their own key. Disabled explicitly because on
+              // claude-sonnet-5 omitting `thinking` runs adaptive by default.
+              'thinking': {'type': 'disabled'},
+              'system': systemPrompt,
+              'messages': [
+                {'role': 'user', 'content': question},
+              ],
+            }),
+          )
+          .timeout(claudeTimeout);
 
-      if (response.statusCode == 200) {
-        final body = json.decode(response.body) as Map<String, dynamic>;
-        final content = body['content'] as List;
-        if (content.isNotEmpty) {
-          return (content[0] as Map<String, dynamic>)['text'] as String;
-        }
-        return 'No response received.';
-      } else if (response.statusCode == 401) {
-        return 'Invalid API key. Please check your key in Settings.';
-      } else {
-        return 'API error (${response.statusCode}). Please try again later.';
+      if (response.statusCode != 200) {
+        return messageForErrorStatus(response.statusCode);
       }
+
+      final decoded = json.decode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        return 'Unexpected response from the Anthropic API. Please try again.';
+      }
+
+      if (decoded['stop_reason'] == 'refusal') {
+        return 'Claude declined to answer that question. Try rephrasing it '
+            'around the disc golf research in the library.';
+      }
+
+      final answer = extractAnswerText(decoded);
+      if (answer == null) {
+        return 'No response received.';
+      }
+
+      if (decoded['stop_reason'] == 'max_tokens') {
+        return '$answer\n\n_(Answer was cut off at the length limit — try '
+            'asking a narrower question.)_';
+      }
+
+      return answer;
+    } on TimeoutException {
+      return 'The request to Anthropic timed out. Please check your '
+          'connection and try again.';
     } catch (e) {
+      debugPrint('AI search request failed: $e');
       return 'Connection error. Please check your internet connection and try again.';
     }
+  }
+
+  @override
+  void dispose() {
+    if (_ownsClient) _client.close();
+    super.dispose();
   }
 }

@@ -154,6 +154,51 @@ class TrainingServerContractTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json(), {"error": "Invalid or missing API key"})
 
+    def test_authenticated_endpoints_reject_a_wrong_key(self):
+        # Exercises the non-matching branch of the constant-time comparison.
+        # A None/str mix-up here would surface as a 500, not a 403.
+        app = self.build_app()
+        for path, method in (
+            ("/api/training/export", "GET"),
+            ("/api/training/start", "POST"),
+        ):
+            for key in ("wrong-key", "", "test-key-with-suffix", "TEST-KEY"):
+                with self.subTest(path=path, key=key):
+                    response = self.request(
+                        app, method, path, headers={"x-app-key": key}
+                    )
+                    self.assertEqual(response.status_code, 403)
+                    self.assertEqual(
+                        response.json(), {"error": "Invalid or missing API key"}
+                    )
+
+    def test_authenticated_endpoints_reject_a_missing_key(self):
+        app = self.build_app()
+        for path, method in (
+            ("/api/training/export", "GET"),
+            ("/api/training/start", "POST"),
+        ):
+            with self.subTest(path=path):
+                response = self.request(app, method, path)
+                self.assertEqual(response.status_code, 403)
+
+    def test_correct_key_passes_authentication(self):
+        # /api/training/start with an empty dataset returns 400
+        # (insufficient_data) rather than 403 — proving the key was accepted.
+        app = self.build_app()
+        response = self.request(
+            app, "POST", "/api/training/start", headers={"x-app-key": "test-key"}
+        )
+        self.assertNotEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["status"], "insufficient_data")
+
+    def test_unauthenticated_endpoints_stay_open(self):
+        app = self.build_app()
+        for path in ("/", "/health", "/api/training/stats", "/api/training/status"):
+            with self.subTest(path=path):
+                self.assertEqual(self.request(app, "GET", path).status_code, 200)
+
     def test_upload_rejects_invalid_label_before_file_write(self):
         app = self.build_app()
         body, content_type = multipart_body(

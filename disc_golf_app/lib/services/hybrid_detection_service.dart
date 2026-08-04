@@ -64,10 +64,21 @@ class HybridDetectionService extends ChangeNotifier {
       );
     }
 
+    if (_isProcessing) {
+      throw StateError(
+          'HybridDetectionService.detect() is already running; await the '
+          'in-flight call before starting another.');
+    }
+
     _isProcessing = true;
     _progress = 0.0;
     _statusMessage = 'Generating spline prediction...';
     notifyListeners();
+
+    // Hoisted so the finally block can clean up even when refinement throws
+    // partway through — otherwise every failed run leaves a full extracted
+    // frame set behind in the temp directory.
+    Directory? framesDir;
 
     try {
       // ---------------------------------------------------------------
@@ -114,20 +125,27 @@ class HybridDetectionService extends ChangeNotifier {
       // Step 2: Extract video frames for the flight range
       // ---------------------------------------------------------------
       final tempDir = await getTemporaryDirectory();
-      final framesDir = Directory(
+      framesDir = Directory(
           '${tempDir.path}/hybrid_detect_${DateTime.now().millisecondsSinceEpoch}');
       await framesDir.create(recursive: true);
 
-      final framePaths = await _detector.extractFrames(
+      final extracted = await _detector.extractFrames(
         videoPath,
         framesDir.path,
         fps: fps,
         maxFrames: totalFrames,
       );
 
-      if (framePaths.isEmpty) {
+      if (extracted.isEmpty) {
         throw Exception('No frames could be extracted');
       }
+
+      // Index by video frame number rather than list position: extraction can
+      // skip a frame, and looking up by position would pair each spline
+      // prediction with the wrong image from that point on.
+      final framesByIndex = <int, String>{
+        for (final frame in extracted) frame.index: frame.path,
+      };
 
       _progress = 0.3;
       _statusMessage = 'Refining with detection...';
@@ -158,14 +176,14 @@ class HybridDetectionService extends ChangeNotifier {
 
         final splinePos = predicted[frame];
         if (splinePos == null) continue;
-        if (frame >= framePaths.length) continue;
 
         // Try to refine using color and/or YOLO
         Offset? refined;
         double confidence = 0.5; // spline-only confidence
 
-        final imageFile = File(framePaths[frame]);
-        if (await imageFile.exists()) {
+        final framePath = framesByIndex[frame];
+        final imageFile = framePath == null ? null : File(framePath);
+        if (imageFile != null && await imageFile.exists()) {
           final bytes = await imageFile.readAsBytes();
           final image = img.decodeImage(bytes);
 
@@ -275,13 +293,6 @@ class HybridDetectionService extends ChangeNotifier {
       // ---------------------------------------------------------------
       _progress = 1.0;
       _statusMessage = 'Complete!';
-      _isProcessing = false;
-      notifyListeners();
-
-      // Cleanup temp frames
-      try {
-        await framesDir.delete(recursive: true);
-      } catch (_) {}
 
       return FlightTrackingResult(
         detections: smoothed,
@@ -291,10 +302,18 @@ class HybridDetectionService extends ChangeNotifier {
         totalFrames: totalFrames,
       );
     } catch (e) {
-      _isProcessing = false;
       _statusMessage = 'Error: $e';
-      notifyListeners();
       rethrow;
+    } finally {
+      if (framesDir != null) {
+        try {
+          await framesDir.delete(recursive: true);
+        } catch (e) {
+          debugPrint('Failed to clean up hybrid detection frames: $e');
+        }
+      }
+      _isProcessing = false;
+      notifyListeners();
     }
   }
 

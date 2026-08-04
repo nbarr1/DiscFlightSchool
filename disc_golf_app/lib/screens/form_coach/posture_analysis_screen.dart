@@ -485,16 +485,26 @@ class _PostureAnalysisScreenState extends State<PostureAnalysisScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Pose detection failed',
+                const Text('Analysis unavailable',
                     style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 14)),
                 const SizedBox(height: 4),
                 Text(
-                  'No person was detected. Scores and angles are simulated. '
-                  'Try recording from the side with good lighting.',
+                  _analysis?.failureReason ??
+                      'No person was detected. Try recording from the side '
+                          'with good lighting.',
                   style: TextStyle(color: Colors.red.shade100, fontSize: 12),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'The angles and score below are simulated placeholders, not '
+                  'measurements of your throw.',
+                  style: TextStyle(
+                      color: Colors.red.shade100,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600),
                 ),
               ],
             ),
