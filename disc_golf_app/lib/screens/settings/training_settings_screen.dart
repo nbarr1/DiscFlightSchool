@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../services/disc_detection_service.dart';
 import '../../services/knowledge_base_service.dart';
 import '../../services/training_data_service.dart';
+import 'privacy_policy_screen.dart';
 
 class TrainingSettingsScreen extends StatefulWidget {
   const TrainingSettingsScreen({super.key});
@@ -470,6 +471,19 @@ class _TrainingSettingsScreenState extends State<TrainingSettingsScreen> {
                   style: TextStyle(color: Colors.red),
                 ),
               ),
+              const SizedBox(height: 8),
+
+              // Privacy policy
+              TextButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const PrivacyPolicyScreen(),
+                  ),
+                ),
+                icon: const Icon(Icons.privacy_tip_outlined),
+                label: const Text('Privacy Policy'),
+              ),
             ],
           );
         },
@@ -488,8 +502,11 @@ class _TrainingSettingsScreenState extends State<TrainingSettingsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Your key is stored in platform secure storage and is only '
-              'used to query the Claude API for research answers.',
+              'Your key is stored in platform secure storage. When you use '
+              'AI Search, your question is sent directly from this device '
+              'to Anthropic (the maker of Claude) to generate an answer; '
+              'no one else sees it. Anthropic\'s handling of that request '
+              'is governed by their own privacy policy, not this app\'s.',
             ),
             const SizedBox(height: 12),
             TextField(

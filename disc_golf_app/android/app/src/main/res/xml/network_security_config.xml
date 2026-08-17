@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Defense-in-depth alongside TrainingDataService's own scheme allow-list
+  (HTTPS everywhere, plaintext HTTP only for localhost/127.0.0.1/::1 during
+  local server development). This blocks plaintext HTTP for every other
+  destination at the OS level, in case a dependency (ffmpeg_kit_flutter_new,
+  tflite_flutter, google_mlkit_pose_detection) ever makes a stray request
+  outside that guarded path.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">::1</domain>
+    </domain-config>
+</network-security-config>

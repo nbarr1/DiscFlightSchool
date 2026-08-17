@@ -156,6 +156,10 @@ flutter build apk --release
 
 Without `key.properties`, release builds now fail fast; use `flutter build apk --debug` for local unsigned testing.
 
+### Bumping the app version for a release
+
+`disc_golf_app/pubspec.yaml`'s `version:` field (`versionName+versionCode`, e.g. `1.0.0+1`) is the single source for both the Android `versionCode`/`versionName` and the iOS `CFBundleVersion`/`CFBundleShortVersionString` — Gradle and Xcode both read it via Flutter's build tooling, nothing else needs editing. **Increment the `+N` build-number suffix on every release submitted to an app store**, even for a patch that only touches `versionName` (e.g. `1.0.0+1` → `1.0.1+2`): Google Play and the App Store both reject a re-upload whose build number doesn't strictly increase over the previous release.
+
 ## Current next steps
 
 1. Keep docs synchronized with source whenever endpoints, assets, build settings, or runtime services change.

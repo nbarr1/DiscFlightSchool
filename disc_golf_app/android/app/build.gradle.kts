@@ -50,7 +50,10 @@ android {
     defaultConfig {
         applicationId = "com.discflightschool.app"
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        // Pinned explicitly rather than left on Flutter's floating default so a
+        // Flutter SDK upgrade can't silently change what Play Store submission
+        // requires (currently API 34+, moving to 35+).
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
