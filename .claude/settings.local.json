@@ -3,7 +3,8 @@
     "allow": [
       "Bash(flutter analyze:*)",
       "Bash(python3 *)",
-      "Skill(code-review)"
+      "Skill(code-review)",
+      "Bash(xargs -I{} grep -l -i \"detect\\\\|yolo\\\\|tflite\\\\|interpreter\" {})"
     ]
   }
 }
