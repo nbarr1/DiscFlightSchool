@@ -47,17 +47,17 @@ Implemented server endpoints:
 | `GET` | `/api/training/stats` | No | Returns stored stats and on-disk image/label counts. |
 | `GET` | `/api/training/export` | `X-App-Key` | Builds and returns a ZIP of the dataset directory when data exists. |
 | `POST` | `/api/training/start` | `X-App-Key` | Starts a background YOLO11 (`yolo11n.pt`) training/export thread if at least 10 full images exist. |
-| `GET` | `/api/training/status` | No | Returns in-memory training status. |
+| `GET` | `/api/training/status` | No | Returns training status (in-memory, or from PostgreSQL in durable mode — same JSON shape either way). |
 | `GET` | `/api/model/version` | No | Returns latest `.tflite` model metadata or the no-model sentinel. |
 | `GET` | `/api/model/download` | No | Downloads the latest `.tflite` model or returns 404 when none exists. |
 
 Important server facts:
 
 - `APP_API_KEY` is required to start the server.
-- Filesystem storage is the only implemented storage backend.
-- Optional database, Redis, and object-storage settings are parsed, but no PostgreSQL, Redis queue, or object-storage adapter is implemented yet.
-- `training_server.worker` is a placeholder process that validates configuration and sleeps; it does not consume jobs.
-- `server/dataset/dataset.yaml` is generated at runtime by `FileStorage.initialize()` if it is absent.
+- Storage backend is selected automatically: `PostgresMinioStorage` (durable) when `DATABASE_URL`, `REDIS_URL`, and every `OBJECT_STORAGE_*` variable are set, otherwise `FileStorage` (filesystem, local dev, no infra required).
+- In durable mode, `POST /api/training/start` enqueues a job on a Redis list instead of spawning an in-process thread; `training_server.worker` consumes it, runs the same `yolo detect train`/`yolo export` sequence, and publishes the resulting model through the storage layer. Without durable config, `training_server.worker` falls back to its original placeholder behavior (log config booleans and sleep).
+- `server/dataset/dataset.yaml` (or, in durable mode, a materialized copy assembled from Postgres/MinIO) is generated at runtime if it is absent.
+- See `server/README.md`'s "Durable storage" section for the Postgres schema and MinIO object-key layout.
 
 ### Docker Compose runtime scaffold
 
@@ -70,7 +70,7 @@ The root `docker-compose.yml` defines services for:
 - `minio`
 - `minio-init`
 
-The compose stack is a scaffold for remote/local validation. The API and worker currently still use filesystem-backed training data/model/export volumes. PostgreSQL, Redis, and MinIO are provisioned but not yet used by implemented adapters.
+`training-api` and `training-worker` both run with the durable env vars set, so this stack exercises `PostgresMinioStorage` and the Redis training queue, not the filesystem backend. `./scripts/test_compose_integration.sh` boots this stack and exercises it end-to-end (see `.github/workflows/compose-integration.yml`, which runs it on push to `main`).
 
 ## Project layout
 
@@ -180,9 +180,6 @@ Without `key.properties`, release builds now fail fast; use `flutter build apk -
 2. Keep docs synchronized with source whenever endpoints, assets, build settings, or runtime services change.
 3. Move disc detection off the UI isolate — see `docs/testing.md` for what is
    still unverified and why.
-4. Add server durable adapters before claiming PostgreSQL, Redis, or MinIO persistence is implemented.
-5. Add integration tests for Docker Compose once durable adapters exist.
-6. Add Android build validation to CI if an APK artifact is required from every merge.
 
 ## Running the compose stack
 

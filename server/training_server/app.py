@@ -23,11 +23,38 @@ from .validation import sample_id_error, yolo_label_error
 logger = logging.getLogger("disc_flight_school.training_server")
 
 
+def _build_default_storage_and_trainer(
+    settings: Settings, storage: StorageBackend | None
+) -> tuple[StorageBackend, TrainingManager]:
+    if storage is not None:
+        return storage, TrainingManager(settings, storage)
+
+    if settings.database_url and settings.object_storage_endpoint and settings.redis_url:
+        from psycopg_pool import ConnectionPool
+        from redis import Redis
+
+        from .durable_storage import PostgresMinioStorage
+        from .queue import TrainingJobQueue, TrainingRunStore
+
+        pool = ConnectionPool(
+            settings.database_url, kwargs={"autocommit": True}, min_size=1, max_size=5, open=True
+        )
+        durable_storage = PostgresMinioStorage(settings, pool=pool)
+        job_queue = TrainingJobQueue(Redis.from_url(settings.redis_url))
+        run_store = TrainingRunStore(pool)
+        trainer = TrainingManager(
+            settings, durable_storage, job_queue=job_queue, run_store=run_store
+        )
+        return durable_storage, trainer
+
+    file_storage = FileStorage(settings)
+    return file_storage, TrainingManager(settings, file_storage)
+
+
 def create_app(settings: Settings, storage: StorageBackend | None = None) -> FastAPI:
     """Build the FastAPI app with explicit dependencies."""
-    storage = storage or FileStorage(settings)
+    storage, trainer = _build_default_storage_and_trainer(settings, storage)
     storage.initialize()
-    trainer = TrainingManager(settings, storage)
 
     app = FastAPI(title="Disc Flight School Training Server")
     app.state.settings = settings

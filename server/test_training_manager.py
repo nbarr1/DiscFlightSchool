@@ -164,5 +164,103 @@ class TrainingManagerStartTests(unittest.TestCase):
         )
 
 
+class FakeJobQueue:
+    """Minimal TrainingJobQueue stand-in — no real Redis needed."""
+
+    def __init__(self) -> None:
+        self.enqueued: list[str] = []
+
+    def enqueue(self, job_id: str) -> None:
+        self.enqueued.append(job_id)
+
+
+class FakeRunStore:
+    """Minimal TrainingRunStore stand-in — no real Postgres needed."""
+
+    def __init__(self, *, active: bool = False) -> None:
+        self._active = active
+        self._status: dict[str, Any] = {"running": False, "last_run": None, "result": None}
+        self.create_run_calls = 0
+
+    def create_run(self) -> str:
+        from training_server.queue import RunAlreadyActiveError
+
+        self.create_run_calls += 1
+        if self._active:
+            raise RunAlreadyActiveError("Training is already in progress")
+        self._active = True
+        self._status["running"] = True
+        return "fake-run-id"
+
+    def latest_status(self) -> dict[str, Any]:
+        return self._status.copy()
+
+
+class TrainingManagerDurableModeTests(unittest.TestCase):
+    """`start()`/`status` when a job_queue + run_store are supplied — the
+    Redis-queued path used when the durable stack is configured. Must not
+    spawn a thread or touch the in-memory `_status` dict at all.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.settings = Settings(app_api_key="test-key", base_dir=Path(self._tmp.name))
+
+    def _manager(self, storage: Any, *, run_store: FakeRunStore | None = None) -> tuple[
+        TrainingManager, FakeJobQueue, FakeRunStore
+    ]:
+        job_queue = FakeJobQueue()
+        run_store = run_store or FakeRunStore()
+        manager = TrainingManager(
+            self.settings, storage, job_queue=job_queue, run_store=run_store
+        )
+        return manager, job_queue, run_store
+
+    def test_start_enqueues_instead_of_spawning_a_thread(self):
+        manager, job_queue, run_store = self._manager(FakeStorage(full_images=12))
+
+        original_start = threading.Thread.start
+
+        def boom(self):  # noqa: ANN001
+            raise AssertionError("durable start() must not spawn a thread")
+
+        threading.Thread.start = boom  # type: ignore[method-assign]
+        try:
+            payload, status = manager.start()
+        finally:
+            threading.Thread.start = original_start  # type: ignore[method-assign]
+
+        self.assertEqual(200, status)
+        self.assertEqual("started", payload["status"])
+        self.assertEqual(["fake-run-id"], job_queue.enqueued)
+
+    def test_insufficient_data_short_circuits_before_creating_a_run(self):
+        manager, job_queue, run_store = self._manager(FakeStorage(full_images=3))
+
+        payload, status = manager.start()
+
+        self.assertEqual(400, status)
+        self.assertEqual("insufficient_data", payload["status"])
+        self.assertEqual([], job_queue.enqueued)
+        self.assertEqual(0, run_store.create_run_calls)
+
+    def test_active_run_is_rejected_with_409(self):
+        run_store = FakeRunStore(active=True)
+        manager, job_queue, _ = self._manager(FakeStorage(full_images=50), run_store=run_store)
+
+        payload, status = manager.start()
+
+        self.assertEqual(409, status)
+        self.assertEqual("already_running", payload["status"])
+        self.assertEqual([], job_queue.enqueued)
+
+    def test_status_reads_through_the_run_store(self):
+        manager, _, run_store = self._manager(FakeStorage(full_images=50))
+        run_store._status = {"running": True, "last_run": None, "result": None}
+
+        self.assertEqual(run_store._status, manager.status)
+
+
 if __name__ == "__main__":
     unittest.main()

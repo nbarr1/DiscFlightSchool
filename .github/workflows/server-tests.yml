@@ -46,10 +46,90 @@ jobs:
             server/test_storage.py \
             server/test_requirements.py \
             server/test_training_manager.py \
+            server/test_durable_storage.py \
+            server/test_queue.py \
             server/training_server/*.py
 
+      # No DATABASE_URL/REDIS_URL/OBJECT_STORAGE_* here, so the durable-adapter
+      # and queue tests skip themselves (see test_durable_storage.py /
+      # test_queue.py) — this job stays fast and needs no service containers.
       - name: Run server unit and contract tests
         run: python -m pytest server
 
       - name: Validate durable runtime files
         run: python scripts/validate_durable_runtime.py
+
+  test-server-durable:
+    name: Durable adapter tests (Postgres + Redis + MinIO)
+    runs-on: ubuntu-latest
+
+    env:
+      APP_API_KEY: test-key
+      DATABASE_URL: postgresql://discflight:discflight@localhost:5432/discflight
+      REDIS_URL: redis://localhost:6379/0
+      OBJECT_STORAGE_ENDPOINT: http://localhost:9000
+      OBJECT_STORAGE_BUCKET: disc-flight-school
+      OBJECT_STORAGE_ACCESS_KEY: minioadmin
+      OBJECT_STORAGE_SECRET_KEY: minioadminpass
+      OBJECT_STORAGE_SECURE: "false"
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: discflight
+          POSTGRES_USER: discflight
+          POSTGRES_PASSWORD: discflight
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U discflight -d discflight"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # MinIO's image needs `server /data` as a command argument, which the
+      # `services:` block can't pass (it only supports image/env/ports/
+      # options) — so it's started by hand instead of as a service container.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadminpass \
+            minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9000/minio/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "MinIO did not become healthy in time" >&2
+          docker logs minio
+          exit 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install server test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r server/requirements-test.txt
+
+      - name: Run durable adapter and queue tests
+        run: python -m pytest server/test_durable_storage.py server/test_queue.py -v

@@ -6,11 +6,14 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 
 - `main.py` is the deployment entrypoint and creates `app` from `training_server.create_app()`.
 - `training_server/config.py` loads required and optional environment variables.
-- `training_server/app.py` defines the HTTP routes.
-- `training_server/storage.py` implements the current filesystem-backed storage adapter.
-- `training_server/training.py` starts YOLO11 (`yolo11n.pt`) training/export in a background thread.
-- `training_server/validation.py` validates sample IDs, YOLO labels, file extensions, signatures, and safe child paths.
-- `training_server/worker.py` is a placeholder worker that validates configuration and sleeps; it does not process queue jobs yet.
+- `training_server/app.py` defines the HTTP routes. `create_app()` selects the storage/training backend automatically: `PostgresMinioStorage` + a Redis-queued `TrainingManager` when `DATABASE_URL`, `REDIS_URL`, and every `OBJECT_STORAGE_*` variable are set, otherwise `FileStorage` + an in-process-thread `TrainingManager` (local dev, no infra required).
+- `training_server/storage.py` implements `FileStorage`, the filesystem-backed adapter (dataset dir, JSON stats file, local `.tflite` models).
+- `training_server/durable_storage.py` implements `PostgresMinioStorage`: sample/model metadata in PostgreSQL, image/model bytes in MinIO. See "Durable storage" below for the schema and object-key layout.
+- `training_server/queue.py` implements `TrainingJobQueue` (a Redis list) and `TrainingRunStore` (Postgres-backed cross-process run status), used only in durable mode.
+- `training_server/training_job.py` runs the actual `yolo detect train` / `yolo export format=tflite` subprocess sequence — shared by both the in-process thread path and the worker's queue-consumption path, so it exists exactly once.
+- `training_server/training.py`'s `TrainingManager` starts training either as an in-process thread (default) or by enqueuing a job for the worker (durable mode); both paths expose the same `start()`/`status` shapes.
+- `training_server/validation.py` validates sample IDs, YOLO labels, file extensions, signatures, decodability, and safe child paths — shared by every storage backend.
+- `training_server/worker.py` is a real Redis-queue consumer when the durable stack is configured (pops a job, runs training, publishes the model, records status); it falls back to the original placeholder (log config booleans and sleep) when it isn't, so `docker compose up` with the durable vars unset still behaves predictably.
 
 ## Environment variables
 
@@ -24,13 +27,14 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 | `TRAINING_EPOCHS` | No | `50` | Epoch count passed to YOLO training. |
 | `TRAINING_IMAGE_SIZE` | No | `640` | Image size passed to YOLO training/export. |
 | `TRAINING_BATCH_SIZE` | No | `16` | Batch size passed to YOLO training. |
-| `DATABASE_URL` | No | none | Parsed for future durable runtime work; no database adapter uses it yet. |
-| `REDIS_URL` | No | none | Parsed for future queue work; no Redis queue adapter uses it yet. |
-| `OBJECT_STORAGE_ENDPOINT` | No | none | Parsed for future object-storage work; no object-storage adapter uses it yet. |
-| `OBJECT_STORAGE_BUCKET` | No | none | Parsed for future object-storage work. |
-| `OBJECT_STORAGE_ACCESS_KEY` | No | none | Parsed for future object-storage work. |
-| `OBJECT_STORAGE_SECRET_KEY` | No | none | Parsed for future object-storage work. |
-| `OBJECT_STORAGE_SECURE` | No | `true` | Parsed as a boolean for future object-storage work. |
+| `DATABASE_URL` | No | none | PostgreSQL connection string. When set together with `REDIS_URL` and every `OBJECT_STORAGE_*` variable, selects the durable storage/queue backend instead of the filesystem/in-process one. |
+| `REDIS_URL` | No | none | Redis connection string for the training job queue (see "Durable storage" below). |
+| `OBJECT_STORAGE_ENDPOINT` | No | none | MinIO/S3-compatible endpoint URL for image and model bytes. |
+| `OBJECT_STORAGE_BUCKET` | No | none | Bucket used for dataset images and trained models. |
+| `OBJECT_STORAGE_ACCESS_KEY` | No | none | Object storage access key. |
+| `OBJECT_STORAGE_SECRET_KEY` | No | none | Object storage secret key. |
+| `OBJECT_STORAGE_SECURE` | No | `true` | Whether the object storage client uses HTTPS. |
+| `WORKER_POLL_SECONDS` | No | `30` | How long `training_server.worker` blocks on the Redis queue between checks (durable mode), or sleeps between log lines (placeholder mode). |
 
 ## Implemented endpoints
 
@@ -41,8 +45,8 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 | `POST` | `/api/training/upload` | `X-App-Key` | Stores one validated full image, crop image, and class-0 YOLO label. |
 | `GET` | `/api/training/stats` | No | Returns upload stats and dataset file counts. |
 | `GET` | `/api/training/export` | `X-App-Key` | Returns a ZIP archive of the dataset directory when data exists. |
-| `POST` | `/api/training/start` | `X-App-Key` | Starts background training when at least 10 full images exist. |
-| `GET` | `/api/training/status` | No | Returns in-memory training state. |
+| `POST` | `/api/training/start` | `X-App-Key` | Starts training (in-process thread, or a queued worker job in durable mode) when at least 10 full images exist. |
+| `GET` | `/api/training/status` | No | Returns training state — from an in-memory dict (default) or the `training_runs` table (durable mode); same JSON shape either way. |
 | `GET` | `/api/model/version` | No | Returns latest model metadata or `version: none`. |
 | `GET` | `/api/model/download` | No | Downloads the latest `.tflite` file or returns 404. |
 
@@ -55,6 +59,8 @@ export APP_API_KEY=replace-with-a-long-random-secret
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
+No `DATABASE_URL`/`REDIS_URL`/`OBJECT_STORAGE_*` means filesystem storage and in-process training — no external services required for local development.
+
 ## Tests
 
 From the repository root:
@@ -64,7 +70,7 @@ python -m pip install -r server/requirements.txt
 APP_API_KEY=test-key ./scripts/test_server.sh
 ```
 
-The script compiles the server modules, runs `pytest server`, and validates durable-runtime config files.
+The script compiles the server modules, runs `pytest server`, and validates durable-runtime config files. The durable-adapter and queue tests (`test_durable_storage.py`, `test_queue.py`) skip themselves when `DATABASE_URL`/`OBJECT_STORAGE_*`/`REDIS_URL` aren't set, so this needs no services running locally. CI exercises them for real against Postgres/Redis/MinIO service containers (`.github/workflows/server-tests.yml`'s `test-server-durable` job).
 
 ## Docker Compose scaffold
 
@@ -76,19 +82,30 @@ cp server/.env.example server/.env
 docker compose --env-file server/.env up --build
 ```
 
-The compose stack starts the API, placeholder worker, PostgreSQL, Redis, MinIO, and a MinIO bucket initializer. Filesystem storage remains the implemented API storage backend; PostgreSQL, Redis, and MinIO are not used by current request handlers.
+The compose stack starts the API, worker, PostgreSQL, Redis, MinIO, and a MinIO bucket initializer, all wired together — `training-api` and `training-worker` both read the durable env vars, so this stack runs on `PostgresMinioStorage` + the Redis job queue, not the filesystem backend. `./scripts/test_compose_integration.sh` boots this exact stack and exercises it end-to-end (upload/stats/export/model-download, plus enqueuing a training job through to the worker claiming it — see that script for why it stops short of waiting on a full YOLO training run).
+
+## Durable storage
+
+**PostgreSQL** (`training_server/durable_storage.py`, tables created idempotently in `initialize()`):
+- `training_stats` — single row, upload count and last-upload timestamp.
+- `training_samples` — one row per uploaded sample (`sample_id` primary key, label, and the two MinIO object keys).
+- `models` — one row per published model (`version` primary key, object key, sha256, size).
+- `training_runs` — one row per training run (`queued`/`running`/`success`/`failed`), with a partial unique index enforcing at most one active (`queued` or `running`) run at a time — this is the cross-process replacement for the in-memory lock used in non-durable mode.
+
+**MinIO** object keys: `dataset/images/{sample_id}_full{ext}`, `dataset/images/{sample_id}_crop{ext}`, `models/{version}.tflite`. YOLO labels stay in Postgres (`training_samples.label`), not MinIO — they're one line, not worth a second round trip.
+
+**Redis**: a single list, `training:jobs`. `POST /api/training/start` inserts a `training_runs` row and `LPUSH`es its id; `training_server.worker` blocks on `BRPOP` and processes jobs one at a time. Delivery is at-most-once — a worker crash mid-job leaves that run stuck at `running` with no auto-requeue, which is an accepted tradeoff for a manually-triggered, low-frequency job type.
+
+**Model downloads**: `GET /api/model/download` always serves a local file (`FileResponse`) — `PostgresMinioStorage.latest_model_info()` downloads from MinIO into `models_dir` only on a cache miss (a fresh replica, or a non-compose deployment without the shared `training-models` volume); the common case (worker and API sharing that volume) never triggers a download at all.
 
 ## Training notes
 
-- `server/dataset/dataset.yaml` is generated at runtime if absent.
-- Training requires at least 10 full-image samples on disk.
+- `server/dataset/dataset.yaml` (or, in durable mode, a `materialized_dataset/dataset.yaml` assembled from Postgres/MinIO) is generated at runtime if absent.
+- Training requires at least 10 full-image samples.
 - The training command uses `yolo detect train` with `yolo11n.pt`.
 - Export uses `yolo export format=tflite`.
-- The newest `.tflite` file under `server/models/` is served as the current detector model.
+- The newest published `.tflite` model is served as the current detector model.
 
 ## Next steps
 
-1. Add durable database/object-storage/queue adapters before depending on PostgreSQL, Redis, or MinIO for live server state.
-2. Add integration tests around upload/export/model-download behavior using the Docker Compose stack.
-3. Add explicit OpenAPI/API-contract documentation if external clients beyond the Flutter app are expected.
-4. Decide whether training should remain in-process background work or move to the worker once Redis queueing is implemented.
+1. Add explicit OpenAPI/API-contract documentation if external clients beyond the Flutter app are expected.

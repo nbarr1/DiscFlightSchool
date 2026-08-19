@@ -58,3 +58,11 @@ class StorageBackend(Protocol):
 
     def build_training_export(self) -> Path:
         """Build and return a unique ZIP file containing training data."""
+
+    def materialize_dataset(self) -> Path:
+        """Return a local directory (dataset.yaml + images/train + labels/train)
+        ready to pass to `yolo detect train`. Callers must not assume the
+        directory is writable or persistent beyond the training run."""
+
+    def publish_model(self, local_tflite_path: Path, *, version: str) -> ModelInfo:
+        """Persist a freshly trained local .tflite file as the new latest model."""

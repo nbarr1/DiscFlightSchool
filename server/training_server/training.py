@@ -3,29 +3,46 @@
 from __future__ import annotations
 
 import logging
-import shutil
-import subprocess
 import threading
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .config import Settings
 from .protocols import StorageBackend
+from .training_job import TrainingJobError, run_yolo_training_and_export
+
+if TYPE_CHECKING:
+    from .queue import TrainingJobQueue, TrainingRunStore
 
 logger = logging.getLogger("disc_flight_school.training_server.training")
 
 
 class TrainingManager:
-    """Thread-backed training manager preserving the original endpoint behavior."""
+    """Starts training either as an in-process thread (default) or, when a
+    durable queue is configured, by enqueuing a job the `training-worker`
+    container executes. The two modes share the same public interface
+    (`start()` / `status`) and the same HTTP response shapes.
+    """
 
-    def __init__(self, settings: Settings, storage: StorageBackend) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        storage: StorageBackend,
+        *,
+        job_queue: "TrainingJobQueue | None" = None,
+        run_store: "TrainingRunStore | None" = None,
+    ) -> None:
         self._settings = settings
         self._storage = storage
+        self._job_queue = job_queue
+        self._run_store = run_store
         self._lock = threading.Lock()
         self._status: dict[str, Any] = {"running": False, "last_run": None, "result": None}
 
     @property
     def status(self) -> dict[str, Any]:
+        if self._run_store is not None:
+            return self._run_store.latest_status()
         with self._lock:
             return self._status.copy()
 
@@ -34,6 +51,35 @@ class TrainingManager:
             self._status.update(updates)
 
     def start(self) -> tuple[dict[str, Any], int]:
+        if self._job_queue is not None and self._run_store is not None:
+            return self._start_durable()
+        return self._start_in_process()
+
+    def _start_durable(self) -> tuple[dict[str, Any], int]:
+        from .queue import RunAlreadyActiveError
+
+        image_count = self._storage.dataset_counts()["full_images"]
+        if image_count < 10:
+            return {
+                "status": "insufficient_data",
+                "count": image_count,
+                "minimum": 10,
+            }, 400
+
+        assert self._run_store is not None
+        assert self._job_queue is not None
+        try:
+            run_id = self._run_store.create_run()
+        except RunAlreadyActiveError:
+            return {
+                "status": "already_running",
+                "message": "Training is already in progress",
+            }, 409
+
+        self._job_queue.enqueue(run_id)
+        return {"status": "started", "message": f"Training started with {image_count} samples"}, 200
+
+    def _start_in_process(self) -> tuple[dict[str, Any], int]:
         with self._lock:
             if self._status["running"]:
                 return {
@@ -71,57 +117,15 @@ class TrainingManager:
     def _run_training(self) -> None:
         try:
             self._set_status(result="training")
-            result = subprocess.run(
-                [
-                    "yolo",
-                    "detect",
-                    "train",
-                    f"data={self._settings.dataset_yaml.resolve()}",
-                    "model=yolo11n.pt",
-                    f"epochs={self._settings.training_epochs}",
-                    f"imgsz={self._settings.training_image_size}",
-                    f"batch={self._settings.training_batch_size}",
-                    f"project={self._settings.base_dir / 'runs'}",
-                    "name=disc_detector",
-                    "exist_ok=True",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=self._settings.training_timeout_seconds,
+            dataset_dir = self._storage.materialize_dataset()
+            tflite_path = run_yolo_training_and_export(
+                self._settings, dataset_dir / "dataset.yaml"
             )
-
-            if result.returncode != 0:
-                self._set_status(result=f"failed: {result.stderr[-500:]}")
-                return
-
-            best_pt = self._settings.base_dir / "runs" / "disc_detector" / "weights" / "best.pt"
-            if best_pt.exists():
-                export_result = subprocess.run(
-                    [
-                        "yolo",
-                        "export",
-                        f"model={best_pt}",
-                        "format=tflite",
-                        f"imgsz={self._settings.training_image_size}",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=self._settings.export_timeout_seconds,
-                )
-                if export_result.returncode != 0:
-                    self._set_status(result=f"failed export: {export_result.stderr[-500:]}")
-                    return
-
-                for tflite in best_pt.parent.glob("*.tflite"):
-                    version = f"disc_detector_v{datetime.now().strftime('%Y%m%d%H%M')}"
-                    dest = self._settings.models_dir / f"{version}.tflite"
-                    shutil.copy2(tflite, dest)
-                    self._set_status(result=f"success: {version}")
-                    return
-
-            self._set_status(result="failed: no TFLite model produced")
-        except subprocess.TimeoutExpired:
-            self._set_status(result="failed: training timed out")
+            version = f"disc_detector_v{datetime.now().strftime('%Y%m%d%H%M')}"
+            info = self._storage.publish_model(tflite_path, version=version)
+            self._set_status(result=f"success: {info['version']}")
+        except TrainingJobError as exc:
+            self._set_status(result=str(exc))
         except Exception as exc:
             logger.error("Unexpected error during training", exc_info=True)
             self._set_status(result=f"failed: {exc}")

@@ -7,6 +7,20 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+def render_dataset_yaml(dataset_dir: Path) -> str:
+    """YOLO dataset manifest shared by every StorageBackend that assembles a
+    local training-ready directory (FileStorage's `dataset_dir`, or a durable
+    adapter's materialized copy)."""
+    return (
+        f"path: {dataset_dir.resolve()}\n"
+        "train: images/train\n"
+        "val: images/train\n"
+        "\n"
+        "names:\n"
+        "  0: disc\n"
+    )
+
+
 @dataclass(frozen=True)
 class Settings:
     """Runtime configuration for the FastAPI training server."""

@@ -13,12 +13,10 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import UploadFile
-from PIL import Image, UnidentifiedImageError
-from PIL.Image import DecompressionBombError
 
-from .config import Settings
+from .config import Settings, render_dataset_yaml
 from .protocols import DatasetCounts, ModelInfo
-from .validation import normalized_image_ext, safe_child, validate_image_signature
+from .validation import normalized_image_ext, read_and_validate_upload, safe_child
 
 
 class FileStorage:
@@ -35,14 +33,7 @@ class FileStorage:
         self.settings.labels_dir.mkdir(parents=True, exist_ok=True)
         self.settings.models_dir.mkdir(parents=True, exist_ok=True)
         if not self.settings.dataset_yaml.exists():
-            self.settings.dataset_yaml.write_text(
-                f"path: {self.settings.dataset_dir.resolve()}\n"
-                "train: images/train\n"
-                "val: images/train\n"
-                "\n"
-                "names:\n"
-                "  0: disc\n"
-            )
+            self.settings.dataset_yaml.write_text(render_dataset_yaml(self.settings.dataset_dir))
 
     def load_stats(self) -> dict[str, Any]:
         if self.settings.stats_file.exists():
@@ -72,56 +63,7 @@ class FileStorage:
         }
 
     def copy_upload_image(self, upload: UploadFile, dest: Path, ext: str) -> int:
-        total = 0
-        header = b""
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        with open(dest, "wb") as output:
-            while True:
-                chunk = upload.file.read(1024 * 1024)
-                if not chunk:
-                    break
-                if not header:
-                    header = chunk[:16]
-                total += len(chunk)
-                if total > self.settings.max_upload_bytes:
-                    output.close()
-                    dest.unlink(missing_ok=True)
-                    raise ValueError("Uploaded image exceeds size limit")
-                output.write(chunk)
-        if total == 0 or not validate_image_signature(ext, header):
-            dest.unlink(missing_ok=True)
-            raise ValueError("Uploaded image type does not match an allowed JPEG/PNG signature")
-        self._validate_decodable_image(dest, ext)
-        return total
-
-    def _validate_decodable_image(self, path: Path, ext: str) -> None:
-        expected_format = "PNG" if ext == ".png" else "JPEG"
-        try:
-            with Image.open(path) as image:
-                # Read dimensions and format before verify(): verify() closes
-                # the underlying file, and touching attributes afterwards is
-                # undefined per Pillow's docs.
-                width, height = image.size
-                image_format = image.format
-                image.verify()
-
-            if image_format != expected_format:
-                raise ValueError("Uploaded image type does not match its file extension")
-            if width <= 0 or height <= 0:
-                raise ValueError("Uploaded image dimensions must be positive")
-        except DecompressionBombError as exc:
-            # A small file can declare enormous dimensions. Pillow refuses to
-            # decode it, and DecompressionBombError is NOT an OSError, so
-            # without this branch it escapes as an unhandled 500 instead of a
-            # 400. Regression covered by test_storage.py.
-            path.unlink(missing_ok=True)
-            raise ValueError("Uploaded image dimensions exceed the decode limit") from exc
-        except (UnidentifiedImageError, OSError, SyntaxError) as exc:
-            path.unlink(missing_ok=True)
-            raise ValueError("Uploaded image could not be decoded as JPEG/PNG") from exc
-        except ValueError:
-            path.unlink(missing_ok=True)
-            raise
+        return read_and_validate_upload(upload, ext, self.settings.max_upload_bytes, dest)
 
     def store_training_sample(
         self,
@@ -201,3 +143,17 @@ class FileStorage:
         zip_path = export_dir / f"training_export_{uuid.uuid4().hex}.zip"
         shutil.make_archive(str(zip_path.with_suffix("")), "zip", str(self.settings.dataset_dir))
         return zip_path
+
+    def materialize_dataset(self) -> Path:
+        # Already a local YOLO-shaped directory (dataset.yaml + images/train +
+        # labels/train) — nothing to assemble.
+        return self.settings.dataset_dir
+
+    def publish_model(self, local_tflite_path: Path, *, version: str) -> ModelInfo:
+        self.settings.models_dir.mkdir(parents=True, exist_ok=True)
+        dest = self.settings.models_dir / f"{version}.tflite"
+        shutil.copy2(local_tflite_path, dest)
+        sha256 = hashlib.sha256(dest.read_bytes()).hexdigest()
+        with self._model_info_lock:
+            self._model_info_cache = (dest, dest.stat().st_mtime, dest.stat().st_size, sha256)
+        return {"path": dest, "version": version, "sha256": sha256}

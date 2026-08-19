@@ -45,11 +45,17 @@ def run_storage_backend_contract(
 ) -> None:
     """Behavioural contract every StorageBackend implementation must satisfy."""
     storage.initialize()
-    (settings.labels_dir / "sample.txt").write_text(VALID_LABEL)
+    storage.store_training_sample(
+        sample_id="contract-sample",
+        label=VALID_LABEL,
+        full_image=StubUpload("a.jpg", image_bytes("JPEG")),
+        crop_image=StubUpload("b.jpg", image_bytes("JPEG")),
+    )
 
     counts = storage.dataset_counts()
+    test_case.assertEqual(counts["full_images"], 1)
+    test_case.assertEqual(counts["all_images"], 2)
     test_case.assertEqual(counts["labels"], 1)
-    test_case.assertEqual(counts["all_images"], 0)
     test_case.assertIsNone(storage.latest_model_info())
 
     first = storage.build_training_export()
@@ -61,12 +67,35 @@ def run_storage_backend_contract(
     test_case.assertTrue(first.exists())
     test_case.assertTrue(second.exists())
 
-    # Stats round-trip through whatever the backing store is.
+    # Stats round-trip through whatever the backing store is (save_stats()
+    # overwrites unconditionally, independent of the sample stored above).
     storage.save_stats({"total_samples": 7, "last_upload": "2026-01-01T00:00:00"})
     test_case.assertEqual(7, storage.load_stats()["total_samples"])
 
     storage.record_upload()
     test_case.assertEqual(8, storage.load_stats()["total_samples"])
+
+    # materialize_dataset() / publish_model() round trip.
+    dataset_dir = storage.materialize_dataset()
+    test_case.assertTrue((dataset_dir / "dataset.yaml").exists())
+    materialized_images = list((dataset_dir / "images" / "train").glob("contract-sample_full.*"))
+    test_case.assertEqual(1, len(materialized_images))
+
+    with tempfile.NamedTemporaryFile(suffix=".tflite", delete=False) as tmp_model:
+        tmp_model.write(b"fake-tflite-bytes")
+        tmp_model_path = Path(tmp_model.name)
+    try:
+        published = storage.publish_model(tmp_model_path, version="contract_v1")
+    finally:
+        tmp_model_path.unlink(missing_ok=True)
+
+    test_case.assertEqual("contract_v1", published["version"])
+    latest = storage.latest_model_info()
+    test_case.assertIsNotNone(latest)
+    assert latest is not None
+    test_case.assertEqual("contract_v1", latest["version"])
+    test_case.assertEqual(published["sha256"], latest["sha256"])
+    test_case.assertTrue(latest["path"].exists())
 
 
 class FileStorageContractTests(unittest.TestCase):

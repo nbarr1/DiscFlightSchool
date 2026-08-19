@@ -1,0 +1,22 @@
+name: Compose Integration
+
+# The image built here bundles ultralytics/torch (~2GB), and this boots the
+# full 6-container stack, so it's push-to-main + manual only, not every PR —
+# same reasoning as build.yml's Flutter APK build. PRs stay covered by the
+# fast server-tests.yml jobs.
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  compose-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run compose integration test
+        run: ./scripts/test_compose_integration.sh
