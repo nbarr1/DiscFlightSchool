@@ -12,7 +12,7 @@ The Flutter app is the end-user application. Its bootstrap lives in `disc_golf_a
 
 Implemented client areas currently present in source:
 
-- Flight Tracker screens, video playback, overlays, and disc-detection services. Automated detection is track-by-detection: full-frame YOLO discovery locates the disc, then windowed tracking with velocity prediction follows it frame-to-frame (falling back to discovery after a short occlusion streak) instead of re-scanning the whole frame every time. Frames are extracted in a single batched FFmpeg pass rather than one call per frame. A user-seeded keyframe path (`GeometricSplineTracker`/`HybridDiscTracker` behind the `DiscTracker` interface) remains available as a manual/hybrid alternative when automated tracking needs a correction.
+- Flight Tracker screens, video playback, overlays, and disc-detection services. Automated detection is track-by-detection: full-frame YOLO discovery locates the disc, then windowed tracking with velocity prediction follows it frame-to-frame (falling back to discovery after a short occlusion streak) instead of re-scanning the whole frame every time. Frames are extracted in a single batched FFmpeg pass rather than one call per frame. A user-seeded keyframe path (`GeometricSplineTracker`/`HybridDiscTracker` behind the `DiscTracker` interface) remains available as a manual/hybrid alternative when automated tracking needs a correction. After trimming, the user picks "Auto-detect" or "Mark manually": auto runs `AutoDiscTracker` over the trimmed clip with no taps, showing determinate progress with a cancel, then reports a low-confidence warning (coverage, interpolated share, and mean confidence relative to the user's own sensitivity setting — see `detection_quality.dart`) and offers to convert the detected path into editable keyframes for hand-correction. Every tracker works in the trimmed frame space: frame 0 is the trim start, not the start of the file.
 - Form Coach screens for video trimming, posture analysis, phase selection/comparison, pose correction, and session history.
 - Disc Roulette screens, scoring models, scoring service, and roulette history service.
 - Knowledge Base screens and local JSON-backed content models/services.
@@ -32,6 +32,8 @@ Important client facts:
 - Release builds require a complete `key.properties` signing config; unsigned local testing should use debug builds.
 - Bundled runtime assets include JSON data files, `assets/models/disc_detector.tflite`, an SVG basket image, and Flutter material assets.
 - The bundled/retrained detector's TFLite output format needs no client-side parsing changes between YOLOv8 and YOLO11: both export the same anchor-free `Detect` head shape (verified against the `ultralytics` source, not assumed). `DiscDetectionService` reads its input tensor size from the loaded model at load time rather than assuming a fixed resolution.
+- **The bundled `disc_detector.tflite` is still the older YOLOv8n export at 320×320**, despite what earlier revisions of this file and commit `6586581` claimed. Read straight out of the flatbuffer: the graph's highest module index is `model.22` (YOLO11 puts its `Detect` head at `model.23`), input `images` is `[1,320,320,3]`, and output `Identity` is `[1,5,2100]` — 2100 being 40²+20²+10², the anchor grid for a 320 input. Only `server/training_server/training_job.py` was moved to `yolo11n.pt`; no retrained model was ever re-bundled. The client is ready for a YOLO11 export at 640 (`[1,5,8400]`) and validates the geometry at load time, but the asset swap itself is outstanding.
+- `DiscDetectionService` logs the loaded model's input and output shapes and warns when they don't match a single-class anchor-free `Detect` head — a non-multiple-of-32 input, an unexpected channel count, or an anchor count that disagrees with the declared input size. These are warnings, never failures: a model downloaded from the training server may legitimately ship at a different geometry, and refusing to load it would break detection outright instead of degrading.
 
 ### Training server (`server/`)
 
@@ -171,15 +173,26 @@ Without `key.properties`, release builds now fail fast; use `flutter build apk -
 
 ## Current next steps
 
-1. **TODO: verify the YOLO11 track-by-detection pipeline on a real device with a real
+1. **TODO: bundle the YOLO11n detector export.** `assets/models/disc_detector.tflite`
+   is still the YOLOv8n@320 model (see the client facts above). The client-side
+   work is done — the parser handles both heads, input size is read from the
+   tensor, and load-time validation warns on unexpected geometry — but the
+   retrained `.tflite` has to be dropped in and `server/models/` kept in sync.
+2. **TODO: verify the YOLO11 track-by-detection pipeline on a real device with a real
    throw video.** The detector upgrade (`yolo11n.pt`), the FFmpeg batch frame
    extraction, the GPU delegate, and the discovery/tracking/occlusion state
    machine are covered by `flutter analyze`/`flutter test` at the pure-function
    level only — none of that is exercised against a real video or a real TFLite
    interpreter yet. See `docs/testing.md` for the specific checklist.
-2. Keep docs synchronized with source whenever endpoints, assets, build settings, or runtime services change.
-3. Move disc detection off the UI isolate — see `docs/testing.md` for what is
-   still unverified and why.
+3. Keep docs synchronized with source whenever endpoints, assets, build settings, or runtime services change.
+4. **Move disc detection off the UI isolate.** This moves from desirable to
+   likely required at a 640 input: per-frame cost scales with input area, so a
+   640 model is roughly 4× the 320 export's inference, output marshalling, and
+   candidate scan. Deriving the frame budget from the trimmed span (a six-second
+   trim is ~61 frames, not the 300-frame default) and reading frames via
+   `getBytes` rather than per-pixel `getPixel` buy back a large part of that,
+   but measure on a device before deciding this can keep waiting. See
+   `docs/testing.md`.
 
 ## Running the compose stack
 

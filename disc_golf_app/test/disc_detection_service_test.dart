@@ -356,6 +356,75 @@ void main() {
     });
   });
 
+  group('buildExtractCommand', () {
+    String build({int startMs = 0, int? endMs, int maxFrames = 300}) {
+      return DiscDetectionService.buildExtractCommand(
+        videoPath: '/videos/throw.mp4',
+        outputPattern: '/tmp/out/frame_%04d.jpg',
+        fps: 10.0,
+        maxFrames: maxFrames,
+        startMs: startMs,
+        endMs: endMs,
+      );
+    }
+
+    test('omits seek arguments when nothing is trimmed', () {
+      final command = build();
+
+      expect(command, isNot(contains('-ss')));
+      expect(command, isNot(contains(' -t ')));
+    });
+
+    test('emits output seeking for a trimmed range', () {
+      final command = build(startMs: 1500, endMs: 5500);
+
+      // -ss must come after -i: input seeking can snap to a keyframe and
+      // shift every frame index relative to the trim start.
+      expect(command.indexOf('-ss'), greaterThan(command.indexOf('-i')));
+      expect(command, contains('-ss 1.500'));
+      // -t is a duration, not an end timestamp.
+      expect(command, contains('-t 4.000'));
+    });
+
+    test('omits the duration when there is no trim end', () {
+      final command = build(startMs: 1500);
+
+      expect(command, contains('-ss 1.500'));
+      expect(command, isNot(contains(' -t ')));
+    });
+
+    test('ignores an end that does not follow the start', () {
+      expect(build(startMs: 5000, endMs: 5000), isNot(contains(' -t ')));
+      expect(build(startMs: 5000, endMs: 1000), isNot(contains(' -t ')));
+    });
+
+    test('preserves the escaped comma in the scale filter', () {
+      // FFmpegKit tokenizes this string itself rather than handing it to a
+      // shell, so the backslash — not quoting — is what keeps the filtergraph
+      // parseable. Losing it silently breaks extraction.
+      expect(build(), contains(r'scale=min(640\,iw):-2'));
+      expect(build(), contains('fps=10.0'));
+    });
+
+    test('carries the frame cap and paths through', () {
+      final command = build(maxFrames: 61);
+
+      expect(command, contains('-frames:v 61'));
+      expect(command, contains('"/videos/throw.mp4"'));
+      expect(command, contains('"/tmp/out/frame_%04d.jpg"'));
+    });
+  });
+
+  group('expectedAnchors', () {
+    test('matches the anchor-free Detect head grid at each input size', () {
+      // 80²+40²+20² — the geometry of the YOLO11 export the app bundles.
+      expect(DiscDetectionService.expectedAnchors(640), 8400);
+      // 40²+20²+10² — the previous 320-input export.
+      expect(DiscDetectionService.expectedAnchors(320), 2100);
+      expect(DiscDetectionService.expectedAnchors(416), 3549);
+    });
+  });
+
   // Note: processVideo() itself is not unit-testable on the host — it needs
   // path_provider and the TFLite native library. Its re-entrancy guard and
   // lock release are covered by inspection plus the integration path; see
