@@ -77,7 +77,7 @@ class TrainingManager:
                     "detect",
                     "train",
                     f"data={self._settings.dataset_yaml.resolve()}",
-                    "model=yolov8n.pt",
+                    "model=yolo11n.pt",
                     f"epochs={self._settings.training_epochs}",
                     f"imgsz={self._settings.training_image_size}",
                     f"batch={self._settings.training_batch_size}",

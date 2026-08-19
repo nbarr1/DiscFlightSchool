@@ -54,8 +54,10 @@ void main() {
     });
 
     test('divides pixel-space coordinates by the input size', () {
-      // Values above 1 are assumed to be in 320x320 model input pixels.
-      expect(service.normalizeModelValueForTesting(160.0), closeTo(0.5, 1e-9));
+      // Values above 1 are assumed to be in model input pixels. No model is
+      // loaded in this test, so the input size is the pre-load default
+      // (640x640) — see _defaultInputSize in DiscDetectionService.
+      expect(service.normalizeModelValueForTesting(320.0), closeTo(0.5, 1e-9));
     });
 
     test('clamps into 0..1', () {
@@ -127,6 +129,39 @@ void main() {
       ];
       final best = service.parseBestDetectionForTesting(output, [1, 5, 1], 20, 10);
       expect(best!.timestamp, const Duration(milliseconds: 2000));
+    });
+  });
+
+  group('selectClosestCandidate', () {
+    test('picks the candidate nearest the predicted position over the '
+        'more confident one', () {
+      final near = detection(5, 0.51, 0.51, confidence: 0.3);
+      final far = detection(5, 0.9, 0.9, confidence: 0.95);
+
+      final chosen =
+          service.selectClosestCandidate([far, near], 0.5, 0.5);
+
+      expect(chosen, same(near),
+          reason: 'a distant high-confidence blob should lose to the one '
+              'consistent with the track');
+    });
+
+    test('breaks a close tie toward the more confident candidate', () {
+      final lessConfident = detection(5, 0.50, 0.50, confidence: 0.2);
+      final moreConfident = detection(5, 0.505, 0.505, confidence: 0.9);
+
+      final chosen = service.selectClosestCandidate(
+        [lessConfident, moreConfident],
+        0.5,
+        0.5,
+      );
+
+      expect(chosen, same(moreConfident));
+    });
+
+    test('returns the sole candidate unchanged', () {
+      final only = detection(5, 0.2, 0.8, confidence: 0.5);
+      expect(service.selectClosestCandidate([only], 0.9, 0.1), same(only));
     });
   });
 

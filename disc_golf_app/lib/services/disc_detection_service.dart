@@ -4,7 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
-import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -86,6 +87,44 @@ class FlightTrackingResult {
   List<Offset> getCompensatedTrail(int currentFrame) => getTrail(currentFrame);
 }
 
+/// Mutable lock-on state for the track-by-detection state machine: the
+/// disc's last confirmed position, its estimated per-frame velocity, and how
+/// long it's been coasting without a confirmed detection.
+class _DiscTrack {
+  double x;
+  double y;
+  double vx = 0.0;
+  double vy = 0.0;
+  int lastFrameIndex;
+  int occlusionStreak = 0;
+
+  _DiscTrack({required this.x, required this.y, required this.lastFrameIndex});
+
+  /// Linearly extrapolate the position [frameGap] frames ahead of the last
+  /// confirmed detection.
+  (double, double) predict(int frameGap) => (
+        (x + vx * frameGap).clamp(0.0, 1.0),
+        (y + vy * frameGap).clamp(0.0, 1.0),
+      );
+
+  /// Fold a newly confirmed detection into the track: updates position,
+  /// smooths the velocity estimate, and resets the occlusion counter.
+  void confirm(DiscDetection detection) {
+    final gap = detection.frameIndex - lastFrameIndex;
+    if (gap > 0) {
+      final newVx = (detection.x - x) / gap;
+      final newVy = (detection.y - y) / gap;
+      const smoothing = DiscDetectionService._velocitySmoothing;
+      vx = smoothing * newVx + (1 - smoothing) * vx;
+      vy = smoothing * newVy + (1 - smoothing) * vy;
+    }
+    x = detection.x;
+    y = detection.y;
+    lastFrameIndex = detection.frameIndex;
+    occlusionStreak = 0;
+  }
+}
+
 class DiscDetectionService extends ChangeNotifier {
   Interpreter? _interpreter;
   bool _isModelLoaded = false;
@@ -100,7 +139,14 @@ class DiscDetectionService extends ChangeNotifier {
   String get statusMessage => _statusMessage;
   FlightTrackingResult? get lastResult => _lastResult;
 
-  static const int _inputSize = 320;
+  /// Fallback input size used only until a model is loaded. The real value
+  /// is read from the interpreter's input tensor at load time (see
+  /// [_loadModelImpl]) — a retrained model is not guaranteed to ship at the
+  /// same geometry as the bundled default, and nothing here calls
+  /// `resizeInputTensor`, so preprocessing must match whatever the model
+  /// actually expects.
+  static const int _defaultInputSize = 640;
+  int _inputSize = _defaultInputSize;
   /// Default confidence threshold — applied when no user override is set.
   static const double defaultConfidenceThreshold = 0.1;
   static const String _prefsKey = 'disc_confidence_threshold';
@@ -111,16 +157,39 @@ class DiscDetectionService extends ChangeNotifier {
 
   /// Maximum normalized distance a detection can jump per frame-step
   /// during spatial coherence filtering (8% of frame dimension).
+  ///
+  /// This is also the single source of truth for how wide the tracking-mode
+  /// search window is (see [_searchWindowSizeFor]) — a window wider than
+  /// what this constant allows would accept detections that
+  /// [_filterSpatialCoherence] then discards downstream as an impossible
+  /// jump, silently undoing the tracker's work.
   static const double _maxJumpPerFrame = 0.08;
   /// Maximum consecutive frames to skip when building a coherent chain.
   static const int _maxChainGap = 5;
 
+  /// How much wider than the coherence filter's raw per-frame budget the
+  /// tracking search window is, to absorb prediction error on top of the
+  /// motion the velocity estimate already accounts for.
+  static const double _trackingWindowMargin = 1.5;
+  static const double _minTrackingWindowSize = 0.15;
+  static const double _maxTrackingWindowSize = 0.5;
+  /// Frames the tracker will coast on velocity alone (no confirmed
+  /// detection) before giving up the lock and reverting to full-frame
+  /// discovery. Matches [_maxChainGap] — no point tolerating a gap here that
+  /// the coherence filter won't bridge anyway.
+  static const int _maxOcclusionFrames = _maxChainGap;
+  /// Exponential smoothing factor applied to new velocity estimates, so a
+  /// single noisy detection doesn't yank the predicted search window off the
+  /// disc's real trajectory.
+  static const double _velocitySmoothing = 0.6;
+
   /// Reusable inference buffers.
   ///
-  /// A 320x320x3 input is 307,200 boxed doubles and a typical YOLOv8 output is
-  /// another ~42,000. Rebuilding both per frame allocated ~100M objects over a
-  /// 300-frame run and dominated the tracking cost. The shapes are constant
-  /// for a given model, so allocate once and overwrite in place.
+  /// A 640x640x3 input alone is over a million boxed doubles; rebuilding
+  /// both input and output buffers per frame dominated tracking cost over a
+  /// multi-hundred-frame run. The shapes are constant for a given model
+  /// (until it's swapped — see [_loadModelImpl]), so allocate once and
+  /// overwrite in place.
   List<List<List<List<double>>>>? _inputBuffer;
   List<List<List<double>>>? _outputBuffer;
   List<int>? _outputBufferShape;
@@ -198,19 +267,61 @@ class DiscDetectionService extends ChangeNotifier {
       // the old one only after the swap. This keeps _interpreter non-null
       // at every point a concurrent processVideo()/_detectDisc() call could
       // observe it, instead of nulling it out for the duration of the load.
-      final newInterpreter = Interpreter.fromFile(modelFile);
+      final options = InterpreterOptions();
+      _configureAccelerationDelegate(options);
+
+      Interpreter newInterpreter;
+      try {
+        newInterpreter = Interpreter.fromFile(modelFile, options: options);
+      } catch (e) {
+        // GPU delegate creation/binding can fail on unsupported hardware or
+        // emulators; fall back to plain CPU inference rather than losing
+        // detection entirely.
+        debugPrint('GPU-accelerated interpreter failed to load ($e); '
+            'retrying on CPU');
+        newInterpreter = Interpreter.fromFile(modelFile);
+      }
+
+      // The model's actual input geometry drives preprocessing, not an
+      // assumed constant — see the comment on [_defaultInputSize].
+      final inputShape = newInterpreter.getInputTensor(0).shape;
+      if (inputShape.length >= 3 && inputShape[1] > 0) {
+        _inputSize = inputShape[1];
+      } else {
+        debugPrint('Model input shape $inputShape has no usable fixed size; '
+            'keeping $_inputSize. Inference will throw if that mismatches '
+            'what the interpreter actually expects.');
+      }
+
       final oldInterpreter = _interpreter;
       _interpreter = newInterpreter;
       _isModelLoaded = true;
-      // A replacement model may have a different output shape, so the cached
-      // buffers are no longer valid.
+      // A replacement model may have a different input/output shape, so the
+      // cached buffers are no longer valid.
+      _inputBuffer = null;
       _outputBuffer = null;
       _outputBufferShape = null;
       oldInterpreter?.close();
-      debugPrint('Disc detection model loaded successfully');
+      debugPrint(
+          'Disc detection model loaded successfully (input=${_inputSize}x$_inputSize)');
     } catch (e) {
       debugPrint('Error loading disc detection model: $e');
       rethrow;
+    }
+  }
+
+  /// Adds the platform's GPU delegate to [options] for faster inference,
+  /// falling back silently to CPU-only options if delegate creation throws
+  /// (e.g. unsupported hardware, some emulators).
+  void _configureAccelerationDelegate(InterpreterOptions options) {
+    try {
+      if (Platform.isAndroid) {
+        options.addDelegate(GpuDelegateV2());
+      } else if (Platform.isIOS) {
+        options.useMetalDelegateForIOS = true;
+      }
+    } catch (e) {
+      debugPrint('GPU delegate setup failed, will run on CPU: $e');
     }
   }
 
@@ -274,10 +385,13 @@ class DiscDetectionService extends ChangeNotifier {
       _statusMessage = 'Detecting disc in ${frames.length} frames...';
       notifyListeners();
 
-      // Step 2: Run detection on each frame — collect ALL candidates per frame
+      // Step 2: Track-by-detection — full-frame discovery to find the disc,
+      // then windowed tracking that follows the established track instead of
+      // re-scanning the whole frame every time.
       final rawDetections = <DiscDetection>[];
       double firstImageW = 640;
       double firstImageH = 1138;
+      _DiscTrack? track;
 
       for (int i = 0; i < frames.length; i++) {
         final frame = frames[i];
@@ -299,9 +413,52 @@ class DiscDetectionService extends ChangeNotifier {
           firstImageH = image.height.toDouble();
         }
 
-        final detection = await _detectDisc(image, frame.index, fps);
-        if (detection != null) {
-          rawDetections.add(detection);
+        DiscDetection? chosen;
+        final currentTrack = track;
+
+        if (currentTrack == null) {
+          // Discovery mode: full-frame scan for the disc leaving the
+          // thrower's hand or in early flight.
+          chosen = await _detectDisc(image, frame.index, fps);
+        } else {
+          // Tracking mode: search only the region the track predicts the
+          // disc has moved to.
+          final gap = frame.index - currentTrack.lastFrameIndex;
+          final (predictedX, predictedY) = currentTrack.predict(gap);
+          final candidates = await detectInWindow(
+            image,
+            frame.index,
+            fps,
+            centerX: predictedX,
+            centerY: predictedY,
+            regionSize: _searchWindowSizeFor(gap),
+          );
+
+          if (candidates.isEmpty) {
+            currentTrack.occlusionStreak++;
+            if (currentTrack.occlusionStreak > _maxOcclusionFrames) {
+              // Lost the lock — fall back to full-frame discovery on the
+              // next frame rather than keep coasting indefinitely.
+              track = null;
+            }
+          } else {
+            chosen = candidates.length == 1
+                ? candidates.first
+                : selectClosestCandidate(candidates, predictedX, predictedY);
+          }
+        }
+
+        if (chosen != null) {
+          rawDetections.add(chosen);
+          if (track == null) {
+            track = _DiscTrack(
+              x: chosen.x,
+              y: chosen.y,
+              lastFrameIndex: chosen.frameIndex,
+            );
+          } else {
+            track.confirm(chosen);
+          }
         }
 
         // Yield after every frame, not every tenth. Inference is synchronous
@@ -377,84 +534,78 @@ class DiscDetectionService extends ChangeNotifier {
     }
   }
 
-  /// Extract frames from video at the given FPS.
+  /// Extract frames from video at the given FPS in a single FFmpeg pass,
+  /// scaled down to a 640px-wide working resolution as they're extracted.
   ///
-  /// Returns only the frames that were successfully extracted, each tagged
-  /// with its video frame index — the list can be sparse.
+  /// Replaces what used to be [maxFrames] separate `video_thumbnail` calls
+  /// (one native decode-and-seek per frame) with one `fps` + `scale` filter
+  /// pass over the whole clip — the dominant cost in extraction was that
+  /// per-frame process/decode overhead, not the decoding itself.
+  ///
+  /// Returns only the frames that made it to disk, each tagged with its
+  /// sequence index — the list can be sparse if ffmpeg exits partway through
+  /// (in which case whatever frames it did write are still salvaged and
+  /// returned, matching the old loop's tolerance for a truncated run).
   Future<List<ExtractedFrame>> _extractFrames(
     String videoPath,
     String outputDir, {
     required double fps,
     required int maxFrames,
   }) async {
-    final frames = <ExtractedFrame>[];
-    final intervalMs = (1000 / fps).round();
+    final outputPattern = '$outputDir/frame_%04d.jpg';
 
-    // A run of consecutive failures means we are past the end of the video (or
-    // the file is unreadable); a single failure is usually a transient decoder
-    // hiccup and should not silently truncate the tracked flight path.
-    const maxConsecutiveFailures = 3;
-    var consecutiveFailures = 0;
-    var transientFailures = 0;
+    // scale=min(640\,iw):-2 matches the old maxWidth:640 behavior — downscale
+    // to a 640px-wide working resolution but never upscale a smaller source,
+    // and -2 keeps the resulting height even (required by some encoders).
+    // The comma is backslash-escaped per ffmpeg's own filtergraph syntax —
+    // not shell-quoted — because FFmpegKit tokenizes this string itself
+    // rather than handing it to a real shell; single/double quotes around
+    // the expression would be passed through literally and fail to parse.
+    final session = await FFmpegKit.execute(
+      '-y -i "$videoPath" '
+      '-vf "fps=$fps,scale=min(640\\,iw):-2" '
+      '-frames:v $maxFrames -q:v 3 "$outputPattern"',
+    );
 
-    for (int i = 0; i < maxFrames; i++) {
-      final timeMs = i * intervalMs;
-      var extracted = false;
+    final returnCode = await session.getReturnCode();
 
-      try {
-        final path = await VideoThumbnail.thumbnailFile(
-          video: videoPath,
-          thumbnailPath: outputDir,
-          imageFormat: ImageFormat.JPEG,
-          maxWidth: 640,
-          timeMs: timeMs,
-          quality: 85,
-        );
-
-        if (path != null) {
-          final newPath =
-              '$outputDir/frame_${i.toString().padLeft(4, '0')}.jpg';
-          final file = File(path);
-          if (await file.exists()) {
-            await file.rename(newPath);
-            frames.add(ExtractedFrame(index: i, path: newPath));
-            extracted = true;
-          }
-        }
-      } catch (e) {
-        debugPrint('Frame extraction failed at ${timeMs}ms (frame $i): $e');
-      }
-
-      if (extracted) {
-        consecutiveFailures = 0;
-      } else {
-        consecutiveFailures++;
-        transientFailures++;
-        if (consecutiveFailures >= maxConsecutiveFailures) {
-          // Trim the trailing failures from the count we report — those are
-          // the end-of-video probes, not real gaps.
-          transientFailures -= consecutiveFailures;
-          break;
-        }
-      }
-
-      await Future.delayed(Duration.zero);
+    final dir = Directory(outputDir);
+    var files = <File>[];
+    if (await dir.exists()) {
+      files = await dir
+          .list()
+          .where((e) => e is File && e.path.toLowerCase().endsWith('.jpg'))
+          .cast<File>()
+          .toList();
+      files.sort((a, b) => a.path.compareTo(b.path));
     }
 
-    if (transientFailures > 0) {
-      debugPrint('Frame extraction: skipped $transientFailures frame(s) mid-'
-          'video; extracted ${frames.length}. Tracking may have gaps.');
+    if (!ReturnCode.isSuccess(returnCode)) {
+      final logs = await session.getAllLogsAsString();
+      if (files.isEmpty) {
+        debugPrint('FFmpeg frame extraction failed with no output: $logs');
+        return const [];
+      }
+      debugPrint('FFmpeg frame extraction ended early '
+          '(${files.length} frame(s) salvaged): $logs');
     }
 
-    return frames;
+    // ffmpeg's %04d sequence has no ability to skip a busted frame, so it's
+    // contiguous by construction — list position doubles as the frame index.
+    return [
+      for (int i = 0; i < files.length; i++)
+        ExtractedFrame(index: i, path: files[i].path),
+    ];
   }
 
-  /// Run YOLOv8 inference on a single frame.
-  Future<DiscDetection?> _detectDisc(
+  /// Run inference on [image] as-is (already cropped to whatever region the
+  /// caller wants examined) and return the raw model output, or null if no
+  /// model is loaded. Shared by full-frame discovery and windowed tracking
+  /// so both go through identical preprocessing and buffer reuse.
+  ({List<List<List<double>>> output, List<int> shape})? _runInference(
     img.Image image,
     int frameIndex,
-    double fps,
-  ) async {
+  ) {
     if (_interpreter == null) return null;
 
     final inputImage = _preprocessImage(image);
@@ -472,15 +623,118 @@ class DiscDetectionService extends ChangeNotifier {
       debugPrint('TFLite output shape: $outputShape, type: $outputType');
     }
 
-    return _parseBestDetection(
-      outputBuffer,
-      outputShape,
-      frameIndex,
-      fps,
-    );
+    return (output: outputBuffer, shape: outputShape);
   }
 
-  /// Preprocess image for YOLOv8: resize to 320x320, normalize to 0-1, NHWC.
+  /// Run YOLO inference on a full frame.
+  Future<DiscDetection?> _detectDisc(
+    img.Image image,
+    int frameIndex,
+    double fps,
+  ) async {
+    final result = _runInference(image, frameIndex);
+    if (result == null) return null;
+    return _parseBestDetection(result.output, result.shape, frameIndex, fps);
+  }
+
+  /// Run YOLO inference restricted to a square window of [image] centered at
+  /// normalized ([centerX], [centerY]) with side length [regionSize]
+  /// (normalized to the image's shorter dimension). Returns every candidate
+  /// above the confidence threshold, remapped back to full-frame normalized
+  /// coordinates — unlike [_detectDisc], which only surfaces the single best
+  /// one. Used by tracking mode, where the caller needs to pick the
+  /// candidate consistent with the established track rather than assuming
+  /// the top-confidence one is the disc.
+  ///
+  /// The crop is square in source pixels (not squashed independently on each
+  /// axis) so a window clamped against a frame edge doesn't get a different
+  /// aspect ratio than one in the middle of the frame — that would make the
+  /// model see a distorted disc shape inconsistently frame-to-frame.
+  Future<List<DiscDetection>> detectInWindow(
+    img.Image image,
+    int frameIndex,
+    double fps, {
+    required double centerX,
+    required double centerY,
+    required double regionSize,
+    int maxCandidates = 5,
+  }) async {
+    if (!_isModelLoaded) await loadModel();
+    if (_interpreter == null) return const [];
+
+    final minDim = min(image.width, image.height);
+    final side = (regionSize * minDim).round().clamp(20, minDim);
+
+    var xMin = (centerX * image.width - side / 2).round();
+    var yMin = (centerY * image.height - side / 2).round();
+    xMin = xMin.clamp(0, image.width - side);
+    yMin = yMin.clamp(0, image.height - side);
+
+    final crop = img.copyCrop(image, x: xMin, y: yMin, width: side, height: side);
+    final result = _runInference(crop, frameIndex);
+    if (result == null) return const [];
+
+    final candidates = _parseCandidateDetections(
+      result.output,
+      result.shape,
+      frameIndex,
+      fps,
+      maxCandidates: maxCandidates,
+    );
+
+    return [
+      for (final d in candidates)
+        DiscDetection(
+          frameIndex: d.frameIndex,
+          x: ((xMin + d.x * side) / image.width).clamp(0.0, 1.0),
+          y: ((yMin + d.y * side) / image.height).clamp(0.0, 1.0),
+          width: d.width * side / image.width,
+          height: d.height * side / image.height,
+          confidence: d.confidence,
+          timestamp: d.timestamp,
+        ),
+    ];
+  }
+
+  /// Picks the candidate whose position best matches ([predictedX],
+  /// [predictedY]) — the track's last known position plus motion prediction
+  /// — instead of blindly taking the highest-confidence or largest
+  /// detection. A small confidence term only breaks close ties; motion
+  /// consistency dominates, since a distant high-confidence blob is more
+  /// likely clutter (a hand, a second disc, a shadow) than the tracked disc
+  /// suddenly teleporting.
+  DiscDetection selectClosestCandidate(
+    List<DiscDetection> candidates,
+    double predictedX,
+    double predictedY,
+  ) {
+    var best = candidates.first;
+    var bestScore = double.infinity;
+    for (final c in candidates) {
+      final dx = c.x - predictedX;
+      final dy = c.y - predictedY;
+      final score = sqrt(dx * dx + dy * dy) - c.confidence * 0.02;
+      if (score < bestScore) {
+        bestScore = score;
+        best = c;
+      }
+    }
+    return best;
+  }
+
+  /// Search-window side length, normalized to the frame's shorter
+  /// dimension, for a track that hasn't been confirmed in [frameGap] frames.
+  /// Deliberately tied to [_maxJumpPerFrame] rather than
+  /// an independent constant: a window wider than that budget would accept
+  /// detections [_filterSpatialCoherence] later throws away as an
+  /// impossible jump, so the two must move together.
+  double _searchWindowSizeFor(int frameGap) {
+    final gap = frameGap.clamp(1, _maxOcclusionFrames + 1);
+    final size = _maxJumpPerFrame * gap * 2 * _trackingWindowMargin;
+    return size.clamp(_minTrackingWindowSize, _maxTrackingWindowSize);
+  }
+
+  /// Preprocess image for YOLO: resize to the model's input size, normalize to 0-1, NHWC.
   ///
   /// Writes into a buffer that is allocated once and reused for every frame —
   /// the returned list is owned by this service and is overwritten by the next
@@ -542,7 +796,13 @@ class DiscDetectionService extends ChangeNotifier {
     return created;
   }
 
-  /// Parse YOLOv8 output to find the best disc detection.
+  /// Parse YOLO detection output to find the best disc detection.
+  ///
+  /// Format is identical for YOLOv8 and YOLO11 exports (both use the
+  /// ultralytics anchor-free `Detect` head): `[1, 4+nc, N]` transposed or
+  /// `[1, N, 4+nc]` standard, coordinates normalized 0-1 by the TFLite
+  /// export. Verified against the ultralytics head implementation — no
+  /// version branching exists there — rather than assumed.
   DiscDetection? _parseBestDetection(
     List<List<List<double>>> output,
     List<int> shape,
@@ -612,6 +872,71 @@ class DiscDetectionService extends ChangeNotifier {
     }
 
     return bestDetection;
+  }
+
+  /// Parse YOLO output into every candidate above the confidence threshold,
+  /// sorted highest-confidence first and capped to [maxCandidates].
+  ///
+  /// Deliberately a separate implementation from [_parseBestDetection]
+  /// rather than that method built on top of this one: [_parseBestDetection]
+  /// is covered by tests pinned to its exact tie-breaking behavior (strict
+  /// `>` comparison against a running best, so the first of equal-confidence
+  /// candidates wins), and routing it through a sort here would depend on
+  /// sort-stability guarantees that aren't worth risking for the sake of
+  /// avoiding a few duplicated lines.
+  List<DiscDetection> _parseCandidateDetections(
+    List<List<List<double>>> output,
+    List<int> shape,
+    int frameIndex,
+    double fps, {
+    required int maxCandidates,
+  }) {
+    final dim1 = shape[1];
+    final dim2 = shape[2];
+
+    final candidates = <DiscDetection>[];
+    final timestamp = Duration(milliseconds: (frameIndex * 1000 / fps).round());
+
+    if (dim1 == 5 || dim1 == 6) {
+      final numDetections = dim2;
+      for (int i = 0; i < numDetections; i++) {
+        final conf = dim1 == 5
+            ? output[0][4][i]
+            : output[0][4][i] * output[0][5][i];
+        if (conf <= _confidenceThreshold) continue;
+        candidates.add(DiscDetection(
+          frameIndex: frameIndex,
+          x: _normalizeModelValue(output[0][0][i]),
+          y: _normalizeModelValue(output[0][1][i]),
+          width: _normalizeModelValue(output[0][2][i]),
+          height: _normalizeModelValue(output[0][3][i]),
+          confidence: conf,
+          timestamp: timestamp,
+        ));
+      }
+    } else {
+      final numDetections = dim1;
+      for (int i = 0; i < numDetections; i++) {
+        final conf = dim2 >= 6
+            ? output[0][i][4] * output[0][i][5]
+            : output[0][i][4];
+        if (conf <= _confidenceThreshold) continue;
+        candidates.add(DiscDetection(
+          frameIndex: frameIndex,
+          x: _normalizeModelValue(output[0][i][0]),
+          y: _normalizeModelValue(output[0][i][1]),
+          width: _normalizeModelValue(output[0][i][2]),
+          height: _normalizeModelValue(output[0][i][3]),
+          confidence: conf,
+          timestamp: timestamp,
+        ));
+      }
+    }
+
+    candidates.sort((a, b) => b.confidence.compareTo(a.confidence));
+    return candidates.length > maxCandidates
+        ? candidates.sublist(0, maxCandidates)
+        : candidates;
   }
 
   double _normalizeModelValue(double value) {

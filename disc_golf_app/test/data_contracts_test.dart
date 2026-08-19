@@ -89,10 +89,12 @@ void main() {
   test('DiscDetectionService parser normalizes pixel-space model output', () {
     final service = DiscDetectionService();
 
+    // Pixel-space coordinates in the model's 640x640 input (the pre-load
+    // default in DiscDetectionService — this test never loads a model).
     final detection = service.parseBestDetectionForTesting(
       [
         [
-          [160.0, 96.0, 64.0, 32.0, 0.9],
+          [320.0, 192.0, 128.0, 64.0, 0.9],
         ],
       ],
       [1, 1, 5],

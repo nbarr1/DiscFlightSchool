@@ -220,18 +220,32 @@ class HybridDetectionService extends ChangeNotifier {
                 }
               }
 
-              // YOLO detection in search window
+              // YOLO detection in search window — shares
+              // DiscDetectionService's windowed-detection logic (same
+              // square, edge-safe crop and remap) so a manual hybrid
+              // correction sees the same view of the disc the automated
+              // tracker would, and can re-anchor the lock at this frame if
+              // automated tracking had lost it.
               if (_detector.isModelLoaded) {
-                final crop = img.copyCrop(image,
-                    x: wxMin, y: wyMin, width: cropW, height: cropH);
-                final yoloDet =
-                    await _detector.detectInImage(crop, frame, fps);
-                if (yoloDet != null) {
-                  // Remap from crop coords to normalized frame coords
-                  yoloResult = Offset(
-                    (wxMin + yoloDet.x * cropW) / image.width,
-                    (wyMin + yoloDet.y * cropH) / image.height,
-                  );
+                final candidates = await _detector.detectInWindow(
+                  image,
+                  frame,
+                  fps,
+                  centerX: splinePos.dx,
+                  centerY: splinePos.dy,
+                  regionSize: windowFrac * 2,
+                );
+                if (candidates.isNotEmpty) {
+                  // The spline prediction — anchored on the user's seed
+                  // keyframes — is the track here: closest to it wins, not
+                  // highest confidence, so a stray high-confidence blob
+                  // elsewhere in the window can't hijack the path the user
+                  // is manually re-anchoring.
+                  final best = candidates.length == 1
+                      ? candidates.first
+                      : _detector.selectClosestCandidate(
+                          candidates, splinePos.dx, splinePos.dy);
+                  yoloResult = Offset(best.x, best.y);
                 }
               }
 
