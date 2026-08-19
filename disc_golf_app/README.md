@@ -1,18 +1,20 @@
 # Disc Flight School Flutter App
 
-This directory contains the Flutter client for DiscFlightSchool. This README reflects the current source tree as audited on 2026-05-10.
+This directory contains the Flutter client for DiscFlightSchool. This README reflects the current source tree as audited on 2026-08-19.
 
 ## What is currently implemented
 
 - App bootstrap in `lib/main.dart` with Provider-registered services and onboarding/home startup routing.
 - Home navigation to Flight Tracker, Form Coach, Disc Roulette, Knowledge Base, Training Settings, and Flight Path Gallery.
-- Flight Tracker screens and services for bundled/downloaded TFLite detection, manual keyframe-assisted tracking, overlays, video playback, and saved flight data.
+- Flight Tracker screens and services for bundled/downloaded TFLite (YOLO11) detection, overlays, video playback, and saved flight data. Automated detection is track-by-detection (full-frame discovery, then windowed tracking with velocity prediction); a user-seeded keyframe/spline/hybrid path remains available as a manual alternative.
 - Form Coach screens and services for video selection/trimming, ML Kit pose analysis, phase comparison, pose correction, feedback, and local form-history persistence.
 - Disc Roulette models, random challenge generation, scored rounds, scorecards, and local history persistence.
 - Knowledge Base models/screens/services using bundled JSON assets, with optional API-key-backed AI search behavior in the UI.
 - Training-data collection and upload support through `TrainingDataService`, with opt-in local sample collection and secure storage for the private training API key.
 - Detector model update checks/downloads from the configured server, including SHA-256 verification before replacing the local model file.
-- Repository interface definitions under `lib/data/repositories/`; these are migration boundaries and not complete concrete adapters.
+- A privacy policy (`lib/legal/privacy_policy.dart`, `lib/screens/settings/privacy_policy_screen.dart`), linked from Training Settings.
+
+There is no repository/persistence abstraction layer — services own their storage directly (`SharedPreferences`, secure storage, or the app documents directory).
 
 ## Key project facts
 
@@ -23,7 +25,7 @@ This directory contains the Flutter client for DiscFlightSchool. This README ref
 - Android compile SDK: `36`.
 - Android NDK: `27.0.12077973`.
 - Bundled model asset: `assets/models/disc_detector.tflite`.
-- Bundled data assets: `assets/data/output_coordinates.json`, `assets/data/analysis_results.json`, `assets/data/pro_baseline_db.json`, and `assets/data/knowledge_base.json`.
+- Bundled data assets: `assets/data/pro_baseline_db.json` and `assets/data/knowledge_base.json`.
 
 ## Setup
 
@@ -89,7 +91,11 @@ For a release APK, create `android/key.properties` with `keyAlias`, `keyPassword
 
 ## Current limitations and next steps
 
-- Repository interfaces are present, but existing services still own most persistence logic directly.
-- Python files under `python/` are prototype helper/server code; the Flutter app does not embed Python directly.
+- **TODO: verify the track-by-detection pipeline against a real throw video on a
+  real device.** `flutter analyze`/`flutter test` cover the pure-function logic
+  (candidate selection, coherence filtering, smoothing) but not the FFmpeg
+  extraction command, the GPU delegate, or the discovery/tracking/occlusion
+  state machine end to end. See `../docs/testing.md`.
+- There is no repository/persistence abstraction layer; each service owns its
+  own storage directly. Introducing one is not currently planned.
 - Android APK generation is not yet represented as a committed CI artifact.
-- Add concrete repository adapters and migration tests before removing legacy SharedPreferences/JSON persistence paths.

@@ -56,8 +56,9 @@ or native library. The following are **not** covered and still need a device or
 emulator:
 
 - `DiscDetectionService.processVideo()` end to end — needs `path_provider`,
-  `video_thumbnail`, and the TFLite native library. Its re-entrancy guard,
-  lock release, and temp-directory cleanup are covered by inspection only.
+  `ffmpeg_kit_flutter_new`, and the TFLite native library (including the GPU
+  delegate path). Its re-entrancy guard, lock release, and temp-directory
+  cleanup are covered by inspection only.
 - `HybridDetectionService.detect()` end to end — same reasons.
 - `PostureAnalysisService.analyzeForm()` — needs ML Kit pose detection.
 - Secure-storage reads and writes. In unit tests
@@ -65,17 +66,37 @@ emulator:
   catch; the tests therefore exercise the in-memory key path, not persistence.
 - Model download and upload against a real server.
 
-### Known unverified change
+### TODO: verify track-by-detection on a real video
 
-The disc-detection inference path was changed to reuse its input and output
-buffers across frames instead of reallocating ~350k boxed doubles per frame.
-This is a large allocation win and was reviewed by inspection, but it has not
-been run against the real TFLite interpreter in this environment.
+`DiscDetectionService` was rewritten around a YOLO11 model and a
+track-by-detection state machine (full-frame discovery → windowed tracking
+with velocity prediction → fall back to discovery after a short occlusion
+streak — see `detectInWindow`, `_DiscTrack`, and the loop in `processVideo`),
+plus a single-pass FFmpeg frame extraction and an optional GPU delegate.
+`flutter analyze` and `flutter test` are clean and cover every pure function
+in isolation (candidate selection, coherence filtering, smoothing,
+interpolation), but **nothing here exercises the state machine against real
+frames, the FFmpeg extraction command, or the GPU delegate — all of that
+needs a device and a real throw video.**
 
-**Before release, run a tracking pass on a device and confirm:** detections
-still appear, the trajectory overlay matches the previous build on the same
-clip, and a second `processVideo()` call after a model reload still produces
-output (the output buffer is invalidated on reload — that path is untested).
+**Before release, run a full tracking pass on a device and confirm:**
+- The FFmpeg extraction command (`fps` + `scale` filter, single pass) actually
+  produces the expected frame sequence — the escaped-comma filter syntax
+  (`scale=min(640\,iw):-2`) was verified by inspection against FFmpegKit's
+  tokenizer, not by running it.
+- Discovery mode finds the disc leaving the hand/early flight, tracking mode
+  follows it through a full flight without losing the lock, and a lock lost to
+  occlusion (e.g. the disc crossing behind the thrower) is reacquired via
+  discovery rather than tracking a false candidate.
+- The resulting trajectory overlay is at least as accurate as the previous
+  (YOLOv8, full-frame-every-frame, 320-input) build on the same clip.
+- The GPU delegate actually engages on a real Android/iOS device (check the
+  `debugPrint` in `_loadModelImpl`) and inference doesn't silently fall back to
+  CPU-only in a way that regresses processing time.
+- A second `processVideo()` call after a model reload still produces output —
+  the input and output buffers are invalidated and reallocated to the new
+  model's geometry on reload, and that path is untested against the real
+  interpreter.
 
 Moving inference off the UI isolate entirely (via `IsolateInterpreter`) remains
 outstanding; it needs device testing to validate, so it was not attempted

@@ -1,6 +1,6 @@
 # Disc Flight School Training Server
 
-This directory contains the FastAPI training/model-distribution server for DiscFlightSchool. This README reflects the current source tree as audited on 2026-05-10.
+This directory contains the FastAPI training/model-distribution server for DiscFlightSchool. This README reflects the current source tree as audited on 2026-08-19.
 
 ## Runtime shape
 
@@ -8,7 +8,7 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 - `training_server/config.py` loads required and optional environment variables.
 - `training_server/app.py` defines the HTTP routes.
 - `training_server/storage.py` implements the current filesystem-backed storage adapter.
-- `training_server/training.py` starts YOLOv8 training/export in a background thread.
+- `training_server/training.py` starts YOLO11 (`yolo11n.pt`) training/export in a background thread.
 - `training_server/validation.py` validates sample IDs, YOLO labels, file extensions, signatures, and safe child paths.
 - `training_server/worker.py` is a placeholder worker that validates configuration and sleeps; it does not process queue jobs yet.
 
@@ -82,7 +82,7 @@ The compose stack starts the API, placeholder worker, PostgreSQL, Redis, MinIO, 
 
 - `server/dataset/dataset.yaml` is generated at runtime if absent.
 - Training requires at least 10 full-image samples on disk.
-- The training command uses `yolo detect train` with `yolov8n.pt`.
+- The training command uses `yolo detect train` with `yolo11n.pt`.
 - Export uses `yolo export format=tflite`.
 - The newest `.tflite` file under `server/models/` is served as the current detector model.
 

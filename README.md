@@ -2,7 +2,7 @@
 
 DiscFlightSchool is a monorepo containing a Flutter client and a FastAPI training/model-distribution server for disc golf analysis workflows.
 
-This README reflects an audit of the current repository state on 2026-08-04. It describes only files and behavior that exist in this repository.
+This README reflects an audit of the current repository state on 2026-08-19. It describes only files and behavior that exist in this repository.
 
 ## Current repository status
 
@@ -12,7 +12,7 @@ The Flutter app is the end-user application. Its bootstrap lives in `disc_golf_a
 
 Implemented client areas currently present in source:
 
-- Flight Tracker screens, manual tracking, video playback, overlays, and disc-detection services.
+- Flight Tracker screens, video playback, overlays, and disc-detection services. Automated detection is track-by-detection: full-frame YOLO discovery locates the disc, then windowed tracking with velocity prediction follows it frame-to-frame (falling back to discovery after a short occlusion streak) instead of re-scanning the whole frame every time. Frames are extracted in a single batched FFmpeg pass rather than one call per frame. A user-seeded keyframe path (`GeometricSplineTracker`/`HybridDiscTracker` behind the `DiscTracker` interface) remains available as a manual/hybrid alternative when automated tracking needs a correction.
 - Form Coach screens for video trimming, posture analysis, phase selection/comparison, pose correction, and session history.
 - Disc Roulette screens, scoring models, scoring service, and roulette history service.
 - Knowledge Base screens and local JSON-backed content models/services.
@@ -31,6 +31,7 @@ Important client facts:
 - Android NDK version requested by Gradle: `27.0.12077973`.
 - Release builds require a complete `key.properties` signing config; unsigned local testing should use debug builds.
 - Bundled runtime assets include JSON data files, `assets/models/disc_detector.tflite`, an SVG basket image, and Flutter material assets.
+- The bundled/retrained detector's TFLite output format needs no client-side parsing changes between YOLOv8 and YOLO11: both export the same anchor-free `Detect` head shape (verified against the `ultralytics` source, not assumed). `DiscDetectionService` reads its input tensor size from the loaded model at load time rather than assuming a fixed resolution.
 
 ### Training server (`server/`)
 
@@ -45,7 +46,7 @@ Implemented server endpoints:
 | `POST` | `/api/training/upload` | `X-App-Key` | Validates sample ID, YOLO class-0 label, positive dimensions, JPEG/PNG signatures, and stores full image, crop image, and label on disk. |
 | `GET` | `/api/training/stats` | No | Returns stored stats and on-disk image/label counts. |
 | `GET` | `/api/training/export` | `X-App-Key` | Builds and returns a ZIP of the dataset directory when data exists. |
-| `POST` | `/api/training/start` | `X-App-Key` | Starts a background YOLOv8 training/export thread if at least 10 full images exist. |
+| `POST` | `/api/training/start` | `X-App-Key` | Starts a background YOLO11 (`yolo11n.pt`) training/export thread if at least 10 full images exist. |
 | `GET` | `/api/training/status` | No | Returns in-memory training status. |
 | `GET` | `/api/model/version` | No | Returns latest `.tflite` model metadata or the no-model sentinel. |
 | `GET` | `/api/model/download` | No | Downloads the latest `.tflite` model or returns 404 when none exists. |
@@ -81,7 +82,8 @@ DiscFlightSchool/
 │   ├── assets/                 # JSON, images, studies, and bundled TFLite model
 │   ├── lib/                    # Dart app code
 │   └── test/                   # Flutter unit, widget, and data-contract tests
-├── docs/                       # Current audit/status/planning documents
+├── docs/                       # testing.md, dependency-audit-troubleshooting.md,
+│                               #   and the Google Play readiness report/plan
 ├── scripts/                    # Local test and validation scripts
 ├── server/                     # FastAPI training/model server
 │   ├── training_server/        # App factory, config, storage, training, validation, worker
@@ -93,10 +95,17 @@ DiscFlightSchool/
 
 There is no Python code in the Flutter app. A prototype Flask service formerly
 lived at `disc_golf_app/python/`, reachable through `python_bridge_service.dart`;
-neither was called by anything, and both have been removed. The Flight Analysis
-screen reads `assets/data/output_coordinates.json` and
-`assets/data/analysis_results.json` bundled with the app — it never called that
-service. Recover either from git history if you want to revive that path.
+neither was called by anything, and both have been removed. A further sweep on
+2026-08-19 removed a second layer of dead code that had accumulated behind
+that same never-routed Flight Analysis screen: `flight_analysis_screen.dart`,
+`flight_data_service.dart`, the `output_coordinates.json`/`analysis_results.json`
+assets it read, the unused `flight_data.dart`/`disc.dart` models, the unused
+`AppConstants`/`Helpers` utility classes, an unused `VideoControls` widget, a
+second (unused) `FlightPathPainter` in `flight_path_overlay.dart` shadowing the
+one actually in use, and two never-routed screens (`manual_tracking_screen.dart`,
+`game_session_screen.dart`). None of it was imported from anywhere reachable —
+`flutter analyze`/`flutter test` were re-run clean after removal. Recover any
+of it from git history if you want to revive that path.
 
 ## Local development
 
@@ -162,12 +171,18 @@ Without `key.properties`, release builds now fail fast; use `flutter build apk -
 
 ## Current next steps
 
-1. Keep docs synchronized with source whenever endpoints, assets, build settings, or runtime services change.
-2. Move disc detection off the UI isolate — see `docs/testing.md` for what is
+1. **TODO: verify the YOLO11 track-by-detection pipeline on a real device with a real
+   throw video.** The detector upgrade (`yolo11n.pt`), the FFmpeg batch frame
+   extraction, the GPU delegate, and the discovery/tracking/occlusion state
+   machine are covered by `flutter analyze`/`flutter test` at the pure-function
+   level only — none of that is exercised against a real video or a real TFLite
+   interpreter yet. See `docs/testing.md` for the specific checklist.
+2. Keep docs synchronized with source whenever endpoints, assets, build settings, or runtime services change.
+3. Move disc detection off the UI isolate — see `docs/testing.md` for what is
    still unverified and why.
-3. Add server durable adapters before claiming PostgreSQL, Redis, or MinIO persistence is implemented.
-4. Add integration tests for Docker Compose once durable adapters exist.
-5. Add Android build validation to CI if an APK artifact is required from every merge.
+4. Add server durable adapters before claiming PostgreSQL, Redis, or MinIO persistence is implemented.
+5. Add integration tests for Docker Compose once durable adapters exist.
+6. Add Android build validation to CI if an APK artifact is required from every merge.
 
 ## Running the compose stack
 

@@ -6,6 +6,14 @@
 
 This audit mirrors the format and scope of TennisScoring's `play_store_readiness_report.md` audit, adapted to this repo's actual stack (Flutter/Android Gradle client + separate FastAPI training server), based on what is present in the repository today.
 
+> **Status update (2026-08-19):** most of the agent-executable (🔧) items from the
+> companion remediation plan have since shipped — see the Action Checklist below
+> for what's now checked off. The findings and analysis in this document are
+> left as originally written for the audit trail; only the checklist reflects
+> current state. Still open: the public privacy-policy URL + Play Console Data
+> Safety form (owner/Console access), the signed release `.aab` pipeline
+> (needs a real keystore), and the `CAMERA` permission device verification.
+
 ---
 
 ## Executive Summary
@@ -30,8 +38,9 @@ The blocking gaps are almost entirely **compliance/store-listing gaps**, not cod
 * **Status:** ✅ **PASS (once built with a current Flutter SDK)**
 * **Analysis:**
   * `android/app/build.gradle.kts` does **not** hardcode `targetSdkVersion` — it delegates to `flutter.targetSdkVersion`, which Flutter's own Gradle plugin sets from the installed Flutter SDK/AGP version.
-  * CI (`.github/workflows/build.yml`) pins `flutter-version: '3.x'` (floating), `compileSdk = 36`, NDK `27.0.12077973`. A `flutter-version: '3.x'` floating pin means the effective `targetSdkVersion` at build time is whatever the latest Flutter 3.x stable resolves to — this is likely to satisfy Google's current API-34+ requirement, but it is **not independently verified in this repo** since no `flutter` toolchain is available in this analysis environment (the repo's own `docs/phase1-audit.md` notes the same limitation).
+  * CI (`.github/workflows/build.yml`) pins `flutter-version: '3.x'` (floating), `compileSdk = 36`, NDK `27.0.12077973`. A `flutter-version: '3.x'` floating pin means the effective `targetSdkVersion` at build time is whatever the latest Flutter 3.x stable resolves to — this is likely to satisfy Google's current API-34+ requirement, but it was **not independently verified in this repo** at audit time, since no `flutter` toolchain was available in that analysis environment.
   * **Recommendation:** Explicitly set `targetSdk = 35` in `android/app/build.gradle.kts` (matching what TennisScoring did in `1b87184 Target Android API level 35+ in mobile app build`) instead of relying on the Flutter plugin default, and pin the CI Flutter version instead of floating on `3.x` so a Flutter stable release doesn't silently change your target SDK out from under a release build.
+  * **Done (2026-08-19):** `targetSdk = 35` is now pinned explicitly in `build.gradle.kts`, and CI pins `flutter-version: '3.47.0'` in both `build.yml` and `flutter-tests.yml`.
 
 ---
 
@@ -119,19 +128,19 @@ The blocking gaps are almost entirely **compliance/store-listing gaps**, not cod
 ## Action Checklist (Pre-Submission Checklist)
 
 ### 🚨 Blockers (Must Fix Before Submission)
-- [ ] **Write and publish a Privacy Policy** covering camera/mic/photo use, opt-in training-image uploads, and the Anthropic pass-through; add the URL to Play Console → App Content.
-- [ ] **Add an in-app link** to the privacy policy (new Settings/About screen, or append to `training_settings_screen.dart`).
-- [ ] **Complete the Data Safety form** for Photos/Videos, Audio, and App Activity (search terms) per §6 above.
+- [x] **In-app Privacy Policy screen** — `lib/legal/privacy_policy.dart` + `lib/screens/settings/privacy_policy_screen.dart` cover camera/mic/photo use, opt-in training-image uploads, retention/deletion, and the Anthropic pass-through.
+- [ ] **Host the policy at a public URL** and add it to Play Console → App Content. No hosting decision has been made yet (owner decision — Console access, not a code change).
+- [ ] **Complete the Data Safety form** for Photos/Videos, Audio, and App Activity (search terms) per §6 above (Play Console UI task).
 
 ### ⚠️ High Priority
-- [ ] **Explicitly pin `targetSdk = 35`** in `android/app/build.gradle.kts` instead of relying on Flutter's floating default; pin the CI `flutter-version` to match.
-- [ ] **Add a signed release `.aab` CI pipeline** (`flutter build appbundle --release` + keystore secrets) — none exists today; `build.yml` only produces a debug APK.
-- [ ] **Set `android:allowBackup="false"`** (or explicit backup rules) given the app persists a server URL/opt-in flag via `SharedPreferences`.
-- [ ] **Verify the `CAMERA` permission's actual runtime-prompt behavior** against `image_picker`'s documented interaction — confirm the observed "Check Camera Permission In Settings" path is reachable and correct in a real build, and remove the permission if it turns out to be unnecessary.
-- [ ] **Document the `pubspec.yaml` build-number bump convention** for future releases (currently `1.0.0+1`, fine for the first submission only).
+- [x] **Explicitly pin `targetSdk = 35`** in `android/app/build.gradle.kts`; CI pins `flutter-version: '3.47.0'` in both workflows.
+- [ ] **Add a signed release `.aab` CI pipeline** (`flutter build appbundle --release` + keystore secrets) — none exists today; `build.yml` only produces a debug APK. Needs an owner-supplied keystore.
+- [x] **Set `android:allowBackup="false"`** — set in `AndroidManifest.xml`, alongside a `network_security_config.xml` reference.
+- [ ] **Verify the `CAMERA` permission's actual runtime-prompt behavior** against `image_picker`'s documented interaction — still declared, still needs a real device to verify/decide whether to remove.
+- [x] **Document the `pubspec.yaml` build-number bump convention** — in root `README.md`, "Bumping the app version for a release."
 
 ### 📋 Final Quality Assurance
-- [ ] Run `flutter analyze` and `flutter test` in an environment with the Flutter/Android toolchain installed (not available in this audit environment — `docs/phase1-audit.md` flags the same gap).
+- [x] Run `flutter analyze` and `flutter test` — done 2026-08-19 with Flutter 3.47.0: analyzer clean, all tests pass. (Still no Android SDK/NDK in this environment, so this covers Dart-level correctness only, not a Gradle build.)
 - [ ] Build and sign a real `.aab` via `flutter build appbundle --release`, then test it through Google Play **Internal Testing** on an API 34+ device.
 - [ ] Manually verify the Camera/Microphone/Photos runtime permission prompts show sensible rationale on first use.
 - [ ] Manually verify the opt-in toggle in Training Settings actually gates the upload flow end-to-end, and that "Clear all training data" behaves as the privacy policy will describe.
