@@ -159,6 +159,17 @@ class DiscDetectionService extends ChangeNotifier {
   /// actually expects.
   static const int _defaultInputSize = 640;
   int _inputSize = _defaultInputSize;
+
+  /// Whether the loaded model's input tensor is channel-first — NCHW,
+  /// `[1,3,H,W]` — rather than channel-last, NHWC, `[1,H,W,3]`.
+  ///
+  /// Ultralytics' current LiteRT/`format="litert"` export (the only export
+  /// path as of Ultralytics 8.4.83 — the standalone `tflite` format now
+  /// silently redirects to it) traces the PyTorch model directly and
+  /// produces NCHW. The legacy onnx2tf-based export this service originally
+  /// supported produced NHWC. Detected per-load in [detectInputLayout];
+  /// [_preprocessImage] writes pixels in whichever order this says.
+  bool _channelsFirst = false;
   /// Default confidence threshold — applied when no user override is set.
   static const double defaultConfidenceThreshold = 0.1;
   static const String _prefsKey = 'disc_confidence_threshold';
@@ -301,12 +312,14 @@ class DiscDetectionService extends ChangeNotifier {
       // The model's actual input geometry drives preprocessing, not an
       // assumed constant — see the comment on [_defaultInputSize].
       final inputShape = newInterpreter.getInputTensor(0).shape;
-      if (inputShape.length >= 3 && inputShape[1] > 0) {
-        _inputSize = inputShape[1];
-      } else {
-        debugPrint('Model input shape $inputShape has no usable fixed size; '
-            'keeping $_inputSize. Inference will throw if that mismatches '
-            'what the interpreter actually expects.');
+      final layout = detectInputLayout(inputShape);
+      _inputSize = layout.size;
+      _channelsFirst = layout.channelsFirst;
+      if (!layout.recognized) {
+        debugPrint('Model input shape $inputShape is neither NHWC ([1,H,W,3]) '
+            'nor NCHW ([1,3,H,W]); guessing size=$_inputSize, channel-last. '
+            'Inference will throw if that mismatches what the interpreter '
+            'actually expects.');
       }
 
       _validateModelGeometry(newInterpreter);
@@ -326,6 +339,32 @@ class DiscDetectionService extends ChangeNotifier {
       debugPrint('Error loading disc detection model: $e');
       rethrow;
     }
+  }
+
+  /// Determines the square input size and channel order from a loaded
+  /// model's input tensor shape.
+  ///
+  /// Distinguishes NHWC (`[1,H,W,3]`) from NCHW (`[1,3,H,W]`) by which
+  /// dimension after the batch dim equals 3 — the channel count. This is
+  /// unambiguous for any real detector: a stride-32 head needs an input of
+  /// at least 32px, so a dimension of exactly 3 can only ever be the
+  /// channel axis, never a spatial one. Falls back to the historical NHWC
+  /// assumption, with `recognized: false`, for a shape that isn't 4D or
+  /// doesn't match either pattern — [_validateModelGeometry]'s anchor-count
+  /// check will flag it downstream if the guess is wrong.
+  @visibleForTesting
+  static ({int size, bool channelsFirst, bool recognized}) detectInputLayout(
+      List<int> shape) {
+    if (shape.length == 4 && shape[3] == 3) {
+      return (size: shape[1], channelsFirst: false, recognized: true);
+    }
+    if (shape.length == 4 && shape[1] == 3) {
+      return (size: shape[2], channelsFirst: true, recognized: true);
+    }
+    if (shape.length >= 3 && shape[1] > 0) {
+      return (size: shape[1], channelsFirst: false, recognized: false);
+    }
+    return (size: _defaultInputSize, channelsFirst: false, recognized: false);
   }
 
   /// Anchor count an ultralytics anchor-free `Detect` head produces for a
@@ -354,7 +393,8 @@ class DiscDetectionService extends ChangeNotifier {
   void _validateModelGeometry(Interpreter interpreter) {
     final inputShape = interpreter.getInputTensor(0).shape;
     final outputShape = interpreter.getOutputTensor(0).shape;
-    debugPrint('Detector geometry: input $inputShape, output $outputShape');
+    debugPrint('Detector geometry: input $inputShape '
+        '(${_channelsFirst ? 'NCHW' : 'NHWC'}), output $outputShape');
 
     if (_inputSize % 32 != 0) {
       debugPrint('Detector warning: input size $_inputSize is not a multiple '
@@ -901,15 +941,36 @@ class DiscDetectionService extends ChangeNotifier {
     return size.clamp(_minTrackingWindowSize, _maxTrackingWindowSize);
   }
 
-  /// Preprocess image for YOLO: resize to the model's input size, normalize to 0-1, NHWC.
+  /// Preprocess image for YOLO: resize to the model's input size, normalize
+  /// to 0-1, and write in whichever tensor layout [_channelsFirst] says the
+  /// loaded model expects (see [detectInputLayout]).
   ///
   /// Writes into a buffer that is allocated once and reused for every frame —
   /// the returned list is owned by this service and is overwritten by the next
-  /// call, so callers must not retain it across frames.
+  /// call, so callers must not retain it across frames. Rebuilt whenever the
+  /// model (and therefore its shape) changes — see [_loadModelImpl], which
+  /// nulls [_inputBuffer] on every load, so a cached buffer never survives a
+  /// layout change.
   List<List<List<List<double>>>> _preprocessImage(img.Image image) {
     final resized =
         img.copyResize(image, width: _inputSize, height: _inputSize);
 
+    // Read the frame as one packed RGB byte array rather than calling
+    // getPixel() per pixel. getPixel allocates a Pixel accessor on every
+    // call — 409,600 of them per frame at 640x640, once per frame for a
+    // whole clip. getBytes hands back the underlying bytes in one go.
+    final bytes = resized.getBytes(order: img.ChannelOrder.rgb);
+
+    if (_channelsFirst) {
+      return _writeChannelsFirst(bytes);
+    }
+    return _writeChannelsLast(bytes);
+  }
+
+  /// NHWC: `[1, H, W, 3]`, pixels interleaved as R,G,B per pixel. The legacy
+  /// onnx2tf-based export produced this layout, and it's what every model
+  /// this service supported before Ultralytics moved to LiteRT used.
+  List<List<List<List<double>>>> _writeChannelsLast(List<int> bytes) {
     final buffer = _inputBuffer ??= List.generate(
       1,
       (_) => List.generate(
@@ -920,12 +981,6 @@ class DiscDetectionService extends ChangeNotifier {
         ),
       ),
     );
-
-    // Read the frame as one packed RGB byte array rather than calling
-    // getPixel() per pixel. getPixel allocates a Pixel accessor on every
-    // call — 409,600 of them per frame at 640x640, once per frame for a
-    // whole clip. getBytes hands back the underlying bytes in one go.
-    final bytes = resized.getBytes(order: img.ChannelOrder.rgb);
 
     final plane = buffer[0];
     int i = 0;
@@ -939,7 +994,41 @@ class DiscDetectionService extends ChangeNotifier {
         i += 3;
       }
     }
+    return buffer;
+  }
 
+  /// NCHW: `[1, 3, H, W]`, channel-planar — all of R, then all of G, then
+  /// all of B. Ultralytics' current LiteRT/w8a32 export produces this by
+  /// tracing the PyTorch model directly rather than going through the old
+  /// onnx2tf conversion.
+  List<List<List<List<double>>>> _writeChannelsFirst(List<int> bytes) {
+    final buffer = _inputBuffer ??= List.generate(
+      1,
+      (_) => List.generate(
+        3,
+        (_) => List.generate(
+          _inputSize,
+          (_) => List<double>.filled(_inputSize, 0.0),
+        ),
+      ),
+    );
+
+    final planes = buffer[0];
+    final rPlane = planes[0];
+    final gPlane = planes[1];
+    final bPlane = planes[2];
+    int i = 0;
+    for (int y = 0; y < _inputSize; y++) {
+      final rRow = rPlane[y];
+      final gRow = gPlane[y];
+      final bRow = bPlane[y];
+      for (int x = 0; x < _inputSize; x++) {
+        rRow[x] = bytes[i] / 255.0;
+        gRow[x] = bytes[i + 1] / 255.0;
+        bRow[x] = bytes[i + 2] / 255.0;
+        i += 3;
+      }
+    }
     return buffer;
   }
 
@@ -1348,6 +1437,20 @@ class DiscDetectionService extends ChangeNotifier {
   @visibleForTesting
   double normalizeModelValueForTesting(double value) =>
       _normalizeModelValue(value);
+
+  /// Test hook for [_preprocessImage]'s NHWC/NCHW write patterns, without
+  /// needing a loaded interpreter to drive [_inputSize]/[_channelsFirst].
+  @visibleForTesting
+  List<List<List<List<double>>>> preprocessImageForTesting(
+    img.Image image, {
+    required int inputSize,
+    required bool channelsFirst,
+  }) {
+    _inputSize = inputSize;
+    _channelsFirst = channelsFirst;
+    _inputBuffer = null;
+    return _preprocessImage(image);
+  }
 
   @override
   void dispose() {

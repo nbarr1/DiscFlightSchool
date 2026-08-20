@@ -74,12 +74,18 @@ to discovery after a short occlusion streak — see `detectInWindow`,
 `_DiscTrack`, and the loop in `processVideo`), plus a single-pass FFmpeg frame
 extraction and an optional GPU delegate.
 
-Note the bundled asset is still the **YOLOv8n@320** export, not YOLO11 — see
-the client facts in `README.md`. The checks below apply either way, but the
-first one gates swapping in the YOLO11n@640 model.
+The bundled asset is now a genuine **YOLO11n@640** export — see the client
+facts in `README.md`. It arrived as `format="litert"`/`quantize="w8a32"`
+output from Ultralytics' current exporter, which (as of Ultralytics 8.4.83,
+when the standalone `tflite` format was removed) produces **NCHW**
+(`[1,3,640,640]`) rather than the NHWC layout the app originally assumed —
+`DiscDetectionService.detectInputLayout` and the two `_preprocessImage` write
+paths handle this, covered at the pure-function level, but **none of it has
+run against a real interpreter yet.**
 `flutter analyze` and `flutter test` are clean and cover every pure function
 in isolation (candidate selection, coherence filtering, smoothing,
-interpolation), but **nothing here exercises the state machine against real
+interpolation, and now the NHWC/NCHW layout detection and both preprocessing
+write patterns), but **nothing here exercises the state machine against real
 frames, the FFmpeg extraction command, or the GPU delegate — all of that
 needs a device and a real throw video.**
 
@@ -94,10 +100,12 @@ needs a device and a real throw video.**
   discovery rather than tracking a false candidate.
 - The resulting trajectory overlay is at least as accurate as the previous
   (YOLOv8, full-frame-every-frame, 320-input) build on the same clip.
-- **Model swap.** After dropping in the YOLO11n export, the load log reports
-  `input [1, 640, 640, 3]` / `output [1, 5, 8400]` and raises no geometry
-  warning, and detection still works on a clip that worked before. This is the
-  acceptance gate for the upgrade.
+- **Model swap.** The load log reports `input [1, 3, 640, 640] (NCHW)` /
+  `output [1, 5, 8400]` and raises no geometry warning, and detection still
+  works on a clip that worked before. This is the acceptance gate for the
+  upgrade — it's the one thing the pure-function tests genuinely cannot
+  cover, since it depends on the real interpreter accepting the buffer shape
+  `_writeChannelsFirst` builds.
 - **Timing at 640.** Measure real ms/frame. Per-frame cost scales with input
   area, so a 640 model is roughly 4× the 320 export. If a trimmed clip still
   takes minutes after the `getBytes` preprocessing change and the trim-derived
