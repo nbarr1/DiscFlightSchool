@@ -27,9 +27,18 @@ class HybridDetectionService extends ChangeNotifier {
   String _statusMessage = '';
   bool _isProcessing = false;
 
+  bool _usedDetectorModel = false;
+
   double get progress => _progress;
   String get statusMessage => _statusMessage;
   bool get isProcessing => _isProcessing;
+
+  /// Whether the most recent [detect] run had the detector model available.
+  ///
+  /// False means refinement fell back to colour-blob matching alone, which is
+  /// materially less accurate. Callers should surface that rather than let it
+  /// pass as an ordinary result.
+  bool get usedDetectorModel => _usedDetectorModel;
 
   HybridDetectionService(this._detector);
 
@@ -37,6 +46,11 @@ class HybridDetectionService extends ChangeNotifier {
   ///
   /// [seedKeyframes] must have 3+ entries. [discColor] is optional — if
   /// provided, color blob detection supplements YOLO in search windows.
+  ///
+  /// [startMs]/[endMs] give the trimmed range of [videoPath]. They are not
+  /// optional in spirit: [seedKeyframes] are indexed from the trim start, so
+  /// extracting from the start of the file instead pairs every spline
+  /// prediction with an image from the wrong moment.
   Future<FlightTrackingResult> detect({
     required List<SeedKeyframe> seedKeyframes,
     required String videoPath,
@@ -45,6 +59,8 @@ class HybridDetectionService extends ChangeNotifier {
     required double videoWidth,
     required double videoHeight,
     Color? discColor,
+    int startMs = 0,
+    int? endMs,
   }) async {
     if (seedKeyframes.length < 3) {
       throw ArgumentError.value(
@@ -134,6 +150,8 @@ class HybridDetectionService extends ChangeNotifier {
         framesDir.path,
         fps: fps,
         maxFrames: totalFrames,
+        startMs: startMs,
+        endMs: endMs,
       );
 
       if (extracted.isEmpty) {
@@ -150,6 +168,19 @@ class HybridDetectionService extends ChangeNotifier {
       _progress = 0.3;
       _statusMessage = 'Refining with detection...';
       notifyListeners();
+
+      // Load the detector up front. The guard further down reads
+      // isModelLoaded, and nothing else in the app loads the model during a
+      // normal run — so without this, a fresh install silently skipped YOLO
+      // altogether and refined against colour blobs alone, with no signal to
+      // the user that it had. The lazy load inside detectInWindow never
+      // fired, because that same guard short-circuits before reaching it.
+      try {
+        await _detector.loadModel();
+      } catch (e) {
+        debugPrint('Hybrid refinement running without the detector model: $e');
+      }
+      _usedDetectorModel = _detector.isModelLoaded;
 
       // Precompute target HSV if disc color is provided
       final targetHsv = discColor != null ? _rgbToHsv(

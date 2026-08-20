@@ -140,11 +140,19 @@ class TrainingDataService extends ChangeNotifier {
 
   /// Collect training samples from manually marked keyframes.
   /// Returns the number of samples successfully saved.
+  ///
+  /// [trimStartMs] is where the marked range begins in [videoPath].
+  /// `KeyframeData.frameIndex` is counted from the trim start, while
+  /// thumbnail extraction seeks by absolute time in the file — without the
+  /// offset, every sample from a trimmed clip pairs an image from the wrong
+  /// moment with a correct-looking label, which is worse than collecting
+  /// nothing at all.
   Future<int> collectFromKeyframes(
     List<KeyframeData> keyframes,
     String videoPath,
-    double fps,
-  ) async {
+    double fps, {
+    int trimStartMs = 0,
+  }) async {
     if (!_isOptedIn || keyframes.isEmpty || fps <= 0) return 0;
 
     final dataDir = await _getDataDir();
@@ -158,7 +166,7 @@ class TrainingDataService extends ChangeNotifier {
     for (final kf in keyframes) {
       try {
         final id = _generateId();
-        final timeMs = (kf.frameIndex / fps * 1000).round();
+        final timeMs = trimStartMs + (kf.frameIndex / fps * 1000).round();
 
         // Extract full frame at keyframe timestamp
         final fullPath = await VideoThumbnail.thumbnailFile(

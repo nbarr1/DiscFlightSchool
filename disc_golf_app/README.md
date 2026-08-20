@@ -6,7 +6,7 @@ This directory contains the Flutter client for DiscFlightSchool. This README ref
 
 - App bootstrap in `lib/main.dart` with Provider-registered services and onboarding/home startup routing.
 - Home navigation to Flight Tracker, Form Coach, Disc Roulette, Knowledge Base, Training Settings, and Flight Path Gallery.
-- Flight Tracker screens and services for bundled/downloaded TFLite (YOLO11) detection, overlays, video playback, and saved flight data. Automated detection is track-by-detection (full-frame discovery, then windowed tracking with velocity prediction); a user-seeded keyframe/spline/hybrid path remains available as a manual alternative.
+- Flight Tracker screens and services for bundled/downloaded TFLite (YOLO11n, 640×640, dynamic-INT8/`w8a32` quantized) detection, overlays, video playback, and saved flight data. Automated detection is track-by-detection (full-frame discovery, then windowed tracking with velocity prediction); a user-seeded keyframe/spline/hybrid path remains available as a manual alternative. After trimming, the user picks "Auto-detect" (zero taps, with progress and a low-confidence warning) or "Mark manually" — see the root `README.md`'s Flight Tracker bullet for the full flow and the model's tensor layout (NCHW, not NHWC — the Ultralytics export changed this).
 - Form Coach screens and services for video selection/trimming, ML Kit pose analysis, phase comparison, pose correction, feedback, and local form-history persistence.
 - Disc Roulette models, random challenge generation, scored rounds, scorecards, and local history persistence.
 - Knowledge Base models/screens/services using bundled JSON assets, with optional API-key-backed AI search behavior in the UI.
@@ -93,9 +93,10 @@ For a release APK, create `android/key.properties` with `keyAlias`, `keyPassword
 
 - **TODO: verify the track-by-detection pipeline against a real throw video on a
   real device.** `flutter analyze`/`flutter test` cover the pure-function logic
-  (candidate selection, coherence filtering, smoothing) but not the FFmpeg
-  extraction command, the GPU delegate, or the discovery/tracking/occlusion
-  state machine end to end. See `../docs/testing.md`.
+  (candidate selection, coherence filtering, smoothing, and — as of the
+  YOLO11n@640 swap — the NHWC/NCHW layout detection and both preprocessing
+  write paths) but not the FFmpeg extraction command, the GPU delegate, or the
+  discovery/tracking/occlusion state machine end to end. See `../docs/testing.md`.
 - There is no repository/persistence abstraction layer; each service owns its
   own storage directly. Introducing one is not currently planned.
 - Android APK generation is not yet represented as a committed CI artifact.

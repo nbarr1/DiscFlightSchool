@@ -87,6 +87,18 @@ class FlightTrackingResult {
   List<Offset> getCompensatedTrail(int currentFrame) => getTrail(currentFrame);
 }
 
+/// Thrown by [DiscDetectionService.processVideo] when a run was stopped by
+/// [DiscDetectionService.cancelProcessing] rather than failing on its own.
+///
+/// Callers should treat this as "the user changed their mind" and stay quiet,
+/// not surface it as an error.
+class DetectionCancelledException implements Exception {
+  const DetectionCancelledException();
+
+  @override
+  String toString() => 'Disc detection was cancelled';
+}
+
 /// Mutable lock-on state for the track-by-detection state machine: the
 /// disc's last confirmed position, its estimated per-frame velocity, and how
 /// long it's been coasting without a confirmed detection.
@@ -147,6 +159,17 @@ class DiscDetectionService extends ChangeNotifier {
   /// actually expects.
   static const int _defaultInputSize = 640;
   int _inputSize = _defaultInputSize;
+
+  /// Whether the loaded model's input tensor is channel-first — NCHW,
+  /// `[1,3,H,W]` — rather than channel-last, NHWC, `[1,H,W,3]`.
+  ///
+  /// Ultralytics' current LiteRT/`format="litert"` export (the only export
+  /// path as of Ultralytics 8.4.83 — the standalone `tflite` format now
+  /// silently redirects to it) traces the PyTorch model directly and
+  /// produces NCHW. The legacy onnx2tf-based export this service originally
+  /// supported produced NHWC. Detected per-load in [detectInputLayout];
+  /// [_preprocessImage] writes pixels in whichever order this says.
+  bool _channelsFirst = false;
   /// Default confidence threshold — applied when no user override is set.
   static const double defaultConfidenceThreshold = 0.1;
   static const String _prefsKey = 'disc_confidence_threshold';
@@ -197,6 +220,10 @@ class DiscDetectionService extends ChangeNotifier {
   /// Guards against overlapping [processVideo] runs, which would interleave
   /// progress/status updates and race on [_lastResult].
   bool _processLock = false;
+
+  /// Set by [cancelProcessing]; cleared at the start and end of every
+  /// [processVideo] run.
+  bool _cancelRequested = false;
 
   /// Serializes concurrent [loadModel] calls so two callers cannot each build
   /// an Interpreter and leak one of them.
@@ -285,13 +312,17 @@ class DiscDetectionService extends ChangeNotifier {
       // The model's actual input geometry drives preprocessing, not an
       // assumed constant — see the comment on [_defaultInputSize].
       final inputShape = newInterpreter.getInputTensor(0).shape;
-      if (inputShape.length >= 3 && inputShape[1] > 0) {
-        _inputSize = inputShape[1];
-      } else {
-        debugPrint('Model input shape $inputShape has no usable fixed size; '
-            'keeping $_inputSize. Inference will throw if that mismatches '
-            'what the interpreter actually expects.');
+      final layout = detectInputLayout(inputShape);
+      _inputSize = layout.size;
+      _channelsFirst = layout.channelsFirst;
+      if (!layout.recognized) {
+        debugPrint('Model input shape $inputShape is neither NHWC ([1,H,W,3]) '
+            'nor NCHW ([1,3,H,W]); guessing size=$_inputSize, channel-last. '
+            'Inference will throw if that mismatches what the interpreter '
+            'actually expects.');
       }
+
+      _validateModelGeometry(newInterpreter);
 
       final oldInterpreter = _interpreter;
       _interpreter = newInterpreter;
@@ -307,6 +338,95 @@ class DiscDetectionService extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error loading disc detection model: $e');
       rethrow;
+    }
+  }
+
+  /// Determines the square input size and channel order from a loaded
+  /// model's input tensor shape.
+  ///
+  /// Distinguishes NHWC (`[1,H,W,3]`) from NCHW (`[1,3,H,W]`) by which
+  /// dimension after the batch dim equals 3 — the channel count. This is
+  /// unambiguous for any real detector: a stride-32 head needs an input of
+  /// at least 32px, so a dimension of exactly 3 can only ever be the
+  /// channel axis, never a spatial one. Falls back to the historical NHWC
+  /// assumption, with `recognized: false`, for a shape that isn't 4D or
+  /// doesn't match either pattern — [_validateModelGeometry]'s anchor-count
+  /// check will flag it downstream if the guess is wrong.
+  @visibleForTesting
+  static ({int size, bool channelsFirst, bool recognized}) detectInputLayout(
+      List<int> shape) {
+    if (shape.length == 4 && shape[3] == 3) {
+      return (size: shape[1], channelsFirst: false, recognized: true);
+    }
+    if (shape.length == 4 && shape[1] == 3) {
+      return (size: shape[2], channelsFirst: true, recognized: true);
+    }
+    if (shape.length >= 3 && shape[1] > 0) {
+      return (size: shape[1], channelsFirst: false, recognized: false);
+    }
+    return (size: _defaultInputSize, channelsFirst: false, recognized: false);
+  }
+
+  /// Anchor count an ultralytics anchor-free `Detect` head produces for a
+  /// square [inputSize]: one prediction per cell across the P3/P4/P5 strides
+  /// (8, 16, 32). 640 gives 80²+40²+20² = 8400; 320 gives 40²+20²+10² = 2100.
+  @visibleForTesting
+  static int expectedAnchors(int inputSize) {
+    const strides = [8, 16, 32];
+    var total = 0;
+    for (final stride in strides) {
+      final cells = inputSize ~/ stride;
+      total += cells * cells;
+    }
+    return total;
+  }
+
+  /// Logs the loaded model's geometry and warns — but never throws — when it
+  /// doesn't look like the single-class YOLO11 detector this app expects.
+  ///
+  /// Warn-and-continue is deliberate. A model downloaded from the training
+  /// server is allowed to ship at a different geometry than the bundled
+  /// asset, and refusing to load it would break detection outright rather
+  /// than degrading. Everything downstream already adapts: [_inputSize] is
+  /// read from the input tensor, and [_parseBestDetection] branches on the
+  /// output layout instead of assuming one.
+  void _validateModelGeometry(Interpreter interpreter) {
+    final inputShape = interpreter.getInputTensor(0).shape;
+    final outputShape = interpreter.getOutputTensor(0).shape;
+    debugPrint('Detector geometry: input $inputShape '
+        '(${_channelsFirst ? 'NCHW' : 'NHWC'}), output $outputShape');
+
+    if (_inputSize % 32 != 0) {
+      debugPrint('Detector warning: input size $_inputSize is not a multiple '
+          'of 32, so the P5 stride grid does not divide evenly.');
+    }
+
+    if (outputShape.length < 3) {
+      debugPrint('Detector warning: output shape $outputShape is not the '
+          'expected 3-dimensional Detect head output.');
+      return;
+    }
+
+    // Transposed [1, 4+nc, N] is what ultralytics TFLite exports emit; the
+    // parser also accepts the standard [1, N, 4+nc] layout.
+    final isTransposed = outputShape[1] == 5 || outputShape[1] == 6;
+    final channels = isTransposed ? outputShape[1] : outputShape[2];
+    final anchors = isTransposed ? outputShape[2] : outputShape[1];
+
+    if (channels != 5 && channels != 6) {
+      debugPrint('Detector warning: output $outputShape has $channels '
+          'channels; expected 5 (4 box coords + 1 class) or 6.');
+    } else if (channels == 6) {
+      debugPrint('Detector note: model reports 2 classes; only class 0 '
+          '(disc) is used.');
+    }
+
+    final expected = expectedAnchors(_inputSize);
+    if (anchors != expected) {
+      debugPrint('Detector warning: output $outputShape has $anchors anchors, '
+          'but a ${_inputSize}x$_inputSize anchor-free Detect head should '
+          'produce $expected. The model may have been exported at a different '
+          'size than its input tensor declares.');
     }
   }
 
@@ -331,11 +451,27 @@ class DiscDetectionService extends ChangeNotifier {
     return await File(modelPath).exists() ? modelPath : null;
   }
 
+  /// Requests that an in-flight [processVideo] stop at the next frame
+  /// boundary, completing with a [DetectionCancelledException].
+  ///
+  /// Granularity is one frame: inference is synchronous, so the frame already
+  /// in flight always finishes.
+  void cancelProcessing() {
+    if (_isProcessing) _cancelRequested = true;
+  }
+
   /// Process a video file: extract frames, run detection, filter & smooth.
+  ///
+  /// [startMs]/[endMs] restrict extraction to a trimmed range. Frame index 0
+  /// is the first frame at or after [startMs], so every returned
+  /// [DiscDetection.frameIndex] is relative to the trim start — matching the
+  /// frame space the player and any user-placed keyframes already use.
   Future<FlightTrackingResult> processVideo(
     String videoPath, {
     double fps = 10.0, // Lower FPS = faster + larger disc movement per frame
     int maxFrames = 300,
+    int startMs = 0,
+    int? endMs,
   }) async {
     if (_processLock) {
       throw StateError(
@@ -349,12 +485,21 @@ class DiscDetectionService extends ChangeNotifier {
     // only in the inner block would wedge the service after the first failure.
     Directory? framesDir;
     try {
+      // Reset progress state *before* loading the model. Loading copies a
+      // multi-megabyte asset out of the bundle and builds an interpreter, and
+      // on a fresh install that is the first thing the user waits on —
+      // leaving the previous run's 'Complete!' at 100% on screen for those
+      // seconds makes a determinate progress bar actively misleading.
+      _cancelRequested = false;
+      _isProcessing = true;
+      _progress = 0.0;
+
       if (!_isModelLoaded) {
+        _statusMessage = 'Loading detector...';
+        notifyListeners();
         await loadModel();
       }
 
-      _isProcessing = true;
-      _progress = 0.0;
       _statusMessage = 'Extracting frames...';
       notifyListeners();
 
@@ -369,6 +514,8 @@ class DiscDetectionService extends ChangeNotifier {
         framesDir.path,
         fps: fps,
         maxFrames: maxFrames,
+        startMs: startMs,
+        endMs: endMs,
       );
 
       if (frames.isEmpty) {
@@ -396,10 +543,14 @@ class DiscDetectionService extends ChangeNotifier {
       for (int i = 0; i < frames.length; i++) {
         final frame = frames[i];
         _progress = (i / frames.length) * 0.7;
+        // Rebuild the status string only every tenth frame — it allocates —
+        // but notify every frame: _progress changes each iteration, and a
+        // determinate progress bar bound to it would otherwise advance in
+        // multi-second jumps.
         if (i % 10 == 0) {
           _statusMessage = 'Detecting disc: frame ${i + 1}/${frames.length}';
-          notifyListeners();
         }
+        notifyListeners();
 
         final imageFile = File(frame.path);
         if (!await imageFile.exists()) continue;
@@ -465,6 +616,12 @@ class DiscDetectionService extends ChangeNotifier {
         // and blocks this isolate for the duration of the call, so this is the
         // only chance the UI gets to paint between frames.
         await Future.delayed(Duration.zero);
+
+        // Checked after the yield, so a cancel tapped while this frame was in
+        // inference is seen now rather than a frame late.
+        if (_cancelRequested) {
+          throw const DetectionCancelledException();
+        }
       }
 
       debugPrint(
@@ -527,6 +684,7 @@ class DiscDetectionService extends ChangeNotifier {
       }
 
       _processLock = false;
+      _cancelRequested = false;
       if (_isProcessing) {
         _isProcessing = false;
         notifyListeners();
@@ -551,21 +709,19 @@ class DiscDetectionService extends ChangeNotifier {
     String outputDir, {
     required double fps,
     required int maxFrames,
+    int startMs = 0,
+    int? endMs,
   }) async {
     final outputPattern = '$outputDir/frame_%04d.jpg';
 
-    // scale=min(640\,iw):-2 matches the old maxWidth:640 behavior — downscale
-    // to a 640px-wide working resolution but never upscale a smaller source,
-    // and -2 keeps the resulting height even (required by some encoders).
-    // The comma is backslash-escaped per ffmpeg's own filtergraph syntax —
-    // not shell-quoted — because FFmpegKit tokenizes this string itself
-    // rather than handing it to a real shell; single/double quotes around
-    // the expression would be passed through literally and fail to parse.
-    final session = await FFmpegKit.execute(
-      '-y -i "$videoPath" '
-      '-vf "fps=$fps,scale=min(640\\,iw):-2" '
-      '-frames:v $maxFrames -q:v 3 "$outputPattern"',
-    );
+    final session = await FFmpegKit.execute(buildExtractCommand(
+      videoPath: videoPath,
+      outputPattern: outputPattern,
+      fps: fps,
+      maxFrames: maxFrames,
+      startMs: startMs,
+      endMs: endMs,
+    ));
 
     final returnCode = await session.getReturnCode();
 
@@ -591,12 +747,63 @@ class DiscDetectionService extends ChangeNotifier {
     }
 
     // ffmpeg's %04d sequence has no ability to skip a busted frame, so it's
-    // contiguous by construction — list position doubles as the frame index.
+    // contiguous by construction — list position doubles as the frame index,
+    // counted from the first frame at or after the trim start.
     return [
       for (int i = 0; i < files.length; i++)
         ExtractedFrame(index: i, path: files[i].path),
     ];
   }
+
+  /// Builds the FFmpeg argument string for one frame-extraction pass.
+  ///
+  /// Split out from [_extractFrames] so it can be asserted in a host test.
+  /// The failure mode here is silent — a wrong `-ss` yields frames from the
+  /// wrong part of the clip, which still look perfectly plausible — and
+  /// string construction is exactly what breaks unnoticed.
+  @visibleForTesting
+  static String buildExtractCommand({
+    required String videoPath,
+    required String outputPattern,
+    required double fps,
+    required int maxFrames,
+    int startMs = 0,
+    int? endMs,
+  }) {
+    final command = StringBuffer('-y -i "$videoPath"');
+
+    // Output seeking (`-ss` *after* `-i`) rather than input seeking. Input
+    // seeking is faster but can snap to the nearest keyframe on some codecs,
+    // which would shift every frame index relative to the trim start and
+    // silently misalign the overlay. These clips are seconds long, so
+    // decoding from zero costs far less than inference does, and exactness
+    // is the entire point of honoring the trim.
+    if (startMs > 0) {
+      command.write(' -ss ${_secondsArg(startMs)}');
+    }
+    if (endMs != null && endMs > startMs) {
+      command.write(' -t ${_secondsArg(endMs - startMs)}');
+    }
+
+    // scale=min(640\,iw):-2 matches the old maxWidth:640 behavior — downscale
+    // to a 640px-wide working resolution but never upscale a smaller source,
+    // and -2 keeps the resulting height even (required by some encoders).
+    // The comma is backslash-escaped per ffmpeg's own filtergraph syntax —
+    // not shell-quoted — because FFmpegKit tokenizes this string itself
+    // rather than handing it to a real shell; single/double quotes around
+    // the expression would be passed through literally and fail to parse.
+    command
+      ..write(' -vf "fps=$fps,scale=min(640\\,iw):-2"')
+      ..write(' -frames:v $maxFrames -q:v 3 "$outputPattern"');
+
+    return command.toString();
+  }
+
+  /// Milliseconds rendered as an ffmpeg seconds argument. `toStringAsFixed`
+  /// is locale-independent in Dart, so this cannot emit a comma as the
+  /// decimal separator on a device with a European locale.
+  static String _secondsArg(int milliseconds) =>
+      (milliseconds / 1000).toStringAsFixed(3);
 
   /// Run inference on [image] as-is (already cropped to whatever region the
   /// caller wants examined) and return the raw model output, or null if no
@@ -734,15 +941,36 @@ class DiscDetectionService extends ChangeNotifier {
     return size.clamp(_minTrackingWindowSize, _maxTrackingWindowSize);
   }
 
-  /// Preprocess image for YOLO: resize to the model's input size, normalize to 0-1, NHWC.
+  /// Preprocess image for YOLO: resize to the model's input size, normalize
+  /// to 0-1, and write in whichever tensor layout [_channelsFirst] says the
+  /// loaded model expects (see [detectInputLayout]).
   ///
   /// Writes into a buffer that is allocated once and reused for every frame —
   /// the returned list is owned by this service and is overwritten by the next
-  /// call, so callers must not retain it across frames.
+  /// call, so callers must not retain it across frames. Rebuilt whenever the
+  /// model (and therefore its shape) changes — see [_loadModelImpl], which
+  /// nulls [_inputBuffer] on every load, so a cached buffer never survives a
+  /// layout change.
   List<List<List<List<double>>>> _preprocessImage(img.Image image) {
     final resized =
         img.copyResize(image, width: _inputSize, height: _inputSize);
 
+    // Read the frame as one packed RGB byte array rather than calling
+    // getPixel() per pixel. getPixel allocates a Pixel accessor on every
+    // call — 409,600 of them per frame at 640x640, once per frame for a
+    // whole clip. getBytes hands back the underlying bytes in one go.
+    final bytes = resized.getBytes(order: img.ChannelOrder.rgb);
+
+    if (_channelsFirst) {
+      return _writeChannelsFirst(bytes);
+    }
+    return _writeChannelsLast(bytes);
+  }
+
+  /// NHWC: `[1, H, W, 3]`, pixels interleaved as R,G,B per pixel. The legacy
+  /// onnx2tf-based export produced this layout, and it's what every model
+  /// this service supported before Ultralytics moved to LiteRT used.
+  List<List<List<List<double>>>> _writeChannelsLast(List<int> bytes) {
     final buffer = _inputBuffer ??= List.generate(
       1,
       (_) => List.generate(
@@ -755,17 +983,52 @@ class DiscDetectionService extends ChangeNotifier {
     );
 
     final plane = buffer[0];
+    int i = 0;
     for (int y = 0; y < _inputSize; y++) {
       final row = plane[y];
       for (int x = 0; x < _inputSize; x++) {
-        final pixel = resized.getPixel(x, y);
         final rgb = row[x];
-        rgb[0] = pixel.r / 255.0;
-        rgb[1] = pixel.g / 255.0;
-        rgb[2] = pixel.b / 255.0;
+        rgb[0] = bytes[i] / 255.0;
+        rgb[1] = bytes[i + 1] / 255.0;
+        rgb[2] = bytes[i + 2] / 255.0;
+        i += 3;
       }
     }
+    return buffer;
+  }
 
+  /// NCHW: `[1, 3, H, W]`, channel-planar — all of R, then all of G, then
+  /// all of B. Ultralytics' current LiteRT/w8a32 export produces this by
+  /// tracing the PyTorch model directly rather than going through the old
+  /// onnx2tf conversion.
+  List<List<List<List<double>>>> _writeChannelsFirst(List<int> bytes) {
+    final buffer = _inputBuffer ??= List.generate(
+      1,
+      (_) => List.generate(
+        3,
+        (_) => List.generate(
+          _inputSize,
+          (_) => List<double>.filled(_inputSize, 0.0),
+        ),
+      ),
+    );
+
+    final planes = buffer[0];
+    final rPlane = planes[0];
+    final gPlane = planes[1];
+    final bPlane = planes[2];
+    int i = 0;
+    for (int y = 0; y < _inputSize; y++) {
+      final rRow = rPlane[y];
+      final gRow = gPlane[y];
+      final bRow = bPlane[y];
+      for (int x = 0; x < _inputSize; x++) {
+        rRow[x] = bytes[i] / 255.0;
+        gRow[x] = bytes[i + 1] / 255.0;
+        bRow[x] = bytes[i + 2] / 255.0;
+        i += 3;
+      }
+    }
     return buffer;
   }
 
@@ -1110,13 +1373,27 @@ class DiscDetectionService extends ChangeNotifier {
   }
 
   /// Public wrapper around [_extractFrames] for use by HybridDetectionService.
+  ///
+  /// [startMs]/[endMs] carry the same meaning as on [processVideo]: frame
+  /// index 0 is the first frame at or after [startMs]. Callers working from
+  /// user-placed keyframes must pass the trim range, since those keyframes
+  /// are indexed from the trim start rather than the start of the file.
   Future<List<ExtractedFrame>> extractFrames(
     String videoPath,
     String outputDir, {
     required double fps,
     int maxFrames = 300,
+    int startMs = 0,
+    int? endMs,
   }) {
-    return _extractFrames(videoPath, outputDir, fps: fps, maxFrames: maxFrames);
+    return _extractFrames(
+      videoPath,
+      outputDir,
+      fps: fps,
+      maxFrames: maxFrames,
+      startMs: startMs,
+      endMs: endMs,
+    );
   }
 
   /// Public access to smoothing for use by HybridDetectionService.
@@ -1160,6 +1437,20 @@ class DiscDetectionService extends ChangeNotifier {
   @visibleForTesting
   double normalizeModelValueForTesting(double value) =>
       _normalizeModelValue(value);
+
+  /// Test hook for [_preprocessImage]'s NHWC/NCHW write patterns, without
+  /// needing a loaded interpreter to drive [_inputSize]/[_channelsFirst].
+  @visibleForTesting
+  List<List<List<List<double>>>> preprocessImageForTesting(
+    img.Image image, {
+    required int inputSize,
+    required bool channelsFirst,
+  }) {
+    _inputSize = inputSize;
+    _channelsFirst = channelsFirst;
+    _inputBuffer = null;
+    return _preprocessImage(image);
+  }
 
   @override
   void dispose() {

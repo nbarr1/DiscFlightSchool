@@ -6,13 +6,16 @@ import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:gal/gal.dart';
 import 'package:provider/provider.dart';
+import '../../services/detection_quality.dart';
 import '../../services/disc_detection_service.dart';
 import '../../services/disc_tracker.dart';
 import '../../services/feedback_service.dart';
 import '../../services/training_data_service.dart';
 import '../../services/video_service.dart';
+import '../../widgets/detection_progress_dialog.dart';
 import '../../widgets/follow_flight_overlay.dart';
 import '../gallery/video_gallery_screen.dart';
+import 'detection_mode_sheet.dart';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -25,6 +28,14 @@ enum _SetupPhase {
   result,    // Flight path generated — clean overlay shown
 }
 
+/// Which tracker produced the path currently on screen.
+///
+/// Kept separate from [_SetupPhase] deliberately: the result phase renders
+/// identically whatever produced it, but the actions offered and the wording
+/// of the prompts differ, and folding this into the phase enum would mean
+/// re-auditing every phase comparison in this file.
+enum _TrackSource { manual, hybrid, auto }
+
 /// A keyframe marked by the user — disc position at a specific frame.
 class _FlightKeyframe {
   final int frameIndex;
@@ -33,10 +44,19 @@ class _FlightKeyframe {
   final double? boxWidth; // Normalized 0-1 (from two-tap box mode)
   final double? boxHeight; // Normalized 0-1 (from two-tap box mode)
 
+  /// True when this point came from the detector rather than the user's
+  /// finger — i.e. it was sampled out of an automatic result for editing.
+  ///
+  /// Derived points are excluded from training-data collection: uploading the
+  /// detector's own output back as ground truth would train the model on its
+  /// own mistakes.
+  final bool derived;
+
   _FlightKeyframe({
     required this.frameIndex,
     required this.x,
     required this.y,
+    this.derived = false,
     this.boxWidth,
     this.boxHeight,
   });
@@ -48,12 +68,17 @@ class VideoPlayerScreen extends StatefulWidget {
   final int? trimStartMs;
   final int? trimEndMs;
 
+  /// Skips the "how should we find the disc?" prompt and goes straight into
+  /// the named mode. Null (the default) asks.
+  final FlightSetupMode? initialMode;
+
   const VideoPlayerScreen({
     super.key,
     required this.videoPath,
     this.disc,
     this.trimStartMs,
     this.trimEndMs,
+    this.initialMode,
   });
 
   @override
@@ -91,6 +116,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   // Guided setup phase
   _SetupPhase _phase = _SetupPhase.camera;
 
+  // Which tracker produced _trackingResult, and how much to trust it.
+  _TrackSource? _resultSource;
+  DetectionQualityReport? _qualityReport;
+
   // World-anchor state — AE "Create Null and Camera" equivalent
   final List<WorldAnchorFrame> _anchorFrames = [];
   Offset? _pendingAnchorA; // Normalized 0-1, first tap in anchor mode
@@ -127,10 +156,18 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       _isInitialized = true;
     });
     _controller.addListener(_onVideoProgress);
-    // Show camera stability question on first init only
+    // Ask how to find the disc on first init only.
     if (_phase == _SetupPhase.camera) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _showCameraQuestion();
+        if (!mounted) return;
+        final mode = widget.initialMode;
+        if (mode == FlightSetupMode.auto) {
+          _runAutoDetection();
+        } else if (mode == FlightSetupMode.manual) {
+          _showCameraQuestion();
+        } else {
+          _showDetectionModeSheet();
+        }
       });
     }
   }
@@ -145,8 +182,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       _controller.pause();
       _controller.seekTo(Duration(milliseconds: widget.trimEndMs!));
     }
-    final effectiveMs = posMs - (widget.trimStartMs ?? 0);
-    final frame = (effectiveMs * _frameFps / 1000).round();
+    // Shared with every tracker, so the player's frame counter and the
+    // detections drawn over it cannot drift apart on a trimmed clip.
+    final frame = FrameIndexing.frameIndexAt(
+      positionMs: posMs,
+      trimStartMs: widget.trimStartMs ?? 0,
+      fps: _frameFps,
+    );
     if (frame != _currentFrame) {
       setState(() {
         _currentFrame = frame;
@@ -340,6 +382,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     setState(() {
       _keyframes.removeLast();
       _trackingResult = null;
+      _resultSource = null;
+      _qualityReport = null;
     });
   }
 
@@ -347,6 +391,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     setState(() {
       _keyframes.clear();
       _trackingResult = null;
+      _resultSource = null;
+      _qualityReport = null;
       _firstBoxCorner = null;
       _anchorFrames.clear();
       _pendingAnchorA = null;
@@ -354,33 +400,50 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     });
   }
 
+  /// The video parameters every tracker needs, expressed in the trimmed
+  /// frame space the player and all keyframes already use — frame 0 is the
+  /// trim start, not the start of the file.
+  TrackerSession _buildSession() {
+    final trimStartMs = widget.trimStartMs ?? 0;
+    final trimEndMs = widget.trimEndMs;
+    final spanMs =
+        (trimEndMs ?? _controller.value.duration.inMilliseconds) - trimStartMs;
+    final frames = (spanMs * _frameFps / 1000).round() + 1;
+
+    return TrackerSession(
+      videoPath: widget.videoPath,
+      fps: _frameFps,
+      totalFrames: math.max(1, frames),
+      videoWidth: _controller.value.size.width,
+      videoHeight: _controller.value.size.height,
+      trimStartMs: trimStartMs,
+      trimEndMs: trimEndMs,
+    );
+  }
+
+  List<TrackerSeedPoint> _seedPoints() => _keyframes
+      .map((kf) => TrackerSeedPoint(
+            frameIndex: kf.frameIndex,
+            x: kf.x,
+            y: kf.y,
+          ))
+      .toList();
+
   /// Generate smooth flight path from keyframes using Catmull-Rom spline.
   Future<void> _processKeyframes() async {
     if (_keyframes.length < 2) return;
 
     final tracker = GeometricSplineTracker();
     final result = await tracker.track(
-      session: TrackerSession(
-        videoPath: widget.videoPath,
-        fps: _frameFps,
-        totalFrames:
-            (_controller.value.duration.inMilliseconds * _frameFps / 1000)
-                .round(),
-        videoWidth: _controller.value.size.width,
-        videoHeight: _controller.value.size.height,
-      ),
-      seedPoints: _keyframes
-          .map((kf) => TrackerSeedPoint(
-                frameIndex: kf.frameIndex,
-                x: kf.x,
-                y: kf.y,
-              ))
-          .toList(),
+      session: _buildSession(),
+      seedPoints: _seedPoints(),
     );
 
     if (!mounted) return;
     setState(() {
       _trackingResult = result;
+      _resultSource = _TrackSource.manual;
+      _qualityReport = null;
       _phase = _SetupPhase.result;
     });
 
@@ -403,47 +466,31 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     final detector = Provider.of<DiscDetectionService>(context, listen: false);
     final tracker = HybridDiscTracker(detector);
 
-    if (mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const AlertDialog(
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 16),
-              Text('Detecting disc in frames...'),
-            ],
-          ),
+    final closeDialog = _showBlockingDialog(
+      const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Detecting disc in frames...'),
+          ],
         ),
-      );
-    }
+      ),
+    );
 
     try {
       final result = await tracker.track(
-        session: TrackerSession(
-          videoPath: widget.videoPath,
-          fps: _frameFps,
-          totalFrames:
-              (_controller.value.duration.inMilliseconds * _frameFps / 1000)
-                  .round(),
-          videoWidth: _controller.value.size.width,
-          videoHeight: _controller.value.size.height,
-        ),
-        seedPoints: _keyframes
-            .map((kf) => TrackerSeedPoint(
-                  frameIndex: kf.frameIndex,
-                  x: kf.x,
-                  y: kf.y,
-                ))
-            .toList(),
+        session: _buildSession(),
+        seedPoints: _seedPoints(),
       );
 
       if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pop(); // dismiss dialog
+      closeDialog();
 
       setState(() {
         _trackingResult = result;
+        _resultSource = _TrackSource.hybrid;
+        _qualityReport = null;
         _phase = _SetupPhase.result;
       });
 
@@ -455,13 +502,175 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pop(); // dismiss dialog
+      closeDialog();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Detection failed: $e')),
       );
     } finally {
       tracker.dispose();
     }
+  }
+
+  /// Shows a non-dismissible dialog and returns a closer that pops it at most
+  /// once.
+  ///
+  /// Popping the root navigator unconditionally is a trap: if the dialog is
+  /// already gone — a second error path, a cancel that already closed it —
+  /// the pop takes this whole screen off the stack instead.
+  VoidCallback _showBlockingDialog(Widget dialog) {
+    var open = true;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => dialog,
+    ).then((_) => open = false);
+
+    return () {
+      if (!open || !mounted) return;
+      open = false;
+      Navigator.of(context, rootNavigator: true).pop();
+    };
+  }
+
+  /// Detect the disc across the whole trimmed clip with no user input.
+  Future<void> _runAutoDetection() async {
+    final detector = Provider.of<DiscDetectionService>(context, listen: false);
+    if (detector.isProcessing) return;
+
+    _controller.pause();
+
+    final tracker = AutoDiscTracker(detector);
+    final closeDialog = _showBlockingDialog(
+      DetectionProgressDialog(onCancel: detector.cancelProcessing),
+    );
+
+    try {
+      final result = await tracker.track(
+        session: _buildSession(),
+        seedPoints: const [],
+      );
+
+      if (!mounted) return;
+      closeDialog();
+
+      if (result.detections.length < 2) {
+        _showAutoFailureBanner();
+        return;
+      }
+
+      final report = assessDetectionQuality(
+        result,
+        confidenceFloor: detector.confidenceThreshold,
+      );
+
+      setState(() {
+        _trackingResult = result;
+        _resultSource = _TrackSource.auto;
+        _qualityReport = report;
+        _phase = _SetupPhase.result;
+      });
+
+      // Rewind so the trail plays from the top rather than from wherever the
+      // scrub position happened to be when detection started.
+      await _controller
+          .seekTo(Duration(milliseconds: widget.trimStartMs ?? 0));
+
+      // A low-confidence result already carries a persistent inline banner
+      // explaining the problem; asking "does this look correct?" on top of it
+      // would stack two prompts asking the same question.
+      if (!report.isLow) {
+        Future.delayed(const Duration(seconds: 3), () {
+          if (!mounted || _trackingResult == null) return;
+          _showFlightVerificationBanner();
+        });
+      }
+    } on DetectionCancelledException {
+      if (!mounted) return;
+      closeDialog();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Auto-detect cancelled — nothing was changed.')),
+      );
+      _showDetectionModeSheet();
+    } on DetectorModelUnavailableException {
+      if (!mounted) return;
+      closeDialog();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'The detector model couldn\'t load — mark the disc by hand for now.'),
+        ),
+      );
+      _showCameraQuestion();
+    } catch (e) {
+      if (!mounted) return;
+      closeDialog();
+      debugPrint('Auto detection failed: $e');
+      _showAutoFailureBanner();
+    } finally {
+      tracker.dispose();
+    }
+  }
+
+  /// Shown when automatic detection ran but never found the disc.
+  void _showAutoFailureBanner() {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showMaterialBanner(
+      MaterialBanner(
+        content: const Text('We couldn\'t find the disc in this clip.'),
+        leading: const Icon(Icons.search_off),
+        actions: [
+          TextButton(
+            onPressed: () {
+              messenger.hideCurrentMaterialBanner();
+              _runAutoDetection();
+            },
+            child: const Text('Try again'),
+          ),
+          TextButton(
+            onPressed: () {
+              messenger.hideCurrentMaterialBanner();
+              _showCameraQuestion();
+            },
+            child: const Text('Mark manually'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Turn an automatic result into editable keyframes and drop back into the
+  /// marking phase so the user can correct it.
+  void _convertResultToKeyframes() {
+    final result = _trackingResult;
+    if (result == null) return;
+
+    final sampled = sampleSeedPoints(result.detections);
+    if (sampled.length < 2) return;
+
+    // Deliberately not _clearAll(): that wipes _anchorFrames too, and the
+    // whole point of coming back here is to keep working on this clip.
+    setState(() {
+      _keyframes
+        ..clear()
+        ..addAll(sampled.map((p) => _FlightKeyframe(
+              frameIndex: p.frameIndex,
+              x: p.x,
+              y: p.y,
+              derived: true,
+            )));
+      _trackingResult = null;
+      _resultSource = null;
+      _qualityReport = null;
+      _firstBoxCorner = null;
+      _phase = _SetupPhase.marking;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Added ${sampled.length} points — step to any that look '
+            'wrong and tap the disc again, then tap Process.'),
+      ),
+    );
   }
 
   void _showFlightVerificationBanner() {
@@ -477,11 +686,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 'verified': false,
                 'type': 'flight_path',
                 'keyframes': _keyframes.length,
+                'source': _resultSource?.name ?? 'unknown',
               });
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                      'Adjust keyframes and tap Process again to refine.'),
+                SnackBar(
+                  content: Text(_resultSource == _TrackSource.auto
+                      ? 'Tap Edit points to turn this path into keyframes you '
+                          'can adjust.'
+                      : 'Adjust keyframes and tap Process again to refine.'),
                 ),
               );
             },
@@ -494,6 +706,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 'verified': true,
                 'type': 'flight_path',
                 'keyframes': _keyframes.length,
+                'source': _resultSource?.name ?? 'unknown',
               });
             },
             child: const Text('Looks Good'),
@@ -508,7 +721,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         Provider.of<TrainingDataService>(context, listen: false);
     if (!trainingService.isOptedIn) return;
 
+    // Derived points came from the detector, not the user. Uploading them as
+    // ground truth would train the next model on this one's own output.
     final keyframeData = _keyframes
+        .where((kf) => !kf.derived)
         .map((kf) => KeyframeData(
               frameIndex: kf.frameIndex,
               x: kf.x,
@@ -518,10 +734,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             ))
         .toList();
 
+    if (keyframeData.isEmpty) return;
+
     final saved = await trainingService.collectFromKeyframes(
       keyframeData,
       widget.videoPath,
       _frameFps,
+      trimStartMs: widget.trimStartMs ?? 0,
     );
 
     if (saved > 0 && mounted) {
@@ -1204,6 +1423,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   Widget _buildActionButtons() {
     final trainingService =
         Provider.of<TrainingDataService>(context, listen: false);
+    // listen: false on purpose. A run puts a modal dialog over this bar, so
+    // the enabled state underneath is moot, and listening would rebuild the
+    // whole player tree on every per-frame progress notification.
+    final detector = Provider.of<DiscDetectionService>(context, listen: false);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1235,12 +1458,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               ),
           ],
           if (_phase == _SetupPhase.marking) ...[
-            if (_anchorFrames.isNotEmpty)
-              TextButton.icon(
-                onPressed: () => setState(() => _phase = _SetupPhase.anchoring),
-                icon: const Icon(Icons.arrow_back, size: 14),
-                label: const Text('Anchoring', style: TextStyle(fontSize: 11)),
-              ),
+            // Unconditional: after converting an automatic result to
+            // keyframes there are no anchors yet, and gating this on them
+            // would leave no route into the anchoring phase at all.
+            TextButton.icon(
+              onPressed: () => setState(() => _phase = _SetupPhase.anchoring),
+              icon: const Icon(Icons.arrow_back, size: 14),
+              label: const Text('Anchoring', style: TextStyle(fontSize: 11)),
+            ),
             if (trainingService.isOptedIn) _buildBoxModeToggle(),
             ElevatedButton.icon(
               onPressed: _keyframes.isEmpty ? null : _undoLastKeyframe,
@@ -1266,6 +1491,18 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 foregroundColor: _keyframes.length >= 3 ? Colors.white : null,
               ),
             ),
+            // Needs no keyframes at all — this is the escape hatch for a user
+            // who chose to mark by hand and changed their mind.
+            ElevatedButton.icon(
+              onPressed: detector.isProcessing ? null : _runAutoDetection,
+              icon: const Icon(Icons.auto_fix_high, size: 16),
+              label: const Text('Auto-detect', style: TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor:
+                    detector.isProcessing ? null : Colors.deepPurple,
+                foregroundColor: detector.isProcessing ? null : Colors.white,
+              ),
+            ),
             ElevatedButton.icon(
               onPressed: _keyframes.isEmpty ? null : _clearAll,
               icon: const Icon(Icons.clear, size: 16),
@@ -1277,11 +1514,26 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             ),
           ],
           if (_phase == _SetupPhase.result) ...[
-            ElevatedButton.icon(
-              onPressed: () => setState(() => _phase = _SetupPhase.marking),
-              icon: const Icon(Icons.arrow_back, size: 16),
-              label: const Text('Edit ←', style: TextStyle(fontSize: 12)),
-            ),
+            if (_resultSource == _TrackSource.auto) ...[
+              // An automatic result has no keyframes behind it, so plain
+              // "Edit ←" would drop the user into an empty marking phase.
+              ElevatedButton.icon(
+                onPressed: _convertResultToKeyframes,
+                icon: const Icon(Icons.edit_location_alt, size: 16),
+                label:
+                    const Text('Edit points', style: TextStyle(fontSize: 12)),
+              ),
+              ElevatedButton.icon(
+                onPressed: detector.isProcessing ? null : _runAutoDetection,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Re-do', style: TextStyle(fontSize: 12)),
+              ),
+            ] else
+              ElevatedButton.icon(
+                onPressed: () => setState(() => _phase = _SetupPhase.marking),
+                icon: const Icon(Icons.arrow_back, size: 16),
+                label: const Text('Edit ←', style: TextStyle(fontSize: 12)),
+              ),
             _buildTargetLineButton(),
           ],
         ],
@@ -1492,8 +1744,34 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           'Tap the disc in 2+ frames (hold for zoom precision), then tap Process',
           const Color(0xFF1a237e),
         );
+      case _SetupPhase.result:
+        final report = _qualityReport;
+        if (report == null || !report.isLow) return const SizedBox.shrink();
+        return _instructionBanner(
+          'Low confidence — check this path',
+          _lowConfidenceDetail(report.primaryFlag!),
+          Colors.amber.shade900,
+        );
       default:
         return const SizedBox.shrink();
+    }
+  }
+
+  /// Explains, in the user's terms, what was wrong with an automatic track.
+  String _lowConfidenceDetail(DetectionQualityFlag flag) {
+    switch (flag) {
+      case DetectionQualityFlag.tooFewDetections:
+        return 'We only locked onto the disc for a few frames. Keep it, or '
+            'tap Edit points to fix it by hand.';
+      case DetectionQualityFlag.lowCoverage:
+        return 'The path covers less than half the clip — the disc may leave '
+            'frame early.';
+      case DetectionQualityFlag.mostlyInterpolated:
+        return 'Most of this path is filled in between sightings, not '
+            'detected.';
+      case DetectionQualityFlag.weakMatches:
+        return 'The matches were weak — this may be tracking something other '
+            'than the disc.';
     }
   }
 
@@ -1520,6 +1798,28 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             style: const TextStyle(color: Color(0xCCFFFFFF), fontSize: 11),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showDetectionModeSheet() {
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: const Color(0xFF1a1a2e),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => DetectionModeSheet(
+        onAuto: () {
+          Navigator.pop(context);
+          _runAutoDetection();
+        },
+        onManual: () {
+          Navigator.pop(context);
+          _showCameraQuestion();
+        },
       ),
     );
   }

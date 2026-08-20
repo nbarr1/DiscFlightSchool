@@ -68,14 +68,24 @@ emulator:
 
 ### TODO: verify track-by-detection on a real video
 
-`DiscDetectionService` was rewritten around a YOLO11 model and a
-track-by-detection state machine (full-frame discovery → windowed tracking
-with velocity prediction → fall back to discovery after a short occlusion
-streak — see `detectInWindow`, `_DiscTrack`, and the loop in `processVideo`),
-plus a single-pass FFmpeg frame extraction and an optional GPU delegate.
+`DiscDetectionService` was rewritten around a track-by-detection state machine
+(full-frame discovery → windowed tracking with velocity prediction → fall back
+to discovery after a short occlusion streak — see `detectInWindow`,
+`_DiscTrack`, and the loop in `processVideo`), plus a single-pass FFmpeg frame
+extraction and an optional GPU delegate.
+
+The bundled asset is now a genuine **YOLO11n@640** export — see the client
+facts in `README.md`. It arrived as `format="litert"`/`quantize="w8a32"`
+output from Ultralytics' current exporter, which (as of Ultralytics 8.4.83,
+when the standalone `tflite` format was removed) produces **NCHW**
+(`[1,3,640,640]`) rather than the NHWC layout the app originally assumed —
+`DiscDetectionService.detectInputLayout` and the two `_preprocessImage` write
+paths handle this, covered at the pure-function level, but **none of it has
+run against a real interpreter yet.**
 `flutter analyze` and `flutter test` are clean and cover every pure function
 in isolation (candidate selection, coherence filtering, smoothing,
-interpolation), but **nothing here exercises the state machine against real
+interpolation, and now the NHWC/NCHW layout detection and both preprocessing
+write patterns), but **nothing here exercises the state machine against real
 frames, the FFmpeg extraction command, or the GPU delegate — all of that
 needs a device and a real throw video.**
 
@@ -90,6 +100,16 @@ needs a device and a real throw video.**
   discovery rather than tracking a false candidate.
 - The resulting trajectory overlay is at least as accurate as the previous
   (YOLOv8, full-frame-every-frame, 320-input) build on the same clip.
+- **Model swap.** The load log reports `input [1, 3, 640, 640] (NCHW)` /
+  `output [1, 5, 8400]` and raises no geometry warning, and detection still
+  works on a clip that worked before. This is the acceptance gate for the
+  upgrade — it's the one thing the pure-function tests genuinely cannot
+  cover, since it depends on the real interpreter accepting the buffer shape
+  `_writeChannelsFirst` builds.
+- **Timing at 640.** Measure real ms/frame. Per-frame cost scales with input
+  area, so a 640 model is roughly 4× the 320 export. If a trimmed clip still
+  takes minutes after the `getBytes` preprocessing change and the trim-derived
+  frame budget, the isolate migration below stops being optional.
 - The GPU delegate actually engages on a real Android/iOS device (check the
   `debugPrint` in `_loadModelImpl`) and inference doesn't silently fall back to
   CPU-only in a way that regresses processing time.
@@ -101,3 +121,43 @@ needs a device and a real throw video.**
 Moving inference off the UI isolate entirely (via `IsolateInterpreter`) remains
 outstanding; it needs device testing to validate, so it was not attempted
 blind.
+
+### TODO: verify the Full Auto flight-tracking flow on a device
+
+`AutoDiscTracker` and the Auto-detect entry point are covered by host tests
+only at the pure-function level — the quality heuristic, seed-point sampling,
+frame-index maths, and the FFmpeg command string. Everything that touches real
+frames still needs a device.
+
+**Run these with a real throw video:**
+
+- **Trim alignment — the important one.** Mark a keyframe on a visually
+  distinctive frame, then run Auto-detect and confirm the overlay lands on the
+  same object at the same frame. Do it once with no trim and once with a
+  non-zero trim start. Before this change, extraction always started at the
+  head of the file while keyframes were counted from the trim start, so a
+  trimmed clip silently paired every position with the wrong image. Re-run the
+  same check on **Auto-Refine**, which had the identical bug.
+- **Progress and cancel.** The bar advances smoothly (progress now notifies
+  every frame, not every tenth) with real per-frame status. Cancel stops the
+  run at the next frame and changes nothing. Then start a second run
+  immediately: if the lock leaked, it surfaces as the `StateError` from
+  `processVideo`.
+- **Quality banner.** A clean clip raises no banner. A clip where the disc
+  leaves frame early raises `lowCoverage`. Thresholds live in
+  `DetectionQualityThresholds` and are first-pass guesses — retune them from
+  what you see here.
+- **Correction path.** Edit points seeds keyframes from real detections only
+  (never interpolated fill), world anchors survive the transition, and
+  Auto-Refine re-runs on the result. Re-tapping a seeded point replaces it and
+  clears its `derived` flag, so it becomes eligible for training collection
+  again.
+- **Fresh install.** Uninstall, install, and go straight to Auto-detect without
+  visiting Training Settings first. Previously nothing loaded the model on a
+  normal run, so `HybridDetectionService` silently skipped YOLO entirely and
+  refined against colour blobs; confirm the load now happens and
+  `usedDetectorModel` is true.
+- **Training-data offset.** With sample collection opted in and a trimmed clip,
+  confirm the stored full-frame image matches the marked moment. Samples used
+  to be extracted at an absolute timestamp computed from a trim-relative frame
+  index, which mislabels every sample from a trimmed video.

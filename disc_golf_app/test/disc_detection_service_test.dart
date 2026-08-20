@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:disc_golf_app/services/disc_detection_service.dart';
@@ -353,6 +354,186 @@ void main() {
 
     test('getCompensatedTrail matches getTrail', () {
       expect(result.getCompensatedTrail(2), result.getTrail(2));
+    });
+  });
+
+  group('buildExtractCommand', () {
+    String build({int startMs = 0, int? endMs, int maxFrames = 300}) {
+      return DiscDetectionService.buildExtractCommand(
+        videoPath: '/videos/throw.mp4',
+        outputPattern: '/tmp/out/frame_%04d.jpg',
+        fps: 10.0,
+        maxFrames: maxFrames,
+        startMs: startMs,
+        endMs: endMs,
+      );
+    }
+
+    test('omits seek arguments when nothing is trimmed', () {
+      final command = build();
+
+      expect(command, isNot(contains('-ss')));
+      expect(command, isNot(contains(' -t ')));
+    });
+
+    test('emits output seeking for a trimmed range', () {
+      final command = build(startMs: 1500, endMs: 5500);
+
+      // -ss must come after -i: input seeking can snap to a keyframe and
+      // shift every frame index relative to the trim start.
+      expect(command.indexOf('-ss'), greaterThan(command.indexOf('-i')));
+      expect(command, contains('-ss 1.500'));
+      // -t is a duration, not an end timestamp.
+      expect(command, contains('-t 4.000'));
+    });
+
+    test('omits the duration when there is no trim end', () {
+      final command = build(startMs: 1500);
+
+      expect(command, contains('-ss 1.500'));
+      expect(command, isNot(contains(' -t ')));
+    });
+
+    test('ignores an end that does not follow the start', () {
+      expect(build(startMs: 5000, endMs: 5000), isNot(contains(' -t ')));
+      expect(build(startMs: 5000, endMs: 1000), isNot(contains(' -t ')));
+    });
+
+    test('preserves the escaped comma in the scale filter', () {
+      // FFmpegKit tokenizes this string itself rather than handing it to a
+      // shell, so the backslash — not quoting — is what keeps the filtergraph
+      // parseable. Losing it silently breaks extraction.
+      expect(build(), contains(r'scale=min(640\,iw):-2'));
+      expect(build(), contains('fps=10.0'));
+    });
+
+    test('carries the frame cap and paths through', () {
+      final command = build(maxFrames: 61);
+
+      expect(command, contains('-frames:v 61'));
+      expect(command, contains('"/videos/throw.mp4"'));
+      expect(command, contains('"/tmp/out/frame_%04d.jpg"'));
+    });
+  });
+
+  group('expectedAnchors', () {
+    test('matches the anchor-free Detect head grid at each input size', () {
+      // 80²+40²+20² — the geometry of the YOLO11 export the app bundles.
+      expect(DiscDetectionService.expectedAnchors(640), 8400);
+      // 40²+20²+10² — the previous 320-input export.
+      expect(DiscDetectionService.expectedAnchors(320), 2100);
+      expect(DiscDetectionService.expectedAnchors(416), 3549);
+    });
+  });
+
+  group('detectInputLayout', () {
+    test('recognizes NHWC — the legacy onnx2tf export layout', () {
+      // The original bundled asset: images [1,320,320,3].
+      final layout = DiscDetectionService.detectInputLayout([1, 320, 320, 3]);
+      expect(layout.size, 320);
+      expect(layout.channelsFirst, isFalse);
+      expect(layout.recognized, isTrue);
+    });
+
+    test('recognizes NCHW — the current Ultralytics LiteRT export layout', () {
+      // best_w8a32.tflite, as delivered: serving_default_args_0 [1,3,640,640].
+      final layout = DiscDetectionService.detectInputLayout([1, 3, 640, 640]);
+      expect(layout.size, 640);
+      expect(layout.channelsFirst, isTrue);
+      expect(layout.recognized, isTrue);
+    });
+
+    test('prefers NHWC when only the last dimension is 3', () {
+      final layout = DiscDetectionService.detectInputLayout([1, 640, 640, 3]);
+      expect(layout.size, 640);
+      expect(layout.channelsFirst, isFalse);
+    });
+
+    test('falls back to the historical NHWC guess for an unrecognized shape',
+        () {
+      // Neither dim 1 nor dim 3 is 3 — e.g. a single-channel or batch>1 model.
+      final layout = DiscDetectionService.detectInputLayout([1, 640, 640, 1]);
+      expect(layout.size, 640);
+      expect(layout.channelsFirst, isFalse);
+      expect(layout.recognized, isFalse);
+    });
+
+    test('falls back to the default size for a shape with no usable dims',
+        () {
+      final layout = DiscDetectionService.detectInputLayout([1]);
+      expect(layout.size, greaterThan(0));
+      expect(layout.channelsFirst, isFalse);
+      expect(layout.recognized, isFalse);
+    });
+  });
+
+  group('preprocessImage layout', () {
+    // A 2x2 source at the target input size, so copyResize is an identity
+    // mapping and every pixel's exact value survives into the buffer.
+    img.Image fourPixelImage() {
+      final image = img.Image(width: 2, height: 2);
+      image.setPixelRgb(0, 0, 10, 20, 30);
+      image.setPixelRgb(1, 0, 40, 50, 60);
+      image.setPixelRgb(0, 1, 70, 80, 90);
+      image.setPixelRgb(1, 1, 100, 110, 120);
+      return image;
+    }
+
+    test('NHWC writes pixel-interleaved: buffer[0][y][x][channel]', () {
+      final service = DiscDetectionService();
+      final buffer = service.preprocessImageForTesting(
+        fourPixelImage(),
+        inputSize: 2,
+        channelsFirst: false,
+      );
+
+      expect(buffer[0][0][0], [closeTo(10 / 255, 1e-6), closeTo(20 / 255, 1e-6), closeTo(30 / 255, 1e-6)]);
+      expect(buffer[0][0][1], [closeTo(40 / 255, 1e-6), closeTo(50 / 255, 1e-6), closeTo(60 / 255, 1e-6)]);
+      expect(buffer[0][1][0], [closeTo(70 / 255, 1e-6), closeTo(80 / 255, 1e-6), closeTo(90 / 255, 1e-6)]);
+      expect(buffer[0][1][1], [closeTo(100 / 255, 1e-6), closeTo(110 / 255, 1e-6), closeTo(120 / 255, 1e-6)]);
+    });
+
+    test('NCHW writes channel-planar: buffer[0][channel][y][x]', () {
+      final service = DiscDetectionService();
+      final buffer = service.preprocessImageForTesting(
+        fourPixelImage(),
+        inputSize: 2,
+        channelsFirst: true,
+      );
+
+      // Red plane
+      expect(buffer[0][0][0][0], closeTo(10 / 255, 1e-6));
+      expect(buffer[0][0][0][1], closeTo(40 / 255, 1e-6));
+      expect(buffer[0][0][1][0], closeTo(70 / 255, 1e-6));
+      expect(buffer[0][0][1][1], closeTo(100 / 255, 1e-6));
+      // Green plane
+      expect(buffer[0][1][0][0], closeTo(20 / 255, 1e-6));
+      expect(buffer[0][1][1][1], closeTo(110 / 255, 1e-6));
+      // Blue plane
+      expect(buffer[0][2][0][0], closeTo(30 / 255, 1e-6));
+      expect(buffer[0][2][1][1], closeTo(120 / 255, 1e-6));
+    });
+
+    test('the two layouts contain the same values in different shapes', () {
+      final image = fourPixelImage();
+      final nhwc = DiscDetectionService().preprocessImageForTesting(
+        image,
+        inputSize: 2,
+        channelsFirst: false,
+      );
+      final nchw = DiscDetectionService().preprocessImageForTesting(
+        image,
+        inputSize: 2,
+        channelsFirst: true,
+      );
+
+      for (int y = 0; y < 2; y++) {
+        for (int x = 0; x < 2; x++) {
+          for (int c = 0; c < 3; c++) {
+            expect(nchw[0][c][y][x], closeTo(nhwc[0][y][x][c], 1e-9));
+          }
+        }
+      }
     });
   });
 

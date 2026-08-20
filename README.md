@@ -12,7 +12,7 @@ The Flutter app is the end-user application. Its bootstrap lives in `disc_golf_a
 
 Implemented client areas currently present in source:
 
-- Flight Tracker screens, video playback, overlays, and disc-detection services. Automated detection is track-by-detection: full-frame YOLO discovery locates the disc, then windowed tracking with velocity prediction follows it frame-to-frame (falling back to discovery after a short occlusion streak) instead of re-scanning the whole frame every time. Frames are extracted in a single batched FFmpeg pass rather than one call per frame. A user-seeded keyframe path (`GeometricSplineTracker`/`HybridDiscTracker` behind the `DiscTracker` interface) remains available as a manual/hybrid alternative when automated tracking needs a correction.
+- Flight Tracker screens, video playback, overlays, and disc-detection services. Automated detection is track-by-detection: full-frame YOLO discovery locates the disc, then windowed tracking with velocity prediction follows it frame-to-frame (falling back to discovery after a short occlusion streak) instead of re-scanning the whole frame every time. Frames are extracted in a single batched FFmpeg pass rather than one call per frame. A user-seeded keyframe path (`GeometricSplineTracker`/`HybridDiscTracker` behind the `DiscTracker` interface) remains available as a manual/hybrid alternative when automated tracking needs a correction. After trimming, the user picks "Auto-detect" or "Mark manually": auto runs `AutoDiscTracker` over the trimmed clip with no taps, showing determinate progress with a cancel, then reports a low-confidence warning (coverage, interpolated share, and mean confidence relative to the user's own sensitivity setting — see `detection_quality.dart`) and offers to convert the detected path into editable keyframes for hand-correction. Every tracker works in the trimmed frame space: frame 0 is the trim start, not the start of the file.
 - Form Coach screens for video trimming, posture analysis, phase selection/comparison, pose correction, and session history.
 - Disc Roulette screens, scoring models, scoring service, and roulette history service.
 - Knowledge Base screens and local JSON-backed content models/services.
@@ -31,7 +31,10 @@ Important client facts:
 - Android NDK version requested by Gradle: `27.0.12077973`.
 - Release builds require a complete `key.properties` signing config; unsigned local testing should use debug builds.
 - Bundled runtime assets include JSON data files, `assets/models/disc_detector.tflite`, an SVG basket image, and Flutter material assets.
-- The bundled/retrained detector's TFLite output format needs no client-side parsing changes between YOLOv8 and YOLO11: both export the same anchor-free `Detect` head shape (verified against the `ultralytics` source, not assumed). `DiscDetectionService` reads its input tensor size from the loaded model at load time rather than assuming a fixed resolution.
+- The bundled/retrained detector's TFLite output format needs no client-side parsing changes between YOLOv8 and YOLO11: both export the same anchor-free `Detect` head shape (verified against the `ultralytics` source, not assumed). `DiscDetectionService` reads its input tensor size and channel order from the loaded model at load time rather than assuming a fixed resolution or layout.
+- **The bundled `disc_detector.tflite` is a genuine YOLO11n export at 640×640**, single class, dynamic-INT8-quantized (`quantize="w8a32"` — int8 weights, float32 activations, no calibration data needed). Read straight out of the flatbuffer to confirm rather than trust the filename: output `serving_default_output_0_output` is `[1,5,8400]` FLOAT32 — 8400 being 80²+40²+20², the anchor grid for a 640 input.
+- **The input tensor is NCHW (channel-first), `[1,3,640,640]`, not the NHWC (channel-last) layout the app originally assumed.** As of Ultralytics 8.4.83 the standalone `tflite` export format was removed; `format="tflite"` now silently redirects to the `litert` exporter, which traces the PyTorch model directly and produces NCHW — there is no supported flag to recover the old onnx2tf-based NHWC output. `DiscDetectionService.detectInputLayout` distinguishes the two by which post-batch dimension equals 3 (the channel count — unambiguous, since a real detector's spatial dimensions are always ≥32) and `_preprocessImage` writes the pixel buffer in whichever order the loaded model actually expects.
+- `DiscDetectionService` logs the loaded model's input/output shapes and detected channel order, and warns — but never fails — when the geometry doesn't match a single-class anchor-free `Detect` head: a non-multiple-of-32 input, an unexpected channel count, an anchor count that disagrees with the declared input size, or a shape it can't confidently classify as NHWC or NCHW. A model downloaded from the training server may legitimately ship at a different geometry, and refusing to load it would break detection outright instead of degrading.
 
 ### Training server (`server/`)
 
@@ -171,15 +174,23 @@ Without `key.properties`, release builds now fail fast; use `flutter build apk -
 
 ## Current next steps
 
-1. **TODO: verify the YOLO11 track-by-detection pipeline on a real device with a real
-   throw video.** The detector upgrade (`yolo11n.pt`), the FFmpeg batch frame
-   extraction, the GPU delegate, and the discovery/tracking/occlusion state
-   machine are covered by `flutter analyze`/`flutter test` at the pure-function
-   level only — none of that is exercised against a real video or a real TFLite
-   interpreter yet. See `docs/testing.md` for the specific checklist.
+1. **TODO: verify the YOLO11n@640 detector on a real device with a real
+   throw video.** The `.tflite` swap and the NCHW-layout handling it required
+   (see the client facts above) are done, but none of it has run against a
+   real TFLite interpreter yet — the FFmpeg batch frame extraction, the GPU
+   delegate, and the discovery/tracking/occlusion state machine are covered
+   by `flutter analyze`/`flutter test` at the pure-function level only. See
+   `docs/testing.md` for the specific checklist, and confirm the load log
+   reports `input [1, 3, 640, 640]` and `NCHW` before trusting anything else.
 2. Keep docs synchronized with source whenever endpoints, assets, build settings, or runtime services change.
-3. Move disc detection off the UI isolate — see `docs/testing.md` for what is
-   still unverified and why.
+3. **Move disc detection off the UI isolate.** This moves from desirable to
+   likely required at a 640 input: per-frame cost scales with input area, so a
+   640 model is roughly 4× the 320 export's inference, output marshalling, and
+   candidate scan. Deriving the frame budget from the trimmed span (a six-second
+   trim is ~61 frames, not the 300-frame default) and reading frames via
+   `getBytes` rather than per-pixel `getPixel` buy back a large part of that,
+   but measure on a device before deciding this can keep waiting. See
+   `docs/testing.md`.
 
 ## Running the compose stack
 
