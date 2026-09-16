@@ -228,7 +228,11 @@ class FlightVideoExporter(private val context: Context) {
             return target
         }
 
-        fun release() {
+        // The effect pipeline releases its overlays on teardown, and the export
+        // releases this one when it finishes, whichever comes first. Recycling
+        // an already-recycled bitmap is a no-op, so both paths are safe.
+        override fun release() {
+            super.release()
             buffers.forEach { it.recycle() }
         }
 
