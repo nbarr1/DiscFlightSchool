@@ -7,8 +7,9 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// Release builds require a complete signing config. Failing fast here beats
-// shipping an unsigned artifact that the Play Console rejects later.
+// Release builds require a complete signing config. Without one the build is
+// stopped outright (see the task graph check below) rather than producing an
+// unsigned artifact the Play Console would reject on upload.
 val keystoreProperties = Properties().apply {
     val keystoreFile = rootProject.file("key.properties")
     if (keystoreFile.exists()) {
@@ -17,6 +18,23 @@ val keystoreProperties = Properties().apply {
 }
 val hasReleaseSigning = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
     .all { keystoreProperties.getProperty(it)?.isNotBlank() == true }
+
+// An unsigned release build succeeds and produces an artifact nobody can
+// upload, and CI only ever builds debug, so nothing else would catch it.
+gradle.taskGraph.whenReady {
+    val buildsRelease = allTasks.any { task ->
+        task.project == project &&
+            listOf("assembleRelease", "bundleRelease", "packageRelease", "installRelease")
+                .any { task.name.startsWith(it) }
+    }
+    if (buildsRelease && !hasReleaseSigning) {
+        throw GradleException(
+            "Release builds need signing credentials. Add disc_golf_android/key.properties " +
+                "with storeFile, storePassword, keyAlias and keyPassword, or build the debug " +
+                "variant instead.",
+        )
+    }
+}
 
 android {
     namespace = "com.discflightschool.app"

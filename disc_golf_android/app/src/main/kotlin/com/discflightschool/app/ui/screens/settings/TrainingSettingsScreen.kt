@@ -493,16 +493,33 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                         modelUpdatePrompt = false
                         scope.launch {
                             busyMessage = "Downloading model..."
-                            val success = collector.downloadModel()
-                            if (success) {
-                                // Reload immediately so the next detection run uses
-                                // the model the user just accepted.
-                                runCatching { container.discDetector.loadModel(forceReload = true) }
+                            val downloaded = collector.downloadModel()
+                            // The download only proves the bytes arrived intact.
+                            // A model the interpreter refuses is worse than no
+                            // update, because the app would keep preferring it
+                            // on every later launch, so the reload decides
+                            // whether this counts as a success.
+                            val loaded = downloaded &&
+                                runCatching {
+                                    container.discDetector.loadModel(forceReload = true)
+                                }.isSuccess
+                            if (loaded) {
+                                modelVersion = training.modelVersion
+                            } else if (downloaded) {
+                                collector.revertToPreviousModel()
+                                runCatching {
+                                    container.discDetector.loadModel(forceReload = true)
+                                }
                                 modelVersion = training.modelVersion
                             }
                             busyMessage = null
                             snackbarHostState.showSnackbar(
-                                if (success) "Model updated and loaded." else "Download failed.",
+                                when {
+                                    loaded -> "Model updated and loaded."
+                                    downloaded ->
+                                        "That model would not load. Keeping the previous one."
+                                    else -> "Download failed."
+                                },
                             )
                         }
                     },

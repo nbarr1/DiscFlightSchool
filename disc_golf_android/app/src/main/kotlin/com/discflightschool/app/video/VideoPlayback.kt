@@ -180,6 +180,10 @@ fun VideoSurface(player: ExoPlayer, modifier: Modifier = Modifier) {
             PlayerView(context).apply {
                 this.player = player
                 useController = false
+                // FIT, never FILL: filling would stretch a clip whose aspect
+                // ratio differs from the space it is given. Overlays keep the
+                // video's coordinates by living inside [VideoStage], which
+                // sizes the surface to the image instead.
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
             }

@@ -209,6 +209,7 @@ fun PostureAnalysisScreen(
             }
 
             if (workbench.phaseFrameIndices.isNotEmpty()) {
+                // The effect below seeks to whichever phase this selects.
                 verificationIndex = 0
             }
         } else {
@@ -220,6 +221,7 @@ fun PostureAnalysisScreen(
     LaunchedEffect(playback.positionMs, analysis) {
         val frames = analysis?.frames ?: return@LaunchedEffect
         if (frames.isEmpty()) return@LaunchedEffect
+        if (playback.positionMs < startMs) return@LaunchedEffect
         val frame = ((playback.positionMs - startMs) / FrameExtractor.POSE_INTERVAL_MS)
             .toInt()
             .coerceIn(0, frames.size - 1)

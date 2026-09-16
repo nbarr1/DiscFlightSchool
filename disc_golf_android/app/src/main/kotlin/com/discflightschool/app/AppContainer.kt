@@ -15,6 +15,7 @@ import com.discflightschool.app.data.migrateFlutterPreferences
 import com.discflightschool.app.detection.DiscDetector
 import com.discflightschool.app.pose.PostureAnalyzer
 import com.discflightschool.app.ui.WorkbenchState
+import com.discflightschool.app.ui.screens.roulette.RoundPlayState
 import com.discflightschool.app.video.FrameExtractor
 import com.discflightschool.core.data.AppPreferences
 import com.discflightschool.core.data.DetectionSettings
@@ -97,6 +98,7 @@ class AppContainer(context: Context) {
 
     /** The clip being worked on, shared across the screens of one flow. */
     val workbench = WorkbenchState()
+    val roundPlayState = RoundPlayState()
 
     /** Releases the native resources held for the life of the process. */
     fun shutdown() {

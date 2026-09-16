@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -52,7 +53,11 @@ fun rememberVideoPickers(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var captureTarget by remember { mutableStateOf<File?>(null) }
+    // Saved, not merely remembered: the camera is another app, and Android can
+    // reclaim this process while it is in front. The result still arrives after
+    // recreation, and without the path the recording would be reported as a
+    // failure and left behind as an orphaned file.
+    var captureTargetPath by rememberSaveable { mutableStateOf<String?>(null) }
 
     val pickLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
@@ -74,8 +79,8 @@ fun rememberVideoPickers(
     val captureLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CaptureVideo(),
     ) { saved ->
-        val file = captureTarget
-        captureTarget = null
+        val file = captureTargetPath?.let(::File)
+        captureTargetPath = null
         if (saved && file != null && file.length() > 0) {
             container.videoLibrary.setCurrentVideo(file.absolutePath)
             onVideoReady(file.absolutePath)
@@ -93,7 +98,7 @@ fun rememberVideoPickers(
             return@rememberLauncherForActivityResult
         }
         val (file, uri) = container.videoLibrary.newCaptureTarget()
-        captureTarget = file
+        captureTargetPath = file.absolutePath
         captureLauncher.launch(uri)
     }
 
@@ -114,7 +119,7 @@ fun rememberVideoPickers(
 
                 if (granted) {
                     val (file, uri) = container.videoLibrary.newCaptureTarget()
-                    captureTarget = file
+                    captureTargetPath = file.absolutePath
                     captureLauncher.launch(uri)
                 } else {
                     cameraPermissionLauncher.launch(Manifest.permission.CAMERA)

@@ -1,6 +1,11 @@
 package com.discflightschool.app.ui.screens.flighttracker
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -82,6 +87,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.discflightschool.app.LocalAppContainer
 import com.discflightschool.app.detection.HybridDiscTracker
@@ -450,6 +456,15 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
         }
     }
 
+    // Writing into the shared Movies collection needs the legacy storage
+    // permission up to API 28; from 29 it is scoped storage and asking would be
+    // both unnecessary and refused.
+    val needsLegacyStoragePermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+        ) != PackageManager.PERMISSION_GRANTED
+
     suspend fun saveVideoWithOverlay() {
         val tracked = workbench.flightResult ?: return
         if (tracked.detections.isEmpty()) return
@@ -483,6 +498,21 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
         }
     }
 
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        scope.launch {
+            if (granted) {
+                saveVideoWithOverlay()
+            } else {
+                snackbarHostState.showSnackbar(
+                    "Storage permission is needed to add the video to your gallery. " +
+                        "It stays in the app gallery either way.",
+                )
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             AppTopBar(title = "Flight tracker", onBack = onBack) {
@@ -493,7 +523,17 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
                     )
                 }
                 if (result != null) {
-                    IconButton(onClick = { scope.launch { saveVideoWithOverlay() } }) {
+                    IconButton(
+                        onClick = {
+                            if (needsLegacyStoragePermission) {
+                                storagePermissionLauncher.launch(
+                                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                                )
+                            } else {
+                                scope.launch { saveVideoWithOverlay() }
+                            }
+                        },
+                    ) {
                         Icon(Icons.Default.Save, contentDescription = "Save video with overlay")
                     }
                 }

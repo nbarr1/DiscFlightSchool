@@ -52,6 +52,9 @@ class TrainingDataCollector(
     private val labelsDir get() = File(dataDir, "labels")
     private val modelsDir get() = File(dataDir, "models")
 
+    /** The version the last download replaced, for [revertToPreviousModel]. */
+    private var replacedModelVersion: String? = null
+
     /**
      * Save one training sample per keyframe, returning how many were written.
      *
@@ -297,12 +300,47 @@ class TrainingDataCollector(
                 }
 
                 modelsDir.mkdirs()
-                File(modelsDir, "disc_detector.tflite").writeBytes(bytes)
+                val modelFile = File(modelsDir, MODEL_FILE)
+                // Kept until the interpreter has accepted the replacement: a
+                // model that fails to load would otherwise be preferred on
+                // every later launch, with no way back to a working one.
+                if (modelFile.exists()) {
+                    modelFile.copyTo(File(modelsDir, PREVIOUS_MODEL_FILE), overwrite = true)
+                }
+                replacedModelVersion = repository.modelVersion
+                modelFile.writeBytes(bytes)
                 repository.modelVersion = remote.version
                 Log.i(TAG, "Installed detector model version ${remote.version}")
                 true
             }
         }.onFailure { Log.w(TAG, "Failed to download the model", it) }.getOrDefault(false)
+    }
+
+    /**
+     * Put back whatever model was in place before the last download.
+     *
+     * With no earlier download to restore, the file is removed so the detector
+     * falls back to the model bundled in the APK.
+     */
+    suspend fun revertToPreviousModel(): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            val modelFile = File(modelsDir, MODEL_FILE)
+            val backup = File(modelsDir, PREVIOUS_MODEL_FILE)
+            if (backup.exists()) {
+                backup.copyTo(modelFile, overwrite = true)
+                backup.delete()
+            } else {
+                modelFile.delete()
+            }
+            // Empty would stick as a stored value; the bundled version is what
+            // "no downloaded model" means.
+            repository.modelVersion = replacedModelVersion
+                ?: TrainingDataRepository.BUNDLED_MODEL_VERSION
+            replacedModelVersion = null
+            Log.i(TAG, "Reverted to the previous detector model")
+            true
+        }.onFailure { Log.w(TAG, "Could not revert the detector model", it) }
+            .getOrDefault(false)
     }
 
     private fun generateId(): String {
@@ -312,6 +350,8 @@ class TrainingDataCollector(
 
     private companion object {
         const val TAG = "TrainingDataCollector"
+        const val MODEL_FILE = "disc_detector.tflite"
+        const val PREVIOUS_MODEL_FILE = "disc_detector.previous.tflite"
         const val APP_VERSION = "1.0.0"
         val JPEG = "image/jpeg".toMediaType()
     }
