@@ -1,5 +1,19 @@
 # Google Play Console Submission & Android App Audit Report
 
+> **Rewrite note.** The client this audit examined was the Flutter app in
+> `disc_golf_app/`. That app has been rewritten as a native Kotlin/Compose
+> client in `disc_golf_android/`, so every path below names a file that no
+> longer exists. The findings themselves still stand — they are about the app
+> that ships, not about Dart — and the shipped fixes carried over to the
+> rewrite: the privacy policy screen (`ui/screens/settings/PrivacyPolicy.kt`),
+> `android:allowBackup="false"`, the network security config, and the
+> `key.properties` release-signing guard. What changed is where to make the
+> next change: build settings live in `disc_golf_android/app/build.gradle.kts`,
+> the manifest in `disc_golf_android/app/src/main/AndroidManifest.xml`, and the
+> version is `versionCode`/`versionName` in that Gradle file rather than a
+> `pubspec.yaml` field. CI builds with Gradle, so there is no Flutter version
+> to pin.
+
 **Target Repository / App:** `disc_golf_app` (Flutter, `com.discflightschool.app`)
 **Audit Date:** 2026-08-14
 **Audit Status:** ⚠️ **ACTION REQUIRED** (no hard manifest blockers found, but store-listing/compliance gaps will block submission or trigger takedown)

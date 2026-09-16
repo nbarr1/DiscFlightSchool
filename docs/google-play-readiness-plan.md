@@ -1,5 +1,19 @@
 # Remediation Plan: Google Play Readiness Findings
 
+> **Rewrite note.** The client this audit examined was the Flutter app in
+> `disc_golf_app/`. That app has been rewritten as a native Kotlin/Compose
+> client in `disc_golf_android/`, so every path below names a file that no
+> longer exists. The findings themselves still stand — they are about the app
+> that ships, not about Dart — and the shipped fixes carried over to the
+> rewrite: the privacy policy screen (`ui/screens/settings/PrivacyPolicy.kt`),
+> `android:allowBackup="false"`, the network security config, and the
+> `key.properties` release-signing guard. What changed is where to make the
+> next change: build settings live in `disc_golf_android/app/build.gradle.kts`,
+> the manifest in `disc_golf_android/app/src/main/AndroidManifest.xml`, and the
+> version is `versionCode`/`versionName` in that Gradle file rather than a
+> `pubspec.yaml` field. CI builds with Gradle, so there is no Flutter version
+> to pin.
+
 Companion to `docs/google-play-readiness-report.md`. Each item below maps 1:1 to a finding in that report, ordered by priority, with the concrete files to touch, and a note on whether it's something this repo/agent can execute directly or whether it needs an action only the app owner can take (Play Console access, a real signing keystore, legal sign-off on policy text).
 
 Status legend: 🔧 code/config change (agent-executable) · 🔑 needs owner-supplied secret/credential · 🧑‍⚖️ needs owner decision or Play Console access · 🧪 needs a real device/toolchain to verify.

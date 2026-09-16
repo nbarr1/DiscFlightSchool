@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The window theme only has to match what Compose draws, so the first
+         frame after launch is not a flash of white. -->
+    <style name="Theme.DiscFlightSchool" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/app_background</item>
+        <item name="android:statusBarColor">@color/app_primary</item>
+        <item name="android:navigationBarColor">@color/app_background</item>
+    </style>
+</resources>

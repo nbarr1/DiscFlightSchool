@@ -1,11 +1,15 @@
 # Dependency audit troubleshooting
 
-`.github/workflows/dependency-audit.yml` runs two independent checks.
+`.github/workflows/dependency-audit.yml` runs one check.
 
 | Check | Tool | Covers |
 |---|---|---|
 | **Python dependency audit** | `pip-audit` | `server/requirements.txt`, `server/requirements-test.txt` |
-| **OSV lockfile audit** | OSV-Scanner | `disc_golf_app/pubspec.lock` |
+
+The workflow also used to run an OSV-Scanner job over `disc_golf_app/pubspec.lock`.
+That lockfile left the repository with the Flutter client, and the Android
+client's `disc_golf_android/gradle/libs.versions.toml` is a version catalog —
+a manifest, not a resolved lockfile — so the job had nothing left to scan.
 
 ## Why Python is audited by pip-audit and not by OSV
 
@@ -68,28 +72,27 @@ production required `Pillow>=12.3.0` — two ranges with no overlap, so the
 image-validation tests were exercising a major version the app would never run.
 Bump both files together.
 
-## How to read a failing OSV lockfile audit
+## Restoring an OSV audit for the Android client
 
-OSV-Scanner exits non-zero when it finds known vulnerabilities in a scanned
-lockfile. Current input: `disc_golf_app/pubspec.lock`.
-
-For Dart findings, update `disc_golf_app/pubspec.yaml` and regenerate the
-lockfile with `flutter pub get`. Do not resolve a finding by widening a version
-range without regenerating the lockfile — the scanner must be able to see the
-safe resolved version.
+OSV-Scanner needs a resolved lockfile. Gradle can produce one with
+[dependency locking](https://docs.gradle.org/current/userguide/dependency_locking.html):
+turn it on in `disc_golf_android`, commit the generated `gradle.lockfile`, then
+add a job that scans it.
 
 ```bash
-osv-scanner scan source --lockfile=disc_golf_app/pubspec.lock
+osv-scanner scan source --lockfile=disc_golf_android/gradle.lockfile
 ```
+
+Scanning the version catalog instead would reproduce the same failure mode the
+Python section describes: findings against versions the build never resolves.
 
 ## Workflow hardening
 
 - Third-party actions are pinned to stable major versions rather than `@main`,
   so an unreleased upstream change cannot break pushes.
-- The OSV action is referenced as
+- If the OSV job is restored, reference the action as
   `google/osv-scanner-action/osv-scanner-action@v2.3.8`. The **repository root
   has no `action.yml`** — referencing `google/osv-scanner-action@v2.3.8`
   fails with `Top level 'runs:' section is required` before the scan starts.
-  If this check ever fails with that message, the path lost its subdirectory.
-- The scan lists explicit lockfiles rather than scanning recursively, so
-  generated build directories are never picked up.
+- List explicit lockfiles rather than scanning recursively, so generated build
+  directories are never picked up.
