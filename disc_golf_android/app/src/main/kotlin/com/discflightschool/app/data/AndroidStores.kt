@@ -2,13 +2,19 @@ package com.discflightschool.app.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Base64
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.discflightschool.core.data.FlutterPreferences
 import com.discflightschool.core.data.KeyValueStore
 import com.discflightschool.core.data.ManifestStore
 import com.discflightschool.core.data.SecretStore
+import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.InputStream
+import java.io.ObjectInputStream
+import java.io.ObjectStreamClass
 
 /** [KeyValueStore] backed by `SharedPreferences`. */
 class SharedPreferencesStore(private val prefs: SharedPreferences) : KeyValueStore {
@@ -122,3 +128,64 @@ class FileManifestStore(private val file: File) : ManifestStore {
         }.onFailure { Log.w("FileManifestStore", "Failed to write ${file.name}", it) }
     }
 }
+
+/**
+ * Carry an earlier Flutter install's preferences into [store], once.
+ *
+ * Runs before any repository reads the store, because the first read is what
+ * decides whether onboarding is shown and what history exists. The marker is
+ * written even when the legacy file is empty, so a fresh install pays the cost
+ * exactly once rather than on every launch.
+ */
+fun migrateFlutterPreferences(context: Context, store: KeyValueStore) {
+    if (store.getBoolean(FLUTTER_MIGRATION_KEY) == true) return
+
+    runCatching {
+        val legacy = context.getSharedPreferences(
+            FlutterPreferences.FILE_NAME,
+            Context.MODE_PRIVATE,
+        )
+        val entries = legacy.all
+        if (entries.isNotEmpty()) {
+            val copied = FlutterPreferences.migrate(
+                legacy = entries,
+                into = store,
+                platformListDecoder = ::decodeSerializedStringList,
+            )
+            Log.i(STORE_TAG, "Carried $copied preferences over from the Flutter install")
+        }
+    }.onFailure { error ->
+        Log.w(STORE_TAG, "Could not read the Flutter preferences file", error)
+    }
+
+    store.putBoolean(FLUTTER_MIGRATION_KEY, true)
+}
+
+/**
+ * Decode the older base64 list form, which is a serialized `ArrayList<String>`.
+ *
+ * Deserialization is restricted to the two classes that form can legitimately
+ * contain. The file is the app's own, but a decoder that will instantiate
+ * whatever it is handed is not worth keeping around for a legacy format.
+ */
+private fun decodeSerializedStringList(encoded: String): List<String>? = runCatching {
+    val bytes = Base64.decode(encoded, Base64.DEFAULT)
+    StringListObjectInputStream(ByteArrayInputStream(bytes)).use { stream ->
+        (stream.readObject() as? List<*>)?.filterIsInstance<String>()
+    }
+}.getOrNull()
+
+private class StringListObjectInputStream(source: InputStream) : ObjectInputStream(source) {
+    override fun resolveClass(description: ObjectStreamClass): Class<*> =
+        when (description.name) {
+            ArrayList::class.java.name -> ArrayList::class.java
+            String::class.java.name -> String::class.java
+            else -> throw java.io.InvalidClassException(
+                description.name,
+                "Not part of a stored string list",
+            )
+        }
+}
+
+private const val FLUTTER_MIGRATION_KEY = "flutter_preferences_migrated"
+private const val STORE_TAG = "AndroidStores"

@@ -24,6 +24,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.discflightschool.app.LocalAppContainer
 import com.discflightschool.app.ui.components.AppTopBar
 import com.discflightschool.app.ui.components.LoadingState
@@ -50,7 +52,12 @@ fun CategoryScreen(
 
     LaunchedEffect(Unit) { repository.load() }
 
-    val category = repository.categories.firstOrNull { it.id == categoryId }
+    // Collected, not read once: on a back stack restored after process death
+    // this screen composes before the content is parsed, and a plain read would
+    // leave it on "Loading..." for good.
+    val content by repository.content.collectAsStateWithLifecycle()
+
+    val category = content.categories.firstOrNull { it.id == categoryId }
     if (category == null) {
         Scaffold(topBar = { AppTopBar(title = "Category", onBack = onBack) }) { padding ->
             LoadingState("Loading...", Modifier.padding(padding))
@@ -146,7 +153,9 @@ fun ArticleDetailScreen(articleId: String, onBack: () -> Unit) {
 
     LaunchedEffect(Unit) { repository.load() }
 
-    val article = repository.articles.firstOrNull { it.id == articleId }
+    val content by repository.content.collectAsStateWithLifecycle()
+
+    val article = content.articles.firstOrNull { it.id == articleId }
     if (article == null) {
         Scaffold(topBar = { AppTopBar(title = "FAQ", onBack = onBack) }) { padding ->
             LoadingState("Loading...", Modifier.padding(padding))

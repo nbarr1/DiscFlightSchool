@@ -91,7 +91,7 @@ import com.discflightschool.app.ui.components.FlightPathOverlay
 import com.discflightschool.app.ui.components.LoadingState
 import com.discflightschool.app.ui.theme.AppColors
 import com.discflightschool.app.video.FlightVideoExporter
-import com.discflightschool.app.video.VideoSurface
+import com.discflightschool.app.video.VideoStage
 import com.discflightschool.app.video.rememberPlaybackState
 import com.discflightschool.app.video.rememberVideoPlayer
 import com.discflightschool.core.data.KeyframeData
@@ -508,99 +508,105 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
         ) {
             PhaseBanner(phase = phase, pendingAnchor = pendingAnchor, report = qualityReport)
 
-            Box(
+            // Taps and overlays live inside the stage, so they share the
+            // letterboxed image's coordinates rather than the whole pane's.
+            VideoStage(
+                player = player,
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
-                    .background(Color.Black)
-                    .onSizeChanged { videoSize = Size(it.width.toFloat(), it.height.toFloat()) }
-                    .pointerInput(phase, boxMode, targetLineMode, currentFrame) {
-                        detectTapGestures(
-                            onTap = { onCanvasTap(it) },
-                            onLongPress = { offset ->
-                                player.pause()
-                                magnifierAt = offset
-                            },
-                            onPress = { offset ->
-                                // A long press ends here, and that release is
-                                // what places the point under the magnifier.
-                                tryAwaitRelease()
-                                if (magnifierAt != null) {
-                                    onCanvasTap(magnifierAt ?: offset)
-                                    magnifierAt = null
-                                }
-                            },
-                        )
-                    },
+                    .fillMaxWidth(),
             ) {
-                VideoSurface(player, Modifier.fillMaxSize())
-
-                if (showOverlay) {
-                    val tracked = result
-                    if (tracked != null && tracked.detections.isNotEmpty()) {
-                        FlightPathOverlay(
-                            result = tracked,
-                            currentFrame = currentFrame,
-                            showFullTrail = true,
-                            showCurrentDisc = phase != SetupPhase.RESULT,
-                            anchors = anchors.toList(),
-                            targetLine = targetStart?.let { start ->
-                                targetEnd?.let { end -> start to end }
-                            },
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-
-                    if (phase == SetupPhase.MARKING) {
-                        KeyframeMarkers(
-                            keyframes = keyframes,
-                            currentFrame = currentFrame,
-                            pendingCorner = pendingBoxCorner,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-
-                    if (phase == SetupPhase.ANCHORING) {
-                        AnchorMarkers(
-                            anchors = anchors,
-                            pending = pendingAnchor,
-                            currentFrame = currentFrame,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                }
-
-                val magnifier = magnifierAt
-                val bitmap = magnifierBitmap
-                if (magnifier != null && bitmap != null) {
-                    Magnifier(
-                        bitmap = bitmap,
-                        focus = magnifier,
-                        canvasSize = videoSize,
-                        offsetPx = with(density) {
-                            IntOffset(
-                                (magnifier.x - 70.dp.toPx()).roundToInt(),
-                                (magnifier.y - 180.dp.toPx()).roundToInt(),
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .onSizeChanged { videoSize = Size(it.width.toFloat(), it.height.toFloat()) }
+                        .pointerInput(phase, boxMode, targetLineMode, currentFrame) {
+                            detectTapGestures(
+                                onTap = { onCanvasTap(it) },
+                                onLongPress = { offset ->
+                                    player.pause()
+                                    magnifierAt = offset
+                                },
+                                onPress = { offset ->
+                                    // A long press ends here, and that release
+                                    // is what places the point under the
+                                    // magnifier.
+                                    tryAwaitRelease()
+                                    if (magnifierAt != null) {
+                                        onCanvasTap(magnifierAt ?: offset)
+                                        magnifierAt = null
+                                    }
+                                },
                             )
                         },
-                    )
-                }
+                ) {
+                    if (showOverlay) {
+                        val tracked = result
+                        if (tracked != null && tracked.detections.isNotEmpty()) {
+                            FlightPathOverlay(
+                                result = tracked,
+                                currentFrame = currentFrame,
+                                showFullTrail = true,
+                                showCurrentDisc = phase != SetupPhase.RESULT,
+                                anchors = anchors.toList(),
+                                targetLine = targetStart?.let { start ->
+                                    targetEnd?.let { end -> start to end }
+                                },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
 
-                if (targetLineMode) {
-                    Text(
-                        text = if (targetStart == null) {
-                            "Tap the start of your target line"
-                        } else {
-                            "Tap the target"
-                        },
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(8.dp)
-                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White,
-                    )
+                        if (phase == SetupPhase.MARKING) {
+                            KeyframeMarkers(
+                                keyframes = keyframes,
+                                currentFrame = currentFrame,
+                                pendingCorner = pendingBoxCorner,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+
+                        if (phase == SetupPhase.ANCHORING) {
+                            AnchorMarkers(
+                                anchors = anchors,
+                                pending = pendingAnchor,
+                                currentFrame = currentFrame,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+
+                    val magnifier = magnifierAt
+                    val bitmap = magnifierBitmap
+                    if (magnifier != null && bitmap != null) {
+                        Magnifier(
+                            bitmap = bitmap,
+                            focus = magnifier,
+                            canvasSize = videoSize,
+                            offsetPx = with(density) {
+                                IntOffset(
+                                    (magnifier.x - 70.dp.toPx()).roundToInt(),
+                                    (magnifier.y - 180.dp.toPx()).roundToInt(),
+                                )
+                            },
+                        )
+                    }
+
+                    if (targetLineMode) {
+                        Text(
+                            text = if (targetStart == null) {
+                                "Tap the start of your target line"
+                            } else {
+                                "Tap the target"
+                            },
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(8.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White,
+                        )
+                    }
                 }
             }
 

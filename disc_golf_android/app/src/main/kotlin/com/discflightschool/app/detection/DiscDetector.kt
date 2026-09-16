@@ -20,7 +20,9 @@ import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.min
 import kotlin.math.roundToInt
+import java.util.concurrent.Executors
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -64,6 +66,16 @@ class DiscDetector(
     private var floatScratch: FloatArray? = null
     private var outputScratch: FloatArray? = null
 
+    // One thread for the model's whole life. The TFLite GPU delegate binds its
+    // GL context to the thread that creates it, and an interpreter using that
+    // delegate has to be called — and closed — on that same thread. Spread
+    // across a pool, every run would throw and detection would quietly return
+    // nothing at all.
+    private val inferenceExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "disc-detector-inference").apply { isDaemon = true }
+    }
+    private val inferenceDispatcher = inferenceExecutor.asCoroutineDispatcher()
+
     private val loadMutex = Mutex()
     private val processMutex = Mutex()
     private val cancelRequested = AtomicBoolean(false)
@@ -104,7 +116,7 @@ class DiscDetector(
         if (_isModelLoaded.value && !forceReload) return
         loadMutex.withLock {
             if (_isModelLoaded.value && !forceReload) return
-            withContext(Dispatchers.IO) { loadModelLocked() }
+            withContext(inferenceDispatcher) { loadModelLocked() }
         }
     }
 
@@ -395,9 +407,13 @@ class DiscDetector(
     // ── Single-frame detection ───────────────────────────────────────────
 
     /** The best detection in a whole frame, or null when nothing clears the bar. */
-    fun detectInImage(bitmap: Bitmap, frameIndex: Int, fps: Double): DiscDetection? {
-        val output = runInference(bitmap) ?: return null
-        return YoloOutput.parseBestDetection(
+    suspend fun detectInImage(
+        bitmap: Bitmap,
+        frameIndex: Int,
+        fps: Double,
+    ): DiscDetection? = withContext(inferenceDispatcher) {
+        val output = runInference(bitmap) ?: return@withContext null
+        YoloOutput.parseBestDetection(
             output = output,
             shape = outputShape,
             frameIndex = frameIndex,
@@ -415,7 +431,7 @@ class DiscDetector(
      * window clamped against a frame edge does not hand the model a differently
      * distorted disc than one in the middle of the frame.
      */
-    fun detectInWindow(
+    suspend fun detectInWindow(
         bitmap: Bitmap,
         frameIndex: Int,
         fps: Double,
@@ -423,8 +439,8 @@ class DiscDetector(
         centerY: Double,
         regionSize: Double,
         maxCandidates: Int = 5,
-    ): List<DiscDetection> {
-        if (interpreter == null) return emptyList()
+    ): List<DiscDetection> = withContext(inferenceDispatcher) {
+        if (interpreter == null) return@withContext emptyList()
 
         val minDim = min(bitmap.width, bitmap.height)
         val side = (regionSize * minDim).roundToInt().coerceIn(20, minDim)
@@ -435,12 +451,12 @@ class DiscDetector(
 
         val crop = Bitmap.createBitmap(bitmap, xMin, yMin, side, side)
         val output = try {
-            runInference(crop) ?: return emptyList()
+            runInference(crop) ?: return@withContext emptyList()
         } finally {
             if (crop !== bitmap) crop.recycle()
         }
 
-        return YoloOutput.parseCandidateDetections(
+        YoloOutput.parseCandidateDetections(
             output = output,
             shape = outputShape,
             frameIndex = frameIndex,
@@ -520,16 +536,21 @@ class DiscDetector(
     }.getOrNull()
 
     fun close() {
-        interpreter?.close()
-        interpreter = null
-        gpuDelegate?.close()
-        gpuDelegate = null
         _isModelLoaded.value = false
-        inputBuffer = null
-        outputBuffer = null
-        pixelBuffer = null
-        floatScratch = null
-        outputScratch = null
+        // Released on the inference thread, behind any work already queued
+        // there: the delegate and the interpreter belong to that thread.
+        inferenceExecutor.execute {
+            interpreter?.close()
+            interpreter = null
+            gpuDelegate?.close()
+            gpuDelegate = null
+            inputBuffer = null
+            outputBuffer = null
+            pixelBuffer = null
+            floatScratch = null
+            outputScratch = null
+        }
+        inferenceExecutor.shutdown()
     }
 
     private companion object {

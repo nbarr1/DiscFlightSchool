@@ -11,6 +11,7 @@ import com.discflightschool.app.data.ProBaselineRepository
 import com.discflightschool.app.data.SharedPreferencesStore
 import com.discflightschool.app.data.TrainingDataCollector
 import com.discflightschool.app.data.VideoLibrary
+import com.discflightschool.app.data.migrateFlutterPreferences
 import com.discflightschool.app.detection.DiscDetector
 import com.discflightschool.app.pose.PostureAnalyzer
 import com.discflightschool.app.ui.WorkbenchState
@@ -40,7 +41,12 @@ class AppContainer(context: Context) {
 
     private val preferencesStore = SharedPreferencesStore(
         appContext.getSharedPreferences("disc_flight_school", Context.MODE_PRIVATE),
-    )
+    ).also {
+        // Before anything reads it: an install upgrading from the Flutter
+        // client keeps its data directory, and this is what makes the data in
+        // it visible to the repositories below.
+        migrateFlutterPreferences(appContext, it)
+    }
     private val secretStore = EncryptedSecretStore(appContext)
 
     /** The root of everything the app collects for detector training. */

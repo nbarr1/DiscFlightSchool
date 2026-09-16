@@ -1,19 +1,28 @@
 package com.discflightschool.app.video
 
 import androidx.annotation.OptIn
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -96,6 +105,69 @@ fun rememberPlaybackState(player: ExoPlayer, pollMs: Long = 33): PlaybackState {
     }
 
     return state
+}
+
+/**
+ * The clip's display aspect ratio, or null until the first frame is decoded.
+ *
+ * Read from the player rather than from the file's stored dimensions so that
+ * the pixel aspect ratio of anamorphic footage is included — the same number
+ * [PlayerView] fits the image with.
+ */
+@Composable
+fun rememberVideoAspectRatio(player: ExoPlayer): Float? {
+    var ratio by remember(player) { mutableFloatStateOf(0f) }
+
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                val width = videoSize.width * videoSize.pixelWidthHeightRatio
+                val height = videoSize.height.toFloat()
+                ratio = if (width > 0f && height > 0f) width / height else 0f
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+
+    return ratio.takeIf { it > 0f }
+}
+
+/**
+ * The video, letterboxed inside [modifier], with [content] drawn over exactly
+ * the image and nothing else.
+ *
+ * Overlays and taps have to share the video's coordinate space: a skeleton or a
+ * flight path is stored in normalized 0-1 image coordinates, and a tap is read
+ * back the same way. Drawing them over the full parent instead would stretch
+ * every position into the letterbox bars whenever the clip's aspect ratio
+ * differs from the space on screen, and would map taps to the wrong pixel.
+ */
+@Composable
+fun VideoStage(
+    player: ExoPlayer,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit = {},
+) {
+    val aspectRatio = rememberVideoAspectRatio(player)
+
+    Box(
+        modifier = modifier.background(Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            // Before the first frame the ratio is unknown; filling the parent
+            // keeps the surface attached so decoding can start.
+            modifier = if (aspectRatio != null) {
+                Modifier.aspectRatio(aspectRatio)
+            } else {
+                Modifier.fillMaxSize()
+            },
+        ) {
+            VideoSurface(player, Modifier.fillMaxSize())
+            content()
+        }
+    }
 }
 
 /** The video surface itself, with no built-in controls. */

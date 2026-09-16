@@ -79,7 +79,7 @@ import com.discflightschool.app.ui.components.SkeletonCanvas
 import com.discflightschool.app.ui.components.frameForFraction
 import com.discflightschool.app.ui.theme.AppColors
 import com.discflightschool.app.video.FrameExtractor
-import com.discflightschool.app.video.VideoSurface
+import com.discflightschool.app.video.VideoStage
 import com.discflightschool.app.video.rememberPlaybackState
 import com.discflightschool.app.video.rememberVideoPlayer
 import com.discflightschool.core.baseline.ProBaselineDatabase
@@ -233,6 +233,16 @@ fun PostureAnalysisScreen(
         player.seekTo(startMs + clamped * FrameExtractor.POSE_INTERVAL_MS)
     }
 
+    // A clip is usually trimmed to start after the throw begins, so the file
+    // opens on footage the analysis never measured. Land on the first analysed
+    // frame instead — or on the phase waiting to be verified, so the card and
+    // the image agree.
+    LaunchedEffect(analysis, verificationIndex) {
+        if (analysis == null) return@LaunchedEffect
+        val phaseFrame = sortedPhases.getOrNull(verificationIndex)?.value
+        seekToFrame(phaseFrame ?: 0)
+    }
+
     Scaffold(
         topBar = {
             AppTopBar(title = "Form analysis", onBack = onBack) {
@@ -299,15 +309,17 @@ fun PostureAnalysisScreen(
                 MockWarning(analysis.failureReason)
             }
 
-            Box(
+            // The skeleton is stored in normalized image coordinates, so it is
+            // drawn on the stage's fitted image rather than over the letterbox.
+            VideoStage(
+                player = player,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(9f / 16f)
-                    .background(Color.Black),
+                    .aspectRatio(9f / 16f),
             ) {
-                VideoSurface(player, Modifier.fillMaxSize())
                 val frame = analysis.frames.getOrNull(currentFrame)
-                if (showSkeleton && frame != null && frame.keyPoints.isNotEmpty()) {
+                val withinAnalysis = playback.positionMs >= workbench.analysisStartMs
+                if (showSkeleton && withinAnalysis && frame != null && frame.keyPoints.isNotEmpty()) {
                     SkeletonCanvas(frame = frame, modifier = Modifier.fillMaxSize())
                 }
             }

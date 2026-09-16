@@ -9,6 +9,8 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
+import android.os.Handler
+import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
@@ -21,6 +23,7 @@ import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.Effects
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
+import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
 import com.discflightschool.core.detection.FlightTrackingResult
 import com.discflightschool.core.tracking.WorldAnchorFrame
@@ -31,17 +34,22 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
 /**
  * Burns the flight path into a copy of the clip.
  *
- * The trail is pre-rendered once per tracked frame and then selected by
- * presentation time during the export, so the path draws on as the disc flies
- * rather than appearing all at once. Rendering inside the frame callback
- * instead would put path construction on the encoder's critical path for every
- * frame of the video, including the ones with no new detection.
+ * The trail is redrawn only when the export crosses into a new tracked frame,
+ * so the path draws on as the disc flies rather than appearing all at once. It
+ * renders into one of two reusable bitmaps rather than into one image per
+ * tracked frame: at 1080p a full-frame ARGB bitmap is about 8 MB, so holding
+ * ninety of them would cost most of a gigabyte and end the export in an
+ * OutOfMemoryError before the encoder ever ran.
  */
 @OptIn(UnstableApi::class)
 class FlightVideoExporter(private val context: Context) {
@@ -60,35 +68,28 @@ class FlightVideoExporter(private val context: Context) {
         anchors: List<WorldAnchorFrame>,
         outputDir: File,
         onProgress: ((Float) -> Unit)? = null,
-    ): File = withContext(Dispatchers.IO) {
+    ): File {
         require(result.detections.isNotEmpty()) { "Nothing to draw: the flight path is empty" }
 
-        val dimensions = FrameExtractor().dimensions(videoPath) ?: (1080 to 1920)
-        val width = dimensions.first
-        val height = dimensions.second
+        val output = withContext(Dispatchers.IO) {
+            val dimensions = FrameExtractor().dimensions(videoPath) ?: (1080 to 1920)
+            outputDir.mkdirs()
+            Triple(
+                dimensions.first,
+                dimensions.second,
+                File(outputDir, "flight_path_${System.currentTimeMillis()}.mp4"),
+            )
+        }
+        val (width, height, file) = output
 
         val frames = result.detections.map { it.frameIndex }.distinct().sorted()
-        val sampled = sampleFrames(frames, MAX_OVERLAY_FRAMES)
-
-        // Pre-render one trail image per sampled frame.
-        val overlays = ArrayList<TimedOverlay>(sampled.size)
-        for ((index, frame) in sampled.withIndex()) {
-            val detection = result.detectionAtFrame(frame) ?: continue
-            val bitmap = renderTrail(
-                result = result,
-                currentFrame = frame,
-                width = width,
-                height = height,
-                anchors = anchors,
-                showDisc = index == sampled.lastIndex,
-            )
-            overlays += TimedOverlay(
-                startUs = detection.timestampMs * 1000,
-                bitmap = bitmap,
-            )
-            onProgress?.invoke((index + 1).toFloat() / sampled.size * 0.6f)
-        }
-        check(overlays.isNotEmpty()) { "No overlay frames could be rendered" }
+        val overlay = TrailOverlay(
+            result = result,
+            frames = sampleFrames(frames, MAX_OVERLAY_FRAMES),
+            anchors = anchors,
+            width = width,
+            height = height,
+        )
 
         val mediaItem = MediaItem.Builder()
             .setUri(File(videoPath).toURI().toString())
@@ -109,145 +110,195 @@ class FlightVideoExporter(private val context: Context) {
                 Effects(
                     /* audioProcessors = */ ImmutableList.of(),
                     /* videoEffects = */ ImmutableList.of<Effect>(
-                        OverlayEffect(ImmutableList.of<TextureOverlay>(TrailOverlay(overlays))),
+                        OverlayEffect(ImmutableList.of<TextureOverlay>(overlay)),
                     ),
                 ),
             )
             .build()
 
-        outputDir.mkdirs()
-        val output = File(outputDir, "flight_path_${System.currentTimeMillis()}.mp4")
-
         try {
-            runTransformer(editedMediaItem, output)
-            onProgress?.invoke(1f)
-            output
+            // Transformer is bound to the looper of the thread that builds it
+            // and rejects calls from anywhere else, so it is built, started and
+            // cancelled on the main thread. The frame work it schedules runs on
+            // its own threads regardless.
+            withContext(Dispatchers.Main) {
+                runTransformer(editedMediaItem, file, onProgress)
+            }
         } finally {
-            overlays.forEach { it.bitmap.recycle() }
+            overlay.release()
         }
+
+        onProgress?.invoke(1f)
+        return file
     }
 
     private suspend fun runTransformer(
         editedMediaItem: EditedMediaItem,
         output: File,
-    ): ExportResult = suspendCancellableCoroutine { continuation ->
-        // Transformer must be built and started on a thread with a Looper.
-        val transformer = Transformer.Builder(context)
-            .addListener(
-                object : Transformer.Listener {
-                    override fun onCompleted(composition: Composition, result: ExportResult) {
-                        if (continuation.isActive) continuation.resume(result)
-                    }
+        onProgress: ((Float) -> Unit)?,
+    ): ExportResult = coroutineScope {
+        val transformer = Transformer.Builder(context).build()
 
-                    override fun onError(
-                        composition: Composition,
-                        result: ExportResult,
-                        exception: ExportException,
-                    ) {
-                        if (continuation.isActive) continuation.resumeWithException(exception)
-                    }
-                },
-            )
-            .build()
-
-        continuation.invokeOnCancellation { transformer.cancel() }
-        transformer.start(editedMediaItem, output.absolutePath)
-    }
-
-    /** One pre-rendered trail image and the time it becomes current. */
-    private class TimedOverlay(val startUs: Long, val bitmap: Bitmap)
-
-    /**
-     * Picks the newest pre-rendered trail at or before the current time.
-     *
-     * Each image already contains the whole path up to its own frame, so
-     * holding one until the next is due produces the draw-on animation.
-     */
-    private class TrailOverlay(private val overlays: List<TimedOverlay>) : BitmapOverlay() {
-        override fun getBitmap(presentationTimeUs: Long): Bitmap {
-            var chosen = overlays.first()
-            for (overlay in overlays) {
-                if (overlay.startUs <= presentationTimeUs) chosen = overlay else break
-            }
-            return chosen.bitmap
-        }
-    }
-
-    /**
-     * Draw the trail up to [currentFrame] onto a transparent bitmap.
-     *
-     * Deliberately plain `android.graphics`: this runs off the composition, and
-     * the export must not depend on a Compose draw scope existing.
-     */
-    private fun renderTrail(
-        result: FlightTrackingResult,
-        currentFrame: Int,
-        width: Int,
-        height: Int,
-        anchors: List<WorldAnchorFrame>,
-        showDisc: Boolean,
-    ): Bitmap {
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-
-        val points = result.detectionsUpToFrame(currentFrame).map { detection ->
-            val position = WorldLock.toCanvas(
-                detection = detection,
-                currentFrame = currentFrame,
-                width = width.toDouble(),
-                height = height.toDouble(),
-                anchors = anchors,
-            )
-            position.x.toFloat() to position.y.toFloat()
-        }
-        if (points.isEmpty()) return bitmap
-
-        if (points.size >= 2) {
-            val path = Path().apply {
-                moveTo(points[0].first, points[0].second)
-                for (i in 0 until points.size - 1) {
-                    val midX = (points[i].first + points[i + 1].first) / 2
-                    val midY = (points[i].second + points[i + 1].second) / 2
-                    quadTo(points[i].first, points[i].second, midX, midY)
+        val progressJob = launch {
+            val holder = ProgressHolder()
+            while (isActive) {
+                delay(PROGRESS_POLL_MS)
+                if (transformer.getProgress(holder) == Transformer.PROGRESS_STATE_AVAILABLE) {
+                    onProgress?.invoke(holder.progress / 100f)
                 }
-                lineTo(points.last().first, points.last().second)
             }
-
-            val gradient = LinearGradient(
-                points.first().first,
-                points.first().second,
-                points.last().first,
-                points.last().second,
-                intArrayOf(TRAIL_START, TRAIL_MIDDLE, TRAIL_END),
-                null,
-                Shader.TileMode.CLAMP,
-            )
-
-            val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.STROKE
-                strokeWidth = width * 0.013f
-                strokeCap = Paint.Cap.ROUND
-                strokeJoin = Paint.Join.ROUND
-                shader = gradient
-                alpha = 55
-                maskFilter = BlurMaskFilter(width * 0.007f, BlurMaskFilter.Blur.NORMAL)
-            }
-            canvas.drawPath(path, glow)
-
-            val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.STROKE
-                strokeWidth = width * 0.004f
-                strokeCap = Paint.Cap.ROUND
-                strokeJoin = Paint.Join.ROUND
-                shader = gradient
-                alpha = 230
-            }
-            canvas.drawPath(path, line)
         }
 
-        if (showDisc) {
-            val detection = result.detectionAtFrame(currentFrame)
-            if (detection != null) {
+        try {
+            suspendCancellableCoroutine { continuation ->
+                transformer.addListener(
+                    object : Transformer.Listener {
+                        override fun onCompleted(composition: Composition, result: ExportResult) {
+                            if (continuation.isActive) continuation.resume(result)
+                        }
+
+                        override fun onError(
+                            composition: Composition,
+                            result: ExportResult,
+                            exception: ExportException,
+                        ) {
+                            if (continuation.isActive) continuation.resumeWithException(exception)
+                        }
+                    },
+                )
+
+                continuation.invokeOnCancellation {
+                    // Cancellation can arrive on any thread; the transformer
+                    // only accepts its own.
+                    Handler(Looper.getMainLooper()).post {
+                        runCatching { transformer.cancel() }
+                    }
+                }
+
+                transformer.start(editedMediaItem, output.absolutePath)
+            }
+        } finally {
+            progressJob.cancel()
+        }
+    }
+
+    /**
+     * The trail as of whatever tracked frame the export has reached.
+     *
+     * Two bitmaps rather than one: the overlay is uploaded to a texture when
+     * the returned instance changes, so handing back the same object after
+     * drawing into it would leave the previous image on screen. Alternating
+     * means the buffer being redrawn is never the one just uploaded.
+     */
+    private class TrailOverlay(
+        private val result: FlightTrackingResult,
+        private val frames: List<Int>,
+        private val anchors: List<WorldAnchorFrame>,
+        private val width: Int,
+        private val height: Int,
+    ) : BitmapOverlay() {
+
+        private val buffers = Array(2) {
+            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        }
+        private var bufferIndex = 0
+        private var renderedFrame: Int? = null
+        private var rendered = false
+
+        override fun getBitmap(presentationTimeUs: Long): Bitmap {
+            // Null until the export reaches the first tracked frame, which
+            // leaves the footage before the throw clean rather than showing the
+            // start of the path over it.
+            val frame = frames.lastOrNull { frameStartUs(it) <= presentationTimeUs }
+
+            if (rendered && frame == renderedFrame) return buffers[bufferIndex]
+
+            bufferIndex = (bufferIndex + 1) % buffers.size
+            val target = buffers[bufferIndex]
+            target.eraseColor(Color.TRANSPARENT)
+            if (frame != null) {
+                drawTrail(
+                    canvas = Canvas(target),
+                    currentFrame = frame,
+                    showDisc = frame == frames.lastOrNull(),
+                )
+            }
+            renderedFrame = frame
+            rendered = true
+            return target
+        }
+
+        fun release() {
+            buffers.forEach { it.recycle() }
+        }
+
+        private fun frameStartUs(frame: Int): Long =
+            (result.detectionAtFrame(frame)?.timestampMs ?: 0L) * 1000
+
+        /**
+         * Draw the trail up to [currentFrame].
+         *
+         * Deliberately plain `android.graphics`: this runs off the composition,
+         * and the export must not depend on a Compose draw scope existing.
+         */
+        private fun drawTrail(canvas: Canvas, currentFrame: Int, showDisc: Boolean) {
+            val points = result.detectionsUpToFrame(currentFrame).map { detection ->
+                val position = WorldLock.toCanvas(
+                    detection = detection,
+                    currentFrame = currentFrame,
+                    width = width.toDouble(),
+                    height = height.toDouble(),
+                    anchors = anchors,
+                )
+                position.x.toFloat() to position.y.toFloat()
+            }
+            if (points.isEmpty()) return
+
+            if (points.size >= 2) {
+                val path = Path().apply {
+                    moveTo(points[0].first, points[0].second)
+                    for (i in 0 until points.size - 1) {
+                        val midX = (points[i].first + points[i + 1].first) / 2
+                        val midY = (points[i].second + points[i + 1].second) / 2
+                        quadTo(points[i].first, points[i].second, midX, midY)
+                    }
+                    lineTo(points.last().first, points.last().second)
+                }
+
+                val gradient = LinearGradient(
+                    points.first().first,
+                    points.first().second,
+                    points.last().first,
+                    points.last().second,
+                    intArrayOf(TRAIL_START, TRAIL_MIDDLE, TRAIL_END),
+                    null,
+                    Shader.TileMode.CLAMP,
+                )
+
+                val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.STROKE
+                    strokeWidth = width * 0.013f
+                    strokeCap = Paint.Cap.ROUND
+                    strokeJoin = Paint.Join.ROUND
+                    shader = gradient
+                    alpha = 55
+                    maskFilter = BlurMaskFilter(width * 0.007f, BlurMaskFilter.Blur.NORMAL)
+                }
+                canvas.drawPath(path, glow)
+
+                val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.STROKE
+                    strokeWidth = width * 0.004f
+                    strokeCap = Paint.Cap.ROUND
+                    strokeJoin = Paint.Join.ROUND
+                    shader = gradient
+                    alpha = 230
+                }
+                canvas.drawPath(path, line)
+            }
+
+            if (showDisc) {
+                val detection = result.detectionAtFrame(currentFrame) ?: return
                 val centerX = (detection.x * width).toFloat()
                 val centerY = (detection.y * height).toFloat()
                 val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -264,17 +315,18 @@ class FlightVideoExporter(private val context: Context) {
                 )
             }
         }
-
-        return bitmap
     }
 
     companion object {
         /**
-         * The cap on pre-rendered overlays, about nine seconds at the tracking
-         * rate. Beyond this the render time stops being worth the extra
-         * smoothness, so frames are sampled evenly instead.
+         * The cap on trail updates, about nine seconds at the tracking rate.
+         * Beyond this the extra redraws stop being worth the smoothness they
+         * add, so tracked frames are sampled evenly instead.
          */
         const val MAX_OVERLAY_FRAMES = 90
+
+        /** How often the export's progress is read back, in milliseconds. */
+        private const val PROGRESS_POLL_MS = 250L
 
         private val TRAIL_START = Color.parseColor("#FF1AF01A")
         private val TRAIL_MIDDLE = Color.parseColor("#FFF0F01A")

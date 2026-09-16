@@ -37,6 +37,18 @@ data class FormFrame(
     val imageWidth: Double? = null,
     val imageHeight: Double? = null,
 ) {
+    /**
+     * A frame whose mutable maps are its own.
+     *
+     * `data class` copy() would share the same `angles` and `keyPoints`
+     * instances, so an editor working on the copy would still write through to
+     * the original.
+     */
+    fun deepCopy(): FormFrame = copy(
+        angles = angles.toMutableMap(),
+        keyPoints = keyPoints.toMutableMap(),
+    )
+
     fun toJson(): JsonObject = buildJsonObject {
         put("timestamp", JsonPrimitive(timestampMs))
         put("angles", JsonObject(angles.mapValues { JsonPrimitive(it.value) }))
@@ -112,6 +124,9 @@ data class FormAnalysis(
      */
     var failureReason: String? = null,
 ) {
+    /** The analysis with every frame's mutable state detached from this one. */
+    fun deepCopy(): FormAnalysis = copy(frames = frames.map { it.deepCopy() })
+
     fun toJson(): JsonObject = buildJsonObject {
         put("id", JsonPrimitive(id))
         put("date", JsonPrimitive(DateTimes.format(date)))

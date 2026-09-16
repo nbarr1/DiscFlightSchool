@@ -113,8 +113,14 @@ fun PhaseFrameSelectorScreen(onBack: () -> Unit, onAnalyze: () -> Unit) {
             AppTopBar(title = "Select phase frames", onBack = onBack) {
                 TextButton(
                     onClick = {
+                        // A phase marked on the last frame converts to an
+                        // index one past the end, because extraction treats the
+                        // trim end as exclusive. Out of range, it would be
+                        // dropped by phase comparison, so clamp into the frames
+                        // that actually exist.
+                        val lastFrame = (workbench.analysisFrameCount - 1).coerceAtLeast(0)
                         workbench.phaseFrameIndices = marks.mapValues { (_, timestampMs) ->
-                            frameIndexFor(timestampMs, startMs)
+                            frameIndexFor(timestampMs, startMs).coerceIn(0, lastFrame)
                         }
                         onAnalyze()
                     },

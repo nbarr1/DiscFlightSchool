@@ -70,12 +70,11 @@ import com.discflightschool.app.ui.components.LoadingState
 import com.discflightschool.app.ui.components.SkeletonOverlay
 import com.discflightschool.app.ui.theme.AppColors
 import com.discflightschool.app.video.FrameExtractor
-import com.discflightschool.app.video.VideoSurface
+import com.discflightschool.app.video.VideoStage
 import com.discflightschool.app.video.rememberPlaybackState
 import com.discflightschool.app.video.rememberVideoPlayer
 import com.discflightschool.core.geometry.Vec2
 import com.discflightschool.core.math.AngleCalculator
-import com.discflightschool.core.model.FormAnalysis
 import kotlin.math.roundToInt
 
 /** One step of the guided re-placement, in the order the joints are asked for. */
@@ -118,14 +117,19 @@ fun PoseCorrectionScreen(
     val density = LocalDensity.current
 
     val videoPath = workbench.formVideoPath
-    val analysis = workbench.analysis
+    val source = workbench.analysis
 
-    if (videoPath == null || analysis == null || analysis.frames.isEmpty()) {
+    if (videoPath == null || source == null || source.frames.isEmpty()) {
         Scaffold(topBar = { AppTopBar(title = "Correct pose", onBack = onBack) }) { padding ->
             LoadingState("No analysis to correct", Modifier.padding(padding))
         }
         return
     }
+
+    // Every gesture here edits landmarks in place. Working on a copy is what
+    // makes Back mean "discard": the shared analysis is only replaced from
+    // applyCorrections, so an abandoned experiment leaves no trace.
+    val analysis = remember(source) { source.deepCopy() }
 
     val player = rememberVideoPlayer(videoPath)
     val playback = rememberPlaybackState(player)
@@ -264,15 +268,7 @@ fun PoseCorrectionScreen(
             container.postureAnalyzer.recalculateFrameAngles(frame)
         }
 
-        workbench.analysis = FormAnalysis(
-            id = analysis.id,
-            date = analysis.date,
-            videoPath = analysis.videoPath,
-            frames = analysis.frames,
-            score = analysis.score,
-            isMock = analysis.isMock,
-            failureReason = analysis.failureReason,
-        )
+        workbench.analysis = analysis
         onApplied()
     }
 
@@ -305,100 +301,105 @@ fun PoseCorrectionScreen(
                 .padding(padding)
                 .fillMaxSize(),
         ) {
-            Box(
+            // Inside the stage, so a tap lands on the pixel the user aimed at
+            // even when the clip does not fill the pane.
+            VideoStage(
+                player = player,
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
-                    .background(Color.Black)
-                    .onSizeChanged {
-                        videoSize = Size(it.width.toFloat(), it.height.toFloat())
-                    }
-                    .pointerInput(sequentialMode, sequentialReview, currentFrame) {
-                        detectTapGestures(
-                            onTap = { position ->
-                                val frame = analysis.frames[currentFrame]
-                                if (sequentialMode && !sequentialReview) {
-                                    onSequentialTap(position)
-                                } else {
+                    .fillMaxWidth(),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .onSizeChanged {
+                            videoSize = Size(it.width.toFloat(), it.height.toFloat())
+                        }
+                        .pointerInput(sequentialMode, sequentialReview, currentFrame) {
+                            detectTapGestures(
+                                onTap = { position ->
+                                    val frame = analysis.frames[currentFrame]
+                                    if (sequentialMode && !sequentialReview) {
+                                        onSequentialTap(position)
+                                    } else {
+                                        selectedLandmark = SkeletonOverlay.nearestLandmark(
+                                            position,
+                                            videoSize,
+                                            frame,
+                                        )
+                                    }
+                                },
+                                onLongPress = { position ->
+                                    if (sequentialMode) return@detectTapGestures
+                                    player.pause()
                                     selectedLandmark = SkeletonOverlay.nearestLandmark(
                                         position,
                                         videoSize,
-                                        frame,
+                                        analysis.frames[currentFrame],
                                     )
+                                    magnifierAt = position
+                                },
+                            )
+                        }
+                        .pointerInput(moveAllMode, sequentialMode, currentFrame) {
+                            detectDragGestures(
+                                onDragEnd = { magnifierAt = null },
+                                onDragCancel = { magnifierAt = null },
+                            ) { change, dragAmount ->
+                                change.consume()
+                                if (sequentialMode) return@detectDragGestures
+                                if (moveAllMode) {
+                                    moveAllBy(dragAmount)
+                                } else {
+                                    if (magnifierAt != null) magnifierAt = change.position
+                                    moveSelectedTo(change.position)
                                 }
-                            },
-                            onLongPress = { position ->
-                                if (sequentialMode) return@detectTapGestures
-                                player.pause()
-                                selectedLandmark = SkeletonOverlay.nearestLandmark(
-                                    position,
-                                    videoSize,
-                                    analysis.frames[currentFrame],
+                            }
+                        },
+                ) {
+                    // Landmarks are edited in place, so `revision` is what tells
+                    // the composition that this frame's contents changed.
+                    val frame = remember(currentFrame, revision) { analysis.frames[currentFrame] }
+                    Canvas(Modifier.fillMaxSize()) {
+                        with(SkeletonOverlay) {
+                            if (!sequentialMode || sequentialReview) {
+                                drawSkeleton(
+                                    frame = frame,
+                                    interactive = true,
+                                    selectedLandmark = selectedLandmark,
                                 )
-                                magnifierAt = position
+                            }
+                        }
+
+                        if (sequentialMode) {
+                            for ((key, position) in sequentialPlacements) {
+                                val center = SkeletonOverlay.scalePoint(position, size, frame)
+                                drawCircle(AppColors.Good, radius = 7.dp.toPx(), center = center)
+                                drawCircle(
+                                    Color.White,
+                                    radius = 7.dp.toPx(),
+                                    center = center,
+                                    style = Stroke(width = 2.dp.toPx()),
+                                )
+                            }
+                        }
+                    }
+
+                    val magnifier = magnifierAt
+                    val bitmap = frameBitmap
+                    if (magnifier != null && bitmap != null) {
+                        Magnifier(
+                            bitmap = bitmap,
+                            focus = magnifier,
+                            canvasSize = videoSize,
+                            offsetPx = with(density) {
+                                IntOffset(
+                                    (magnifier.x - 70.dp.toPx()).roundToInt(),
+                                    (magnifier.y - 180.dp.toPx()).roundToInt(),
+                                )
                             },
                         )
                     }
-                    .pointerInput(moveAllMode, sequentialMode, currentFrame) {
-                        detectDragGestures(
-                            onDragEnd = { magnifierAt = null },
-                            onDragCancel = { magnifierAt = null },
-                        ) { change, dragAmount ->
-                            change.consume()
-                            if (sequentialMode) return@detectDragGestures
-                            if (moveAllMode) {
-                                moveAllBy(dragAmount)
-                            } else {
-                                if (magnifierAt != null) magnifierAt = change.position
-                                moveSelectedTo(change.position)
-                            }
-                        }
-                    },
-            ) {
-                VideoSurface(player, Modifier.fillMaxSize())
-
-                // Landmarks are edited in place, so `revision` is what tells
-                // the composition that this frame's contents changed.
-                val frame = remember(currentFrame, revision) { analysis.frames[currentFrame] }
-                Canvas(Modifier.fillMaxSize()) {
-                    with(SkeletonOverlay) {
-                        if (!sequentialMode || sequentialReview) {
-                            drawSkeleton(
-                                frame = frame,
-                                interactive = true,
-                                selectedLandmark = selectedLandmark,
-                            )
-                        }
-                    }
-
-                    if (sequentialMode) {
-                        for ((key, position) in sequentialPlacements) {
-                            val center = SkeletonOverlay.scalePoint(position, size, frame)
-                            drawCircle(AppColors.Good, radius = 7.dp.toPx(), center = center)
-                            drawCircle(
-                                Color.White,
-                                radius = 7.dp.toPx(),
-                                center = center,
-                                style = Stroke(width = 2.dp.toPx()),
-                            )
-                        }
-                    }
-                }
-
-                val magnifier = magnifierAt
-                val bitmap = frameBitmap
-                if (magnifier != null && bitmap != null) {
-                    Magnifier(
-                        bitmap = bitmap,
-                        focus = magnifier,
-                        canvasSize = videoSize,
-                        offsetPx = with(density) {
-                            IntOffset(
-                                (magnifier.x - 70.dp.toPx()).roundToInt(),
-                                (magnifier.y - 180.dp.toPx()).roundToInt(),
-                            )
-                        },
-                    )
                 }
             }
 
