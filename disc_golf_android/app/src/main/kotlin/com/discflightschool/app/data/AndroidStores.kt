@@ -9,6 +9,7 @@ import com.discflightschool.core.data.KeyValueStore
 import com.discflightschool.core.data.ManifestStore
 import com.discflightschool.core.data.SecretStore
 import java.io.File
+import org.json.JSONArray
 
 /** [KeyValueStore] backed by `SharedPreferences`. */
 class SharedPreferencesStore(private val prefs: SharedPreferences) : KeyValueStore {
@@ -62,6 +63,52 @@ class SharedPreferencesStore(private val prefs: SharedPreferences) : KeyValueSto
          * The ASCII record separator, so a stored JSON document can never be
          * mistaken for a list delimiter.
          */
+/** Copies Flutter's shared_preferences store into the native store exactly once. */
+fun migrateFlutterPreferences(context: Context, destination: SharedPreferences) {
+    val marker = "native_preferences_migrated"
+    if (destination.getBoolean(marker, false)) return
+    val legacy = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+    val editor = destination.edit()
+    legacy.all.forEach { (encodedKey, value) ->
+        val key = encodedKey.removePrefix("flutter.")
+        if (destination.contains(key)) return@forEach
+        when (value) {
+            is String -> when {
+                value.startsWith(FLUTTER_LIST_PREFIX) -> {
+                    val array = JSONArray(value.removePrefix(FLUTTER_LIST_PREFIX))
+                    val items = (0 until array.length()).map { array.getString(it) }
+                    editor.putString("$key.list", items.joinToString("\u001e"))
+                }
+                value.startsWith(FLUTTER_DOUBLE_PREFIX) -> {
+                    val doubleValue = value.removePrefix(FLUTTER_DOUBLE_PREFIX).toDoubleOrNull()
+                    if (doubleValue != null) {
+                        editor.putLong(key, java.lang.Double.doubleToRawLongBits(doubleValue))
+                    }
+                }
+                else -> editor.putString(key, value)
+            }
+            is Boolean -> editor.putBoolean(key, value)
+            is Int -> editor.putInt(key, value)
+            is Long -> editor.putLong(key, value)
+            is Float -> if (key == "disc_confidence_threshold") {
+                editor.putLong(key, java.lang.Double.doubleToRawLongBits(value.toDouble()))
+            } else {
+                editor.putFloat(key, value)
+            }
+            // Flutter StringList values are StringSets in the Android backing
+            // file. Native ordered lists use the store's encoded list key.
+            is Set<*> -> editor.putString(
+                "$key.list",
+                value.filterIsInstance<String>().joinToString("\u001e"),
+            )
+        }
+    }
+    editor.putBoolean(marker, true).commit()
+}
+
+private const val FLUTTER_LIST_PREFIX = "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGxpc3Qu"
+private const val FLUTTER_DOUBLE_PREFIX = "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGRvdWJsZS4="
+
         const val LIST_SEPARATOR = ""
     }
 }

@@ -68,7 +68,12 @@ class FlightVideoExporter(private val context: Context) {
         val height = dimensions.second
 
         val frames = result.detections.map { it.frameIndex }.distinct().sorted()
-        val sampled = sampleFrames(frames, MAX_OVERLAY_FRAMES)
+        // Bound retained pixel memory rather than only the frame count. A 4K
+        // bitmap is ~32 MiB, so a fixed 90-frame cap is not meaningful.
+        val bytesPerFrame = width.toLong() * height * 4
+        val memoryBoundFrames = (OVERLAY_MEMORY_BUDGET_BYTES / bytesPerFrame)
+            .coerceIn(1, MAX_OVERLAY_FRAMES.toLong()).toInt()
+        val sampled = sampleFrames(frames, memoryBoundFrames)
 
         // Pre-render one trail image per sampled frame.
         val overlays = ArrayList<TimedOverlay>(sampled.size)
@@ -83,7 +88,9 @@ class FlightVideoExporter(private val context: Context) {
                 showDisc = index == sampled.lastIndex,
             )
             overlays += TimedOverlay(
-                startUs = detection.timestampMs * 1000,
+                // Under the one-bitmap memory fallback, show the completed
+                // path for the whole clip instead of only at its final frame.
+                startUs = if (sampled.size == 1) 0 else detection.timestampMs * 1000,
                 bitmap = bitmap,
             )
             onProgress?.invoke((index + 1).toFloat() / sampled.size * 0.6f)
@@ -119,7 +126,9 @@ class FlightVideoExporter(private val context: Context) {
         val output = File(outputDir, "flight_path_${System.currentTimeMillis()}.mp4")
 
         try {
-            runTransformer(editedMediaItem, output)
+            withContext(Dispatchers.Main.immediate) {
+                runTransformer(editedMediaItem, output)
+            }
             onProgress?.invoke(1f)
             output
         } finally {
@@ -150,7 +159,9 @@ class FlightVideoExporter(private val context: Context) {
             )
             .build()
 
-        continuation.invokeOnCancellation { transformer.cancel() }
+        continuation.invokeOnCancellation {
+            android.os.Handler(context.mainLooper).post { transformer.cancel() }
+        }
         transformer.start(editedMediaItem, output.absolutePath)
     }
 
@@ -275,6 +286,7 @@ class FlightVideoExporter(private val context: Context) {
          * smoothness, so frames are sampled evenly instead.
          */
         const val MAX_OVERLAY_FRAMES = 90
+        const val OVERLAY_MEMORY_BUDGET_BYTES = 64L * 1024 * 1024
 
         private val TRAIL_START = Color.parseColor("#FF1AF01A")
         private val TRAIL_MIDDLE = Color.parseColor("#FFF0F01A")
@@ -282,6 +294,7 @@ class FlightVideoExporter(private val context: Context) {
 
         /** Evenly sample [frames] down to [max], always keeping both ends. */
         fun sampleFrames(frames: List<Int>, max: Int): List<Int> {
+            if (max <= 1) return frames.takeLast(1)
             if (frames.size <= max) return frames
             val step = (frames.size - 1).toDouble() / (max - 1)
             return (0 until max)

@@ -11,9 +11,11 @@ import com.discflightschool.app.data.ProBaselineRepository
 import com.discflightschool.app.data.SharedPreferencesStore
 import com.discflightschool.app.data.TrainingDataCollector
 import com.discflightschool.app.data.VideoLibrary
+import com.discflightschool.app.data.migrateFlutterPreferences
 import com.discflightschool.app.detection.DiscDetector
 import com.discflightschool.app.pose.PostureAnalyzer
 import com.discflightschool.app.ui.WorkbenchState
+import com.discflightschool.app.ui.screens.roulette.RoundPlayState
 import com.discflightschool.app.video.FrameExtractor
 import com.discflightschool.core.data.AppPreferences
 import com.discflightschool.core.data.DetectionSettings
@@ -38,9 +40,13 @@ class AppContainer(context: Context) {
 
     private val appContext = context.applicationContext
 
-    private val preferencesStore = SharedPreferencesStore(
-        appContext.getSharedPreferences("disc_flight_school", Context.MODE_PRIVATE),
-    )
+    private val nativePreferences =
+        appContext.getSharedPreferences("disc_flight_school", Context.MODE_PRIVATE).also {
+            // Flutter's plugin used FlutterSharedPreferences and prefixed every key.
+            // This must run before any repository reads its initial state.
+            migrateFlutterPreferences(appContext, it)
+        }
+    private val preferencesStore = SharedPreferencesStore(nativePreferences)
     private val secretStore = EncryptedSecretStore(appContext)
 
     /** The root of everything the app collects for detector training. */
@@ -91,6 +97,7 @@ class AppContainer(context: Context) {
 
     /** The clip being worked on, shared across the screens of one flow. */
     val workbench = WorkbenchState()
+    val roundPlayState = RoundPlayState()
 
     /** Releases the native resources held for the life of the process. */
     fun shutdown() {

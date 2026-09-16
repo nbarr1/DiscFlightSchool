@@ -53,8 +53,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -110,17 +108,18 @@ fun PlayRoundScreen(
         return
     }
 
-    var holeNumber by remember { mutableStateOf(1) }
+    val roundState = container.roundPlayState.also { it.attach(activeRound) }
+    var holeNumber by roundState.holeNumber
     var isSpinning by remember { mutableStateOf(false) }
     var isPutting by remember { mutableStateOf(false) }
     var challenge by remember { mutableStateOf<RouletteResult?>(null) }
     var showUndoDialog by remember { mutableStateOf(false) }
     val rotation = remember { Animatable(0f) }
 
-    val currentThrows = remember { mutableStateListOf<ThrowRecord>() }
-    val playerThrows = remember { mutableStateMapOf<String, List<ThrowRecord>>() }
-    val playerStrokes = remember { mutableStateMapOf<String, Int>() }
-    val completedPlayers = remember { mutableStateListOf<String>() }
+    val currentThrows = roundState.currentThrows
+    val playerThrows = roundState.playerThrows
+    val playerStrokes = roundState.playerStrokes
+    val completedPlayers = roundState.completedPlayers
     var playerMenuExpanded by remember { mutableStateOf(false) }
 
     val holePar = activeRound.coursePars.getOrElse(holeNumber - 1) { 3 }

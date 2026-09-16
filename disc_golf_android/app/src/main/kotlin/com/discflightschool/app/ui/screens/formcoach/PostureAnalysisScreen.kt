@@ -210,9 +210,16 @@ fun PostureAnalysisScreen(
 
             if (workbench.phaseFrameIndices.isNotEmpty()) {
                 verificationIndex = 0
+                currentFrame = sortedPhases.first().value
+                player.seekTo(
+                    startMs + sortedPhases.first().value * FrameExtractor.POSE_INTERVAL_MS,
+                )
+            } else {
+                player.seekTo(startMs)
             }
         } else {
             refreshDerived()
+            player.seekTo(startMs)
         }
     }
 
@@ -220,6 +227,7 @@ fun PostureAnalysisScreen(
     LaunchedEffect(playback.positionMs, analysis) {
         val frames = analysis?.frames ?: return@LaunchedEffect
         if (frames.isEmpty()) return@LaunchedEffect
+        if (playback.positionMs < startMs) return@LaunchedEffect
         val frame = ((playback.positionMs - startMs) / FrameExtractor.POSE_INTERVAL_MS)
             .toInt()
             .coerceIn(0, frames.size - 1)

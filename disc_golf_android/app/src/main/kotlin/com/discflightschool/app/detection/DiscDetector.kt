@@ -18,6 +18,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.Executors
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +54,9 @@ class DiscDetector(
 
     private var interpreter: Interpreter? = null
     private var gpuDelegate: GpuDelegate? = null
+    private val modelExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "disc-detector-model")
+    }
 
     private var inputSize = YoloOutput.DEFAULT_INPUT_SIZE
     private var channelsFirst = false
@@ -104,7 +108,9 @@ class DiscDetector(
         if (_isModelLoaded.value && !forceReload) return
         loadMutex.withLock {
             if (_isModelLoaded.value && !forceReload) return
-            withContext(Dispatchers.IO) { loadModelLocked() }
+            withContext(Dispatchers.IO) {
+                modelExecutor.submit { loadModelLocked() }.get()
+            }
         }
     }
 
@@ -465,7 +471,10 @@ class DiscDetector(
      * input is over a million floats; rebuilding it per frame dominated the cost
      * of a multi-hundred-frame run.
      */
-    private fun runInference(bitmap: Bitmap): FloatArray? {
+    private fun runInference(bitmap: Bitmap): FloatArray? =
+        modelExecutor.submit<FloatArray?> { runInferenceOnModelThread(bitmap) }.get()
+
+    private fun runInferenceOnModelThread(bitmap: Bitmap): FloatArray? {
         val interpreter = this.interpreter ?: return null
 
         val scaled = if (bitmap.width == inputSize && bitmap.height == inputSize) {
@@ -520,10 +529,13 @@ class DiscDetector(
     }.getOrNull()
 
     fun close() {
-        interpreter?.close()
-        interpreter = null
-        gpuDelegate?.close()
-        gpuDelegate = null
+        modelExecutor.submit {
+            interpreter?.close()
+            interpreter = null
+            gpuDelegate?.close()
+            gpuDelegate = null
+        }.get()
+        modelExecutor.shutdown()
         _isModelLoaded.value = false
         inputBuffer = null
         outputBuffer = null

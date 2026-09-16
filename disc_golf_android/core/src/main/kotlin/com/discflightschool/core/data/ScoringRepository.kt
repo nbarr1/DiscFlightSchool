@@ -71,9 +71,14 @@ class ScoringRepository(private val store: KeyValueStore) {
         val round = _currentRound.value ?: return
         if (_currentPlayer.value == null) return
 
-        val updatedScores = round.scores + score
+        // Re-entering a hole replaces its record rather than creating a
+        // duplicate (for example after navigation restored round progress).
+        val updatedScores = round.scores.filterNot {
+            it.holeNumber == score.holeNumber && it.playerName == score.playerName
+        } + score
         val willBeComplete = round.playerNames.all { player ->
-            updatedScores.count { it.playerName == player } >= round.coursePars.size
+            updatedScores.filter { it.playerName == player }.map { it.holeNumber }.distinct().size >=
+                round.coursePars.size
         }
 
         val updated = round.copy(

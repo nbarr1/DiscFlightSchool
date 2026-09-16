@@ -108,7 +108,10 @@ fun VideoSurface(player: ExoPlayer, modifier: Modifier = Modifier) {
             PlayerView(context).apply {
                 this.player = player
                 useController = false
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                // Overlays and pointer coordinates share this view's bounds.
+                // Filling those bounds prevents FIT letterbox bars from putting
+                // them in a different coordinate space than the video image.
+                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
                 setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
             }
         },
