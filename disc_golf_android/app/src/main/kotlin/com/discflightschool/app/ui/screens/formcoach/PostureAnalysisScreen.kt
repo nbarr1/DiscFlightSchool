@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.InfoOutline
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PersonSearch
@@ -35,6 +34,7 @@ import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
@@ -530,7 +530,7 @@ private fun QualityWarnings(warnings: List<String>) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                Icons.Default.InfoOutline,
+                Icons.Outlined.Info,
                 contentDescription = null,
                 tint = AppColors.Warning,
                 modifier = Modifier.size(16.dp),

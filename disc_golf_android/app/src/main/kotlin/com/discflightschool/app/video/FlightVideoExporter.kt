@@ -10,10 +10,12 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
 import androidx.annotation.OptIn
+import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.OverlayEffect
+import androidx.media3.effect.TextureOverlay
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.Effects
@@ -106,8 +108,8 @@ class FlightVideoExporter(private val context: Context) {
             .setEffects(
                 Effects(
                     /* audioProcessors = */ ImmutableList.of(),
-                    /* videoEffects = */ ImmutableList.of(
-                        OverlayEffect(ImmutableList.of(TrailOverlay(overlays))),
+                    /* videoEffects = */ ImmutableList.of<Effect>(
+                        OverlayEffect(ImmutableList.of<TextureOverlay>(TrailOverlay(overlays))),
                     ),
                 ),
             )

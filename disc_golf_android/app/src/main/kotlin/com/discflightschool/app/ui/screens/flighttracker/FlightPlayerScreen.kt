@@ -833,7 +833,7 @@ private fun PhaseBanner(
     pendingAnchor: Vec2?,
     report: DetectionQualityReport?,
 ) {
-    val content: Triple<String, String, Color>? = when (phase) {
+    val content = when (phase) {
         SetupPhase.ANCHORING -> Triple(
             "Step 1 of 2 — anchor the environment",
             if (pendingAnchor == null) {
