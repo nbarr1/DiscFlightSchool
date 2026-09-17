@@ -115,28 +115,44 @@ class RoboflowVideoProcessor:
         capture.release()
         total = reliable_total if reliable_total > 0 else None
 
-        frames: list[tuple[int, float | None, Any]] = []
+        # Keep only small frame metadata in memory. Annotated images can be
+        # several megabytes once decoded, so retaining a video's worth of
+        # NumPy arrays here would allow an otherwise valid upload to exhaust
+        # the API worker's memory.
+        frames: list[tuple[int, float | None, Path]] = []
         detection_frames: set[int] = set()
         frame_errors: list[str] = []
+        frames_lock = threading.Lock()
 
         def on_data(data: dict[str, Any]) -> None:
             if cancel.is_set():
                 self.close()
                 return
             try:
-                frame_id = _frame_id(data, len(frames))
+                with frames_lock:
+                    default_frame_id = len(frames)
+                frame_id = _frame_id(data, default_frame_id)
                 timestamp = _timestamp(data)
                 encoded = _output_value(data.get("output_image"))
                 if encoded:
+                    compressed = base64.b64decode(encoded)
                     decoded = cv2.imdecode(
-                        np.frombuffer(base64.b64decode(encoded), dtype=np.uint8),
+                        np.frombuffer(compressed, dtype=np.uint8),
                         cv2.IMREAD_COLOR,
                     )
                     if decoded is not None:
-                        frames.append((frame_id, timestamp, decoded))
-                if _prediction_count(data.get("disc_detections")) > 0:
-                    detection_frames.add(frame_id)
-                update(len(frames), total, "processing")
+                        # Preserve the compressed workflow output on disk and
+                        # release the decoded frame immediately. It is decoded
+                        # again, one frame at a time, while assembling the MP4.
+                        frame_path = spool_directory / f"{uuid.uuid4().hex}.image"
+                        frame_path.write_bytes(compressed)
+                        with frames_lock:
+                            frames.append((frame_id, timestamp, frame_path))
+                with frames_lock:
+                    if _prediction_count(data.get("disc_detections")) > 0:
+                        detection_frames.add(frame_id)
+                    completed = len(frames)
+                update(completed, total, "processing")
             except Exception as exc:  # one malformed frame must not end a throw
                 frame_errors.append(f"frame {_frame_id(data, len(frames))}: {type(exc).__name__}")
                 logger.warning(json.dumps({"event": "disc_flight.frame_error", "error": type(exc).__name__}))
@@ -163,18 +179,21 @@ class RoboflowVideoProcessor:
         self.active_session = session
         _register_callback(session, "data", on_data)
         _register_callback(session, "error", on_error)
-        update(0, total, "connecting")
+        spool = tempfile.TemporaryDirectory(prefix="annotated-frames-", dir=destination.parent)
+        spool_directory = Path(spool.name)
         started = time.monotonic()
         timed_out = threading.Event()
+        timer: threading.Timer | None = None
 
         def expire_session() -> None:
             timed_out.set()
             self.close()
 
-        timer = threading.Timer(self.settings.disc_flight_session_timeout_seconds, expire_session)
-        timer.daemon = True
-        timer.start()
         try:
+            update(0, total, "connecting")
+            timer = threading.Timer(self.settings.disc_flight_session_timeout_seconds, expire_session)
+            timer.daemon = True
+            timer.start()
             starter = getattr(session, "start", None)
             if callable(starter):
                 starter()
@@ -189,11 +208,13 @@ class RoboflowVideoProcessor:
             if cancel.is_set():
                 raise Cancelled()
             update(len(frames), total, "finalizing")
-            _write_mp4(frames, destination, input_fps, cv2)
+            _write_mp4(frames, destination, input_fps, cv2, np)
         finally:
-            timer.cancel()
+            if timer is not None:
+                timer.cancel()
             self.close()
             self.active_session = None
+            spool.cleanup()
 
         count = len(frames)
         return {
@@ -352,7 +373,7 @@ def _register_callback(session: Any, event: str, callback: Callable) -> None:
     raise RuntimeError(f"Installed inference-sdk does not expose a {event} callback")
 
 
-def _write_mp4(frames, destination: Path, fallback_fps: float, cv2: Any) -> None:
+def _write_mp4(frames, destination: Path, fallback_fps: float, cv2: Any, np: Any) -> None:
     if not frames:
         raise RuntimeError("Workflow returned no annotated frames")
     ordered = sorted(frames, key=lambda item: item[0])
@@ -364,13 +385,22 @@ def _write_mp4(frames, destination: Path, fallback_fps: float, cv2: Any) -> None
         # SDK timestamps may be seconds or milliseconds.
         fps = (1000.0 / median) if median > 1.0 else (1.0 / median)
     fps = min(240.0, max(1.0, fps))
-    height, width = ordered[0][2].shape[:2]
+    def decode(path: Path):
+        return cv2.imdecode(np.frombuffer(path.read_bytes(), dtype=np.uint8), cv2.IMREAD_COLOR)
+
+    first_frame = decode(ordered[0][2])
+    if first_frame is None:
+        raise RuntimeError("Could not decode an annotated frame")
+    height, width = first_frame.shape[:2]
     writer = cv2.VideoWriter(str(destination), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
     if not writer.isOpened():
         writer.release()
         raise RuntimeError("Could not initialize annotated MP4 writer")
     try:
-        for _, _, frame in ordered:
+        for index, (_, _, frame_path) in enumerate(ordered):
+            frame = first_frame if index == 0 else decode(frame_path)
+            if frame is None:
+                raise RuntimeError("Could not decode an annotated frame")
             if frame.shape[1] != width or frame.shape[0] != height:
                 frame = cv2.resize(frame, (width, height))
             writer.write(frame)
