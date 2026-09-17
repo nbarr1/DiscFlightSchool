@@ -41,6 +41,9 @@ class Settings:
     object_storage_access_key: str | None = None
     object_storage_secret_key: str | None = None
     object_storage_secure: bool = True
+    roboflow_api_key: str | None = None
+    disc_flight_max_upload_bytes: int = 200 * 1024 * 1024
+    disc_flight_session_timeout_seconds: int = 900
 
     @property
     def dataset_dir(self) -> Path:
@@ -135,4 +138,11 @@ class Settings:
             object_storage_access_key=cls._optional_env("OBJECT_STORAGE_ACCESS_KEY"),
             object_storage_secret_key=cls._optional_env("OBJECT_STORAGE_SECRET_KEY"),
             object_storage_secure=object_storage_secure,
+            roboflow_api_key=cls._optional_env("ROBOFLOW_API_KEY"),
+            disc_flight_max_upload_bytes=cls.positive_int_from_env(
+                "DISC_FLIGHT_MAX_UPLOAD_BYTES", 200 * 1024 * 1024
+            ),
+            disc_flight_session_timeout_seconds=cls.positive_int_from_env(
+                "DISC_FLIGHT_SESSION_TIMEOUT_SECONDS", 900
+            ),
         )

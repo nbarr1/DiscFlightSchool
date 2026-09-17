@@ -18,7 +18,17 @@ TEST_REQUIREMENTS = SERVER_DIR / "requirements-test.txt"
 
 # Packages allowed to appear in only one of the two files.
 TEST_ONLY_PACKAGES = {"pytest"}
-RUNTIME_ONLY_PACKAGES = {"ultralytics", "uvicorn", "gunicorn"}
+RUNTIME_ONLY_PACKAGES = {
+    "ultralytics",
+    "uvicorn",
+    "gunicorn",
+    # Roboflow is lazy-imported and replaced by a fake processor in unit tests.
+    # Keeping this video stack out of the fast test image avoids installing
+    # WebRTC/OpenCV while guaranteeing CI never contacts paid inference.
+    "inference-sdk[webrtc]",
+    "opencv-python-headless",
+    "numpy",
+}
 
 _SPECIFIER_CHARS = "<>=!~ "
 

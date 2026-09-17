@@ -1,5 +1,19 @@
 # Testing
 
+## Roboflow flight path
+
+Automated backend and Android tests use fake HTTP/WebRTC responses and never
+spend inference credits. Run the server suite with `APP_API_KEY=test-key
+./scripts/test_server.sh` and Android tests with `./scripts/test_android.sh`.
+
+For the opt-in real Workflow check, install `server/requirements.txt`, set
+`ROBOFLOW_API_KEY` and `ROBOFLOW_TEST_VIDEO` to a short throw, then run
+`python scripts/test_roboflow_integration.py`. Confirm the generated MP4 opens,
+then configure the same backend in Android Training Settings and verify on a
+device: pick and record, preview, process, progress/indeterminate processing,
+playback, sharing, retry, cancellation, and duplicate-tap prevention. Do not
+mark the mobile integration verified until the annotated result plays there.
+
 ## Running the suites
 
 ```bash

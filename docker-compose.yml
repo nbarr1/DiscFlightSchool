@@ -2,7 +2,10 @@ services:
   training-api:
     build:
       context: ./server
-    command: gunicorn main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+    # Disc-flight jobs currently have an in-process registry, so requests for
+    # one job must stay in this sole API worker. Scale only after moving that
+    # registry and cancellation signal into the shared durable services.
+    command: gunicorn main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
     env_file:
       - ./server/.env.example
     environment:
@@ -18,6 +21,9 @@ services:
       OBJECT_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
       OBJECT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
       OBJECT_STORAGE_SECURE: "false"
+      # Empty keeps the existing training-only stack usable. Supply this only
+      # to the API process to enable cloud flight tracing.
+      ROBOFLOW_API_KEY: ${ROBOFLOW_API_KEY:-}
     ports:
       - "8000:8000"
     depends_on:
@@ -31,6 +37,7 @@ services:
       - training-data:/app/dataset
       - training-models:/app/models
       - training-exports:/app/exports
+      - disc-flight-jobs:/app/disc_flight_jobs
 
   training-worker:
     build:
@@ -119,3 +126,4 @@ volumes:
   training-data:
   training-models:
   training-exports:
+  disc-flight-jobs:
