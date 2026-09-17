@@ -1,0 +1,71 @@
+name: Android Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test-android:
+    name: Unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # :core is a plain Kotlin/JVM module and holds the ported detection,
+      # tracking, posture, and scoring logic, so it carries most of the suite.
+      # :app's unit tests cover the Android-free helpers around it.
+      - name: Run unit tests
+        working-directory: disc_golf_android
+        run: ./gradlew --no-daemon :core:test :app:testDebugUnitTest
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            disc_golf_android/core/build/reports/tests/
+            disc_golf_android/app/build/reports/tests/
+          if-no-files-found: ignore
+
+  lint-android:
+    name: Android Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run lint
+        working-directory: disc_golf_android
+        run: ./gradlew --no-daemon :app:lintDebug
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: disc_golf_android/app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore

@@ -1,0 +1,16 @@
+# Gradle and Android build output
+.gradle/
+build/
+local.properties
+.cxx/
+
+# Signing material. key.properties names a keystore and holds its passwords;
+# neither belongs in version control.
+key.properties
+*.jks
+*.keystore
+
+# IDE
+.idea/
+*.iml
+captures/

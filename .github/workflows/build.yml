@@ -19,43 +19,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.47.0'
-          channel: 'stable'
-          cache: true
-
-      # Install the exact NDK and SDK versions required by the plugins.
-      # NDK 27.0.12077973 — required by tflite_flutter, mlkit, ffmpeg_kit, etc.
-      # compileSdk 36 — required by tflite_flutter.
-      - name: Install Android NDK and SDK platform
-        run: |
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-            "ndk;27.0.12077973" \
-            "platforms;android-36" \
-            "build-tools;36.0.0"
-
-      # Apply init.gradle to suppress -Werror on JavaCompile tasks (ffmpeg_kit, etc.)
-      # Gradle only auto-loads init scripts from GRADLE_USER_HOME/init.d/ — the file
-      # sitting in android/ is ignored without this step.
-      - name: Apply Gradle init script
-        run: |
-          mkdir -p ~/.gradle/init.d
-          cp disc_golf_app/android/init.gradle ~/.gradle/init.d/suppress-werror.gradle
-
-      - name: Install Flutter dependencies
-        working-directory: disc_golf_app
-        run: flutter pub get
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Check required assets
-        working-directory: disc_golf_app
+        working-directory: disc_golf_android
         run: |
           for asset in \
-            "assets/data/pro_baseline_db.json" \
-            "assets/data/knowledge_base.json" \
-            "assets/models/disc_detector.tflite" \
-            "assets/images/disc_golf_basket.svg"; do
+            "app/src/main/assets/data/pro_baseline_db.json" \
+            "app/src/main/assets/data/knowledge_base.json" \
+            "app/src/main/assets/models/disc_detector.tflite"; do
             if [ ! -f "$asset" ]; then
               echo "ERROR: Missing asset: $asset"
               exit 1
@@ -63,21 +36,13 @@ jobs:
           done
           echo "All assets present."
 
-      - name: Analyze Flutter app
-        working-directory: disc_golf_app
-        run: flutter analyze
-
-      - name: Run Flutter tests
-        working-directory: disc_golf_app
-        run: flutter test
-
       - name: Build debug APK
-        working-directory: disc_golf_app
-        run: flutter build apk --debug
+        working-directory: disc_golf_android
+        run: ./gradlew --no-daemon :app:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: disc-flight-school-debug-${{ github.run_number }}
-          path: disc_golf_app/build/app/outputs/flutter-apk/app-debug.apk
+          path: disc_golf_android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30

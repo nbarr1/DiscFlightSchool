@@ -7,12 +7,16 @@
 python -m pip install -r server/requirements-test.txt
 APP_API_KEY=test-key ./scripts/test_server.sh
 
-# Flutter
-./scripts/test_flutter.sh          # pub get + analyze + test
+# Android
+./scripts/test_android.sh          # :core:test + :app:testDebugUnitTest
 ```
 
+`:core` is a plain Kotlin/JVM module, so `./gradlew :core:test` alone needs
+nothing but a JDK 17 — no Android SDK.
+
 CI runs both on every pull request (`.github/workflows/server-tests.yml`,
-`flutter-tests.yml`) plus a dependency audit (`dependency-audit.yml`).
+`android-tests.yml`, which also runs Android Lint) plus a dependency audit
+(`dependency-audit.yml`).
 
 ## Server coverage
 
@@ -37,63 +41,86 @@ Two guardrails worth knowing about, because they encode past incidents:
   those overrides the committed placeholder API key would become a live
   credential on any stack someone starts.
 
-## Flutter coverage
+## Android coverage
+
+Everything ported out of Dart that can be tested without a device lives in
+`:core`, which is why the suite concentrates there.
 
 | File | Covers |
 |---|---|
-| `angle_calculator_test.dart` | 2-D/3-D joint angles, X-factor sign and magnitude, Catmull-Rom control-point interpolation, anchor filling |
-| `scoring_service_test.dart` | round persistence (including the undo/re-enter duplicate-save regression), corrupt-store resilience, statistics |
-| `posture_analysis_service_test.dart` | lead/trail knee labelling per throw type, physiological-limit clamping vs dropping, pro deviation scoring |
-| `knowledge_base_service_test.dart` | Anthropic request shape and response parsing, including thinking-block handling, refusals, truncation, and transport errors |
-| `disc_detection_service_test.dart` | model-output parsing for both YOLO tensor layouts, spatial-coherence filtering, smoothing, gap interpolation, frame-index alignment |
-| `training_data_service_test.dart` | server URL allow-listing, same-origin checks, API-key clearing on origin change, YOLO label/server-validator agreement |
-| `data_contracts_test.dart`, `disc_tracker_test.dart`, `widget_test.dart` | pre-existing model round-trips, spline tracker, app startup routing |
+| `AngleCalculatorTest.kt` | 2-D/3-D joint angles, X-factor sign and magnitude, Catmull-Rom control-point interpolation, anchor filling |
+| `ScoringRepositoryTest.kt` | round persistence (including the undo/re-enter duplicate-save regression), corrupt-store resilience, statistics |
+| `PostureMathTest.kt` | lead/trail knee labelling per throw type, physiological-limit clamping vs dropping, angle and keypoint smoothing, pro deviation scoring |
+| `KnowledgeSearchTest.kt` | local keyword search plus the Anthropic request shape and response parsing, including thinking-block handling, refusals, truncation, and transport errors |
+| `DiscDetectionTest.kt` | model-output parsing for both YOLO tensor layouts, input-layout detection, both preprocessing write orders, spatial-coherence filtering, smoothing, gap interpolation, frame-index alignment |
+| `DetectionQualityTest.kt` | the coverage/interpolation/confidence heuristic, its thresholds against the user's sensitivity setting, and seed-point sampling |
+| `TrackerTest.kt` | the spline tracker, the frame budget derived from a trimmed span, and frame-index maths |
+| `WorldAnchorTest.kt` | the similarity transform that keeps a flight path pinned to the scene while the camera pans and zooms |
+| `ServerUriTest.kt` | server URL allow-listing, same-origin checks, endpoint construction |
+| `RouletteTest.kt` | disc/power/shape generation, incompatible-combination filtering, difficulty weighting |
+| `DataContractsTest.kt` | the persisted formats — landmark keys, ISO timestamps, legacy fields — that an upgrading install still has to read |
+
+`:app`'s own unit tests cover the helpers that are Android-free but live in the
+Android module: `FormattingTest.kt` (scorecard and history readouts),
+`FrameIndexTest.kt` and `FrameForFractionTest.kt` (timestamp-to-frame maths),
+and `FlightVideoExporterTest.kt` (which tracked frames get a pre-rendered
+overlay).
 
 ### What these tests deliberately do not cover
 
-Host-side `flutter test` cannot exercise anything that needs a platform channel
-or native library. The following are **not** covered and still need a device or
+A JVM unit test cannot exercise anything that needs a real Android framework or
+native library. The following are **not** covered and still need a device or
 emulator:
 
-- `DiscDetectionService.processVideo()` end to end — needs `path_provider`,
-  `ffmpeg_kit_flutter_new`, and the TFLite native library (including the GPU
-  delegate path). Its re-entrancy guard, lock release, and temp-directory
-  cleanup are covered by inspection only.
-- `HybridDetectionService.detect()` end to end — same reasons.
-- `PostureAnalysisService.analyzeForm()` — needs ML Kit pose detection.
-- Secure-storage reads and writes. In unit tests
-  `flutter_secure_storage` throws `MissingPluginException`, which the services
-  catch; the tests therefore exercise the in-memory key path, not persistence.
+- `DiscDetector.processVideo()` end to end — needs `MediaMetadataRetriever` and
+  the TensorFlow Lite native library (including the GPU delegate path). Its
+  re-entrancy guard, cancellation, and buffer reallocation on model reload are
+  covered by inspection only.
+- `HybridDiscTracker.refine()` end to end — same reasons.
+- `PostureAnalyzer.analyze()` — needs ML Kit pose detection.
+- Every Compose screen, and the navigation graph wiring them together.
+- `FlightVideoExporter` — needs Media3 `Transformer` and a real encoder.
+- `EncryptedSharedPreferences` reads and writes, which fall back to an
+  in-memory store when the keystore is unavailable.
 - Model download and upload against a real server.
+
+### TODO: walk the app on a device
+
+The Kotlin client has never been run. Assemble a debug APK and go through each
+feature once, watching for the things a unit test cannot see: permission
+prompts, video pickers returning a content URI the app has to copy, playback
+seeking landing on the frame the analysis measured, and state surviving a
+rotation or a trip through the background.
 
 ### TODO: verify track-by-detection on a real video
 
-`DiscDetectionService` was rewritten around a track-by-detection state machine
+`DiscDetector` was built around a track-by-detection state machine
 (full-frame discovery → windowed tracking with velocity prediction → fall back
-to discovery after a short occlusion streak — see `detectInWindow`,
-`_DiscTrack`, and the loop in `processVideo`), plus a single-pass FFmpeg frame
-extraction and an optional GPU delegate.
+to discovery after a short occlusion streak — see `detectInWindow`, `DiscTrack`,
+and the loop in `processVideo`), plus `MediaMetadataRetriever` frame extraction
+and an optional GPU delegate.
 
 The bundled asset is now a genuine **YOLO11n@640** export — see the client
 facts in `README.md`. It arrived as `format="litert"`/`quantize="w8a32"`
 output from Ultralytics' current exporter, which (as of Ultralytics 8.4.83,
 when the standalone `tflite` format was removed) produces **NCHW**
 (`[1,3,640,640]`) rather than the NHWC layout the app originally assumed —
-`DiscDetectionService.detectInputLayout` and the two `_preprocessImage` write
-paths handle this, covered at the pure-function level, but **none of it has
-run against a real interpreter yet.**
-`flutter analyze` and `flutter test` are clean and cover every pure function
-in isolation (candidate selection, coherence filtering, smoothing,
-interpolation, and now the NHWC/NCHW layout detection and both preprocessing
-write patterns), but **nothing here exercises the state machine against real
-frames, the FFmpeg extraction command, or the GPU delegate — all of that
-needs a device and a real throw video.**
+`YoloOutput.detectInputLayout` and both `YoloPreprocessor` write paths handle
+this, covered at the pure-function level, but **none of it has run against a
+real interpreter yet.**
+The `:core` suite covers every pure function in isolation (candidate
+selection, coherence filtering, smoothing, interpolation, the NHWC/NCHW layout
+detection, and both preprocessing write patterns), but **nothing here
+exercises the state machine against real frames, frame extraction, or the GPU
+delegate — all of that needs a device and a real throw video.**
 
 **Before release, run a full tracking pass on a device and confirm:**
-- The FFmpeg extraction command (`fps` + `scale` filter, single pass) actually
-  produces the expected frame sequence — the escaped-comma filter syntax
-  (`scale=min(640\,iw):-2`) was verified by inspection against FFmpegKit's
-  tokenizer, not by running it.
+- Frame extraction produces the expected sequence. `FrameExtractor` asks
+  `MediaMetadataRetriever` for `OPTION_CLOSEST`, not the cheaper
+  `OPTION_CLOSEST_SYNC`, so a frame should come back at the requested
+  timestamp rather than at the nearest keyframe — confirm that on a clip with
+  sparse keyframes, where snapping would be visible as an overlay lagging the
+  disc.
 - Discovery mode finds the disc leaving the hand/early flight, tracking mode
   follows it through a full flight without losing the lock, and a lock lost to
   occlusion (e.g. the disc crossing behind the thrower) is reacquired via
@@ -105,29 +132,30 @@ needs a device and a real throw video.**
   works on a clip that worked before. This is the acceptance gate for the
   upgrade — it's the one thing the pure-function tests genuinely cannot
   cover, since it depends on the real interpreter accepting the buffer shape
-  `_writeChannelsFirst` builds.
+  `YoloPreprocessor` builds.
 - **Timing at 640.** Measure real ms/frame. Per-frame cost scales with input
   area, so a 640 model is roughly 4× the 320 export. If a trimmed clip still
-  takes minutes after the `getBytes` preprocessing change and the trim-derived
-  frame budget, the isolate migration below stops being optional.
-- The GPU delegate actually engages on a real Android/iOS device (check the
-  `debugPrint` in `_loadModelImpl`) and inference doesn't silently fall back to
-  CPU-only in a way that regresses processing time.
+  takes minutes with the reused direct buffers and the trim-derived frame
+  budget, the background-execution question below stops being optional.
+- The GPU delegate actually engages on a real device (check the load log) and
+  inference doesn't silently fall back to CPU-only in a way that regresses
+  processing time.
 - A second `processVideo()` call after a model reload still produces output —
   the input and output buffers are invalidated and reallocated to the new
   model's geometry on reload, and that path is untested against the real
   interpreter.
 
-Moving inference off the UI isolate entirely (via `IsolateInterpreter`) remains
-outstanding; it needs device testing to validate, so it was not attempted
-blind.
+Detection runs on a background dispatcher, but a long clip still ties the app
+to the foreground for the whole pass. Whether that needs a foreground service
+or a `WorkManager` job depends on the measured per-frame cost, so decide it
+from device numbers rather than in advance.
 
 ### TODO: verify the Full Auto flight-tracking flow on a device
 
 `AutoDiscTracker` and the Auto-detect entry point are covered by host tests
 only at the pure-function level — the quality heuristic, seed-point sampling,
-frame-index maths, and the FFmpeg command string. Everything that touches real
-frames still needs a device.
+frame-index maths, and the frame timestamps to sample. Everything that touches
+real frames still needs a device.
 
 **Run these with a real throw video:**
 
@@ -153,10 +181,10 @@ frames still needs a device.
   clears its `derived` flag, so it becomes eligible for training collection
   again.
 - **Fresh install.** Uninstall, install, and go straight to Auto-detect without
-  visiting Training Settings first. Previously nothing loaded the model on a
-  normal run, so `HybridDetectionService` silently skipped YOLO entirely and
-  refined against colour blobs; confirm the load now happens and
-  `usedDetectorModel` is true.
+  visiting Training Settings first. In the Flutter client nothing loaded the
+  model on a normal run, so the hybrid tracker silently skipped YOLO entirely
+  and refined against colour blobs; confirm the load happens and
+  `HybridDiscTracker.usedDetectorModel` is true.
 - **Training-data offset.** With sample collection opted in and a trimmed clip,
   confirm the stored full-frame image matches the marked moment. Samples used
   to be extracted at an absolute timestamp computed from a trim-relative frame

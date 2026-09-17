@@ -108,4 +108,4 @@ The compose stack starts the API, worker, PostgreSQL, Redis, MinIO, and a MinIO 
 
 ## Next steps
 
-1. Add explicit OpenAPI/API-contract documentation if external clients beyond the Flutter app are expected.
+1. Add explicit OpenAPI/API-contract documentation if external clients beyond the Android app are expected.

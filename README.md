@@ -1,40 +1,83 @@
 # DiscFlightSchool
 
-DiscFlightSchool is a monorepo containing a Flutter client and a FastAPI training/model-distribution server for disc golf analysis workflows.
+DiscFlightSchool is a monorepo containing a native Android client and a FastAPI training/model-distribution server for disc golf analysis workflows.
 
-This README reflects an audit of the current repository state on 2026-08-19. It describes only files and behavior that exist in this repository.
+The client was a Flutter app until the Kotlin rewrite; `disc_golf_app/` is gone and its history is in git. This README describes only files and behavior that exist in this repository.
 
 ## Current repository status
 
-### Flutter client (`disc_golf_app/`)
+### Android client (`disc_golf_android/`)
 
-The Flutter app is the end-user application. Its bootstrap lives in `disc_golf_app/lib/main.dart`, registers app services with Provider, and routes first-time users through onboarding before showing the home screen.
+The Android app is the end-user application, written in Kotlin with Jetpack
+Compose. `MainActivity` provides the process-wide `AppContainer` through a
+composition local and hands off to `AppNavHost`, which routes first-time users
+through onboarding before showing the home screen.
+
+The Gradle project has two modules:
+
+- **`:core`** — a plain Kotlin/JVM module with no Android dependencies. It holds
+  the detection maths, tracking state machines, posture calculations, scoring,
+  roulette, the knowledge-base search and Anthropic request/response handling,
+  the server-URL allow-listing, and every persisted model. Because it is
+  Android-free, all of it runs under a normal JVM test task.
+- **`:app`** — the Android module: Compose UI, ML Kit and TensorFlow Lite
+  integration, Media3 playback and export, frame extraction, storage, and the
+  network client.
 
 Implemented client areas currently present in source:
 
-- Flight Tracker screens, video playback, overlays, and disc-detection services. Automated detection is track-by-detection: full-frame YOLO discovery locates the disc, then windowed tracking with velocity prediction follows it frame-to-frame (falling back to discovery after a short occlusion streak) instead of re-scanning the whole frame every time. Frames are extracted in a single batched FFmpeg pass rather than one call per frame. A user-seeded keyframe path (`GeometricSplineTracker`/`HybridDiscTracker` behind the `DiscTracker` interface) remains available as a manual/hybrid alternative when automated tracking needs a correction. After trimming, the user picks "Auto-detect" or "Mark manually": auto runs `AutoDiscTracker` over the trimmed clip with no taps, showing determinate progress with a cancel, then reports a low-confidence warning (coverage, interpolated share, and mean confidence relative to the user's own sensitivity setting — see `detection_quality.dart`) and offers to convert the detected path into editable keyframes for hand-correction. Every tracker works in the trimmed frame space: frame 0 is the trim start, not the start of the file.
+- Flight Tracker screens, video playback, overlays, and disc-detection services. Automated detection is track-by-detection: full-frame YOLO discovery locates the disc, then windowed tracking with velocity prediction follows it frame-to-frame (falling back to discovery after a short occlusion streak) instead of re-scanning the whole frame every time. A user-seeded keyframe path (`GeometricSplineTracker`/`HybridDiscTracker` behind the `DiscTracker` interface) remains available as a manual/hybrid alternative when automated tracking needs a correction. After trimming, the user picks "Auto-detect" or "Mark manually": auto runs `AutoDiscTracker` over the trimmed clip with no taps, showing determinate progress with a cancel, then reports a low-confidence warning (coverage, interpolated share, and mean confidence relative to the user's own sensitivity setting — see `core/detection/DetectionQuality.kt`) and offers to convert the detected path into editable keyframes for hand-correction. Every tracker works in the trimmed frame space: frame 0 is the trim start, not the start of the file.
 - Form Coach screens for video trimming, posture analysis, phase selection/comparison, pose correction, and session history.
-- Disc Roulette screens, scoring models, scoring service, and roulette history service.
-- Knowledge Base screens and local JSON-backed content models/services.
+- Disc Roulette screens, scoring models, scoring repository, and roulette history.
+- Knowledge Base screens and local JSON-backed content models/repositories.
 - Training Settings for opt-in sample collection, server URL/API-key configuration, pending upload management, and detector model update checks.
 
-There is no repository/persistence abstraction layer; services own their own
-storage (SharedPreferences, secure storage, or the app documents directory).
+Screen-to-screen state that is too large to encode in a navigation route — a
+pose analysis, a flight path — lives in `WorkbenchState`; the routes
+themselves carry only identifiers. Persistence is `SharedPreferences`,
+`EncryptedSharedPreferences` for keys, and files under the app's own storage.
 
 Important client facts:
 
-- Package name: `disc_golf_app`.
-- Published version in `pubspec.yaml`: `1.0.0+1`.
-- Dart SDK constraint: `>=3.8.0 <4.0.0`.
+- Gradle project: `disc_golf_android/`, modules `:app` and `:core`, built with the committed Gradle wrapper (8.11.1).
+- Android Gradle Plugin `8.9.1`, Kotlin `2.1.0`, Compose BOM `2024.12.01`.
 - Android application ID: `com.discflightschool.app`.
-- Android compile SDK: `36`.
-- Android NDK version requested by Gradle: `27.0.12077973`.
-- Release builds require a complete `key.properties` signing config; unsigned local testing should use debug builds.
-- Bundled runtime assets include JSON data files, `assets/models/disc_detector.tflite`, an SVG basket image, and Flutter material assets.
-- The bundled/retrained detector's TFLite output format needs no client-side parsing changes between YOLOv8 and YOLO11: both export the same anchor-free `Detect` head shape (verified against the `ultralytics` source, not assumed). `DiscDetectionService` reads its input tensor size and channel order from the loaded model at load time rather than assuming a fixed resolution or layout.
+- `versionCode = 1`, `versionName = "1.0.0"`, declared in `disc_golf_android/app/build.gradle.kts`.
+- `compileSdk = 36`, `targetSdk = 36`, `minSdk = 24`.
+- Java/Kotlin target 17, with core library desugaring so `java.time` works at API 24.
+- Release builds require a complete `disc_golf_android/key.properties` signing config; unsigned local testing should use debug builds.
+- Bundled runtime assets live in `disc_golf_android/app/src/main/assets/`: `data/pro_baseline_db.json`, `data/knowledge_base.json`, and `models/disc_detector.tflite`.
+- The bundled/retrained detector's TFLite output format needs no client-side parsing changes between YOLOv8 and YOLO11: both export the same anchor-free `Detect` head shape (verified against the `ultralytics` source, not assumed). `DiscDetector` reads its input tensor size and channel order from the loaded model at load time rather than assuming a fixed resolution or layout.
 - **The bundled `disc_detector.tflite` is a genuine YOLO11n export at 640×640**, single class, dynamic-INT8-quantized (`quantize="w8a32"` — int8 weights, float32 activations, no calibration data needed). Read straight out of the flatbuffer to confirm rather than trust the filename: output `serving_default_output_0_output` is `[1,5,8400]` FLOAT32 — 8400 being 80²+40²+20², the anchor grid for a 640 input.
-- **The input tensor is NCHW (channel-first), `[1,3,640,640]`, not the NHWC (channel-last) layout the app originally assumed.** As of Ultralytics 8.4.83 the standalone `tflite` export format was removed; `format="tflite"` now silently redirects to the `litert` exporter, which traces the PyTorch model directly and produces NCHW — there is no supported flag to recover the old onnx2tf-based NHWC output. `DiscDetectionService.detectInputLayout` distinguishes the two by which post-batch dimension equals 3 (the channel count — unambiguous, since a real detector's spatial dimensions are always ≥32) and `_preprocessImage` writes the pixel buffer in whichever order the loaded model actually expects.
-- `DiscDetectionService` logs the loaded model's input/output shapes and detected channel order, and warns — but never fails — when the geometry doesn't match a single-class anchor-free `Detect` head: a non-multiple-of-32 input, an unexpected channel count, an anchor count that disagrees with the declared input size, or a shape it can't confidently classify as NHWC or NCHW. A model downloaded from the training server may legitimately ship at a different geometry, and refusing to load it would break detection outright instead of degrading.
+- **The input tensor is NCHW (channel-first), `[1,3,640,640]`, not the NHWC (channel-last) layout the app originally assumed.** As of Ultralytics 8.4.83 the standalone `tflite` export format was removed; `format="tflite"` now silently redirects to the `litert` exporter, which traces the PyTorch model directly and produces NCHW — there is no supported flag to recover the old onnx2tf-based NHWC output. `YoloOutput.detectInputLayout` distinguishes the two by which post-batch dimension equals 3 (the channel count — unambiguous, since a real detector's spatial dimensions are always ≥32) and `YoloPreprocessor.writeNormalizedInput` writes the pixel buffer in whichever order the loaded model actually expects.
+- `DiscDetector` logs the loaded model's input/output shapes and detected channel order, and warns — but never fails — when the geometry doesn't match a single-class anchor-free `Detect` head: a non-multiple-of-32 input, an unexpected channel count, an anchor count that disagrees with the declared input size, or a shape it can't confidently classify as NHWC or NCHW. A model downloaded from the training server may legitimately ship at a different geometry, and refusing to load it would break detection outright instead of degrading.
+
+#### Library choices carried over from the Flutter client
+
+| Flutter package | Android replacement |
+|---|---|
+| `provider` | `AppContainer` + Compose state / `StateFlow` |
+| `video_player` | Media3 ExoPlayer (`SeekParameters.EXACT` for frame-accurate scrubbing) |
+| `ffmpeg_kit_flutter_new` | `MediaMetadataRetriever` for frame extraction, Media3 `Transformer` + `OverlayEffect` for the burned-in flight path |
+| `tflite_flutter` | `org.tensorflow:tensorflow-lite`, with the GPU delegate and a CPU fallback |
+| `google_mlkit_pose_detection` | `com.google.mlkit:pose-detection-accurate` |
+| `image_picker` / `file_picker` | `ActivityResultContracts.PickVisualMedia` / `CaptureVideo` |
+| `flutter_secure_storage` | `EncryptedSharedPreferences` |
+| `shared_preferences` | `SharedPreferences` |
+| `gal` | `MediaStore` |
+| `share_plus` | `FileProvider` + `ACTION_SEND` |
+| `http` | OkHttp |
+| `archive` / `crypto` | `java.util.zip` / `MessageDigest` |
+
+Frame extraction is the one substitution with a behavioural note worth knowing:
+`MediaMetadataRetriever` is asked for `OPTION_CLOSEST` rather than the cheaper
+`OPTION_CLOSEST_SYNC`, because snapping to the nearest keyframe would silently
+misalign an overlay from the position it was measured at.
+
+The on-disk formats — landmark key strings, ISO-8601 timestamps, the legacy
+`challenge` field on a saved hole, the `uploaded` flag on a training sample —
+are unchanged from the Flutter client, so an existing install keeps its
+history. `DataContractsTest` covers those round trips.
 
 ### Training server (`server/`)
 
@@ -79,14 +122,16 @@ The root `docker-compose.yml` defines services for:
 
 ```text
 DiscFlightSchool/
-├── .github/workflows/          # GitHub Actions for Flutter build/tests and server tests
-├── disc_golf_app/              # Flutter application
-│   ├── android/                # Android Gradle project
-│   ├── assets/                 # JSON, images, studies, and bundled TFLite model
-│   ├── lib/                    # Dart app code
-│   └── test/                   # Flutter unit, widget, and data-contract tests
+├── .github/workflows/          # GitHub Actions for the Android build/tests and server tests
+├── disc_golf_android/          # Android application (Gradle)
+│   ├── app/                    # Android module: Compose UI, ML Kit, TFLite, Media3
+│   │   └── src/main/assets/    # JSON data and the bundled TFLite detector
+│   ├── core/                   # Pure Kotlin/JVM module: detection, tracking, posture,
+│   │                           #   scoring, and the persisted models, with its tests
+│   └── art/                    # Source artwork for the launcher icon and basket drawable
 ├── docs/                       # testing.md, dependency-audit-troubleshooting.md,
-│                               #   and the Google Play readiness report/plan
+│   │                           #   and the Google Play readiness report/plan
+│   └── studies/                # The research papers the knowledge base cites
 ├── scripts/                    # Local test and validation scripts
 ├── server/                     # FastAPI training/model server
 │   ├── training_server/        # App factory, config, storage, training, validation, worker
@@ -96,19 +141,13 @@ DiscFlightSchool/
 └── docker-compose.yml          # API/worker/Postgres/Redis/MinIO scaffold
 ```
 
-There is no Python code in the Flutter app. A prototype Flask service formerly
-lived at `disc_golf_app/python/`, reachable through `python_bridge_service.dart`;
-neither was called by anything, and both have been removed. A further sweep on
-2026-08-19 removed a second layer of dead code that had accumulated behind
-that same never-routed Flight Analysis screen: `flight_analysis_screen.dart`,
-`flight_data_service.dart`, the `output_coordinates.json`/`analysis_results.json`
-assets it read, the unused `flight_data.dart`/`disc.dart` models, the unused
-`AppConstants`/`Helpers` utility classes, an unused `VideoControls` widget, a
-second (unused) `FlightPathPainter` in `flight_path_overlay.dart` shadowing the
-one actually in use, and two never-routed screens (`manual_tracking_screen.dart`,
-`game_session_screen.dart`). None of it was imported from anywhere reachable —
-`flutter analyze`/`flutter test` were re-run clean after removal. Recover any
-of it from git history if you want to revive that path.
+The Flutter client that preceded this one accumulated several layers of dead
+code, all removed before the rewrite: a never-called prototype Flask service
+and its bridge, a never-routed Flight Analysis screen with the services,
+assets, models, and helpers behind it, and two other unrouted screens. One
+more — `comparison_screen.dart`, which nothing navigated to — was found during
+the port and deliberately not carried over. Recover any of it from git history
+if you want to revive that path.
 
 ## Local development
 
@@ -122,75 +161,80 @@ python -m pip install -r server/requirements-test.txt
 APP_API_KEY=test-key ./scripts/test_server.sh
 ```
 
-### Flutter checks
+### Android checks
 
 ```bash
-./scripts/test_flutter.sh
+./scripts/test_android.sh
 ```
 
-The Flutter script requires `flutter` on `PATH` and runs `flutter pub get`, `flutter analyze`, and `flutter test` inside `disc_golf_app/`.
+The script runs `:core:test` and `:app:testDebugUnitTest` through the committed
+Gradle wrapper, so the only host requirement is a JDK 17 plus the Android SDK
+for the `:app` module. `:core` alone needs nothing but the JDK:
+
+```bash
+cd disc_golf_android
+./gradlew :core:test
+```
 
 ## Building a testable Android APK
 
-A testable Android APK is currently built from the Flutter project, not from the server.
-
 Prerequisites:
 
-1. Flutter SDK compatible with Dart `>=3.8.0 <4.0.0`.
-2. Android SDK with compile SDK 36 installed.
-3. Android NDK `27.0.12077973` installed or installable by the Android tooling.
-4. Java 17 available to Gradle/Android tooling.
-5. Network access for first-time dependency resolution unless dependencies are already cached.
+1. Java 17.
+2. Android SDK with compile SDK 36 and build tools installed (`ANDROID_HOME`, or a `local.properties` naming `sdk.dir`).
+3. Network access for first-time dependency resolution unless dependencies are already cached.
 
 Recommended validation/build sequence:
 
 ```bash
-cd disc_golf_app
-flutter doctor -v
-flutter pub get
-flutter analyze
-flutter test
-flutter build apk --debug
+cd disc_golf_android
+./gradlew :core:test :app:testDebugUnitTest
+./gradlew :app:lintDebug
+./gradlew :app:assembleDebug
 ```
 
 Expected debug APK output:
 
 ```text
-disc_golf_app/build/app/outputs/flutter-apk/app-debug.apk
+disc_golf_android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-For a signed release APK, add `disc_golf_app/android/key.properties` with `keyAlias`, `keyPassword`, `storeFile`, and `storePassword`, then run:
+For a signed release build, add `disc_golf_android/key.properties` with `keyAlias`, `keyPassword`, `storeFile`, and `storePassword`, then run:
 
 ```bash
-cd disc_golf_app
-flutter build apk --release
+cd disc_golf_android
+./gradlew :app:assembleRelease     # APK
+./gradlew :app:bundleRelease       # AAB, what Play Console takes
 ```
 
-Without `key.properties`, release builds now fail fast; use `flutter build apk --debug` for local unsigned testing.
+Without `key.properties` the release build has no signing config and fails; use `:app:assembleDebug` for local unsigned testing.
 
 ### Bumping the app version for a release
 
-`disc_golf_app/pubspec.yaml`'s `version:` field (`versionName+versionCode`, e.g. `1.0.0+1`) is the single source for both the Android `versionCode`/`versionName` and the iOS `CFBundleVersion`/`CFBundleShortVersionString` — Gradle and Xcode both read it via Flutter's build tooling, nothing else needs editing. **Increment the `+N` build-number suffix on every release submitted to an app store**, even for a patch that only touches `versionName` (e.g. `1.0.0+1` → `1.0.1+2`): Google Play and the App Store both reject a re-upload whose build number doesn't strictly increase over the previous release.
+`versionCode` and `versionName` live in `disc_golf_android/app/build.gradle.kts`. **Increment `versionCode` on every release submitted to an app store**, even for a patch that only changes `versionName`: Google Play rejects a re-upload whose version code doesn't strictly increase over the previous release.
 
 ## Current next steps
 
-1. **TODO: verify the YOLO11n@640 detector on a real device with a real
+1. **TODO: build and run the Kotlin client on a device.** The rewrite has
+   been verified at the logic level — `:core`'s suite covers every ported
+   calculation, and `:app`'s unit tests cover the Android-free helpers — but
+   nothing here has exercised Compose, ML Kit, TensorFlow Lite, Media3, or
+   `MediaMetadataRetriever` against a real device. Assemble a debug APK and
+   walk each feature end to end; `docs/testing.md` has the checklist.
+2. **TODO: verify the YOLO11n@640 detector on a real device with a real
    throw video.** The `.tflite` swap and the NCHW-layout handling it required
    (see the client facts above) are done, but none of it has run against a
-   real TFLite interpreter yet — the FFmpeg batch frame extraction, the GPU
-   delegate, and the discovery/tracking/occlusion state machine are covered
-   by `flutter analyze`/`flutter test` at the pure-function level only. See
-   `docs/testing.md` for the specific checklist, and confirm the load log
-   reports `input [1, 3, 640, 640]` and `NCHW` before trusting anything else.
-2. Keep docs synchronized with source whenever endpoints, assets, build settings, or runtime services change.
-3. **Move disc detection off the UI isolate.** This moves from desirable to
-   likely required at a 640 input: per-frame cost scales with input area, so a
-   640 model is roughly 4× the 320 export's inference, output marshalling, and
-   candidate scan. Deriving the frame budget from the trimmed span (a six-second
-   trim is ~61 frames, not the 300-frame default) and reading frames via
-   `getBytes` rather than per-pixel `getPixel` buy back a large part of that,
-   but measure on a device before deciding this can keep waiting. See
-   `docs/testing.md`.
+   real TFLite interpreter yet. Confirm the load log reports
+   `input [1, 3, 640, 640]` and `NCHW` before trusting anything else.
+3. Keep docs synchronized with source whenever endpoints, assets, build settings, or runtime services change.
+4. **Measure detection timing at 640 and decide where inference runs.**
+   Per-frame cost scales with input area, so a 640 model is roughly 4× the 320
+   export's inference, output marshalling, and candidate scan. Detection
+   already runs off the main thread on a background dispatcher and reuses its
+   direct `ByteBuffer`s, and the frame budget is derived from the trimmed span
+   (a six-second trim is ~61 frames, not the 300-frame cap), but measure on a
+   device before deciding whether a foreground service or a `WorkManager` job
+   is needed for long clips. See `docs/testing.md`.
 
 ## Running the compose stack
 
