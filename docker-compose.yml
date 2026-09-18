@@ -71,6 +71,13 @@ services:
         condition: service_healthy
       object-storage:
         condition: service_started
+      # Not a runtime dependency: this service shares three named volumes with
+      # training-api, and Docker populates a fresh volume from the image when
+      # it creates the first container that mounts it. Creating both at once
+      # races that copy — "failed to mkdir .../labels: file exists" — so wait
+      # for training-api to exist before this one is created.
+      training-api:
+        condition: service_started
     volumes:
       - training-data:/app/dataset
       - training-models:/app/models
