@@ -69,8 +69,8 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       OBJECT_STORAGE_ENDPOINT: http://localhost:9000
       OBJECT_STORAGE_BUCKET: disc-flight-school
-      OBJECT_STORAGE_ACCESS_KEY: minioadmin
-      OBJECT_STORAGE_SECRET_KEY: minioadminpass
+      OBJECT_STORAGE_ACCESS_KEY: ci-test-access-key
+      OBJECT_STORAGE_SECRET_KEY: ci-test-secret-key
       OBJECT_STORAGE_SECURE: "false"
 
     services:
@@ -101,23 +101,44 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # MinIO's image needs `server /data` as a command argument, which the
-      # `services:` block can't pass (it only supports image/env/ports/
-      # options) — so it's started by hand instead of as a service container.
-      - name: Start MinIO
+      # Not required for access — every image below is public — but an
+      # authenticated pull gets a far higher Docker Hub rate limit than a
+      # shared runner's IP does, and an anonymous 429 fails the job just as
+      # hard as a denial. Both are repository secrets, which a pull request
+      # from a fork does not receive, so such a run fails at this step.
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # MinIO's images are gated: Docker Hub denies minio/minio and minio/mc
+      # to accounts without the entitlement, authenticated or not, so this job
+      # could no longer start an object store at all. s3proxy serves the S3
+      # API over a filesystem backend and enforces the same access key and
+      # secret, so OBJECT_STORAGE_ACCESS_KEY/SECRET still carry weight here.
+      # It needs env configuration the `services:` block can't express, so it
+      # is started by hand rather than as a service container.
+      - name: Start the S3-compatible object store
         run: |
-          docker run -d --name minio -p 9000:9000 \
-            -e MINIO_ROOT_USER=minioadmin \
-            -e MINIO_ROOT_PASSWORD=minioadminpass \
-            minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
+          docker run -d --name object-storage -p 9000:9000 \
+            -e S3PROXY_ENDPOINT=http://0.0.0.0:9000 \
+            -e S3PROXY_AUTHORIZATION=aws-v4 \
+            -e S3PROXY_IDENTITY=ci-test-access-key \
+            -e S3PROXY_CREDENTIAL=ci-test-secret-key \
+            -e JCLOUDS_PROVIDER=filesystem \
+            -e JCLOUDS_FILESYSTEM_BASEDIR=/data \
+            andrewgaul/s3proxy:4.1.1
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:9000/minio/health/live >/dev/null; then
+            # An unauthenticated request is answered 403, so any HTTP response
+            # proves the listener is up; -f would reject that as a failure.
+            if curl -s -o /dev/null http://localhost:9000/; then
               exit 0
             fi
             sleep 1
           done
-          echo "MinIO did not become healthy in time" >&2
-          docker logs minio
+          echo "The object store did not become reachable in time" >&2
+          docker logs object-storage
           exit 1
 
       - name: Set up Python
