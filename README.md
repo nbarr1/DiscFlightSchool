@@ -96,6 +96,10 @@ Implemented server endpoints:
 | `GET` | `/api/training/status` | No | Returns training status (in-memory, or from PostgreSQL in durable mode — same JSON shape either way). |
 | `GET` | `/api/model/version` | No | Returns latest `.tflite` model metadata or the no-model sentinel. |
 | `GET` | `/api/model/download` | No | Downloads the latest `.tflite` model or returns 404 when none exists. |
+| `POST` | `/api/disc-flight/jobs` | `X-App-Key` | Uploads a supported throw video and starts one persistent Roboflow WebRTC Workflow session. |
+| `GET` | `/api/disc-flight/jobs/{id}` | `X-App-Key` + `X-Job-Token` | Returns honest job phase, frame counts, and progress when a reliable total is available. |
+| `GET` | `/api/disc-flight/jobs/{id}/result` | `X-App-Key` + `X-Job-Token` | Streams the completed annotated MP4. |
+| `DELETE` | `/api/disc-flight/jobs/{id}` | `X-App-Key` + `X-Job-Token` | Cancels processing and removes temporary input/output files. |
 
 Important server facts:
 
@@ -160,6 +164,65 @@ if you want to revive that path.
 python -m pip install -r server/requirements-test.txt
 APP_API_KEY=test-key ./scripts/test_server.sh
 ```
+
+### Roboflow disc-flight processing
+
+The Android Flight Tracker can preview an imported/recorded throw and send it
+to the existing FastAPI server. The server, never the application, reads
+`ROBOFLOW_API_KEY`. It sends the entire video in frame order through one
+persistent WebRTC session for workspace `disc-golf-tracer`, Workflow
+`disc-golf-flight-tracker-1789645514948`, and image input `image`. The
+Workflow's `output_image` is the canonical visualization; the client does not
+reimplement OC-SORT or trajectory rendering.
+
+Local setup:
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -r server/requirements.txt
+export APP_API_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+export ROBOFLOW_API_KEY='your-server-side-key'
+uvicorn main:app --app-dir server --host 0.0.0.0 --port 8000
+```
+
+In Android **Training Settings**, set the server URL and the matching
+`APP_API_KEY`, then run the client with Android Studio or:
+
+```bash
+cd disc_golf_android
+./gradlew :app:installDebug
+```
+
+Accepted uploads are MP4, MOV, WebM, and MKV. The default limit is 200 MiB
+(`DISC_FLIGHT_MAX_UPLOAD_BYTES=209715200`) and the default session timeout is
+15 minutes (`DISC_FLIGHT_SESSION_TIMEOUT_SECONDS=900`). Job results are stored
+under `server/disc_flight_jobs/`, which is ignored by Git. The current
+in-process job registry is appropriate for a single API process; a deployment
+using multiple API replicas must move job state to its shared queue/database
+before scaling the API horizontally.
+
+Normal tests mock Roboflow and consume no credits:
+
+```bash
+APP_API_KEY=test-key ./scripts/test_server.sh
+./scripts/test_android.sh
+```
+
+The real integration is deliberately opt-in and needs a short throw video:
+
+```bash
+ROBOFLOW_API_KEY='server-only-key' \
+ROBOFLOW_TEST_VIDEO=/absolute/path/to/short-throw.mp4 \
+python scripts/test_roboflow_integration.py
+```
+
+It verifies that OpenCV can open the resulting annotated MP4. A release is
+still not end-to-end verified until that output is also played in the Android
+app on a device. Rotate a Roboflow credential in the Roboflow dashboard, update
+only the server secret manager/environment, and restart the API. Never put the
+key in Android source, resources, `BuildConfig`, client-readable configuration,
+an APK, or Git history.
 
 ### Android checks
 

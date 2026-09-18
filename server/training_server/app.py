@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 import logging
 import time
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Header, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 
 from .config import Settings
+from .disc_flight import ALLOWED_VIDEO_TYPES, DiscFlightJobManager, temporary_upload
 from .protocols import StorageBackend
 from .storage import FileStorage
 from .training import TrainingManager
@@ -51,7 +54,11 @@ def _build_default_storage_and_trainer(
     return file_storage, TrainingManager(settings, file_storage)
 
 
-def create_app(settings: Settings, storage: StorageBackend | None = None) -> FastAPI:
+def create_app(
+    settings: Settings,
+    storage: StorageBackend | None = None,
+    disc_flight_manager: DiscFlightJobManager | None = None,
+) -> FastAPI:
     """Build the FastAPI app with explicit dependencies."""
     storage, trainer = _build_default_storage_and_trainer(settings, storage)
     storage.initialize()
@@ -60,6 +67,8 @@ def create_app(settings: Settings, storage: StorageBackend | None = None) -> Fas
     app.state.settings = settings
     app.state.storage = storage
     app.state.trainer = trainer
+    flight_jobs = disc_flight_manager or DiscFlightJobManager(settings)
+    app.state.disc_flight_jobs = flight_jobs
 
     app.add_middleware(
         CORSMiddleware,
@@ -109,6 +118,100 @@ def create_app(settings: Settings, storage: StorageBackend | None = None) -> Fas
         ):
             return JSONResponse({"error": "Invalid or missing API key"}, status_code=403)
         return None
+
+    def owned_job(job_id: str, token: str | None):
+        job = flight_jobs.get(job_id, token)
+        if job is None:
+            return JSONResponse({"error": "Job not found"}, status_code=404)
+        return job
+
+    @app.post("/api/disc-flight/jobs", status_code=202)
+    async def create_disc_flight_job(
+        video: UploadFile | None = File(None),
+        x_app_key: str | None = Header(None),
+    ):
+        if auth_error := require_api_key(x_app_key):
+            return auth_error
+        if video is None:
+            return JSONResponse({"error": "A video file is required"}, status_code=400)
+        content_type = (video.content_type or "").split(";", 1)[0].lower()
+        suffix = Path(video.filename or "").suffix.lower()
+        expected_suffix = ALLOWED_VIDEO_TYPES.get(content_type)
+        allowed_suffixes = set(ALLOWED_VIDEO_TYPES.values())
+        if expected_suffix is None or suffix not in allowed_suffixes:
+            return JSONResponse(
+                {"error": "Unsupported video format. Use MP4, MOV, WebM, or MKV."},
+                status_code=415,
+            )
+        temporary = temporary_upload()
+        size = 0
+        digest = hashlib.sha256()
+        try:
+            with temporary.open("wb") as destination:
+                while chunk := await video.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > settings.disc_flight_max_upload_bytes:
+                        return JSONResponse(
+                            {"error": "Video exceeds the configured upload limit"},
+                            status_code=413,
+                        )
+                    digest.update(chunk)
+                    destination.write(chunk)
+            if size == 0:
+                return JSONResponse({"error": "The uploaded video is empty"}, status_code=400)
+            if not settings.roboflow_api_key:
+                return JSONResponse(
+                    {"error": "Roboflow processing is not configured on this server"},
+                    status_code=503,
+                )
+            try:
+                job, token = flight_jobs.create(temporary, suffix, digest.hexdigest())
+            except ValueError as exc:
+                return JSONResponse({"error": str(exc)}, status_code=409)
+            return {"jobId": job.id, "status": "queued", "jobToken": token}
+        finally:
+            temporary.unlink(missing_ok=True)
+            await video.close()
+
+    @app.get("/api/disc-flight/jobs/{job_id}")
+    async def get_disc_flight_job(
+        job_id: str,
+        x_app_key: str | None = Header(None),
+        x_job_token: str | None = Header(None),
+    ):
+        if auth_error := require_api_key(x_app_key):
+            return auth_error
+        job = owned_job(job_id, x_job_token)
+        return job if isinstance(job, JSONResponse) else job.public()
+
+    @app.get("/api/disc-flight/jobs/{job_id}/result")
+    async def get_disc_flight_result(
+        job_id: str,
+        x_app_key: str | None = Header(None),
+        x_job_token: str | None = Header(None),
+    ):
+        if auth_error := require_api_key(x_app_key):
+            return auth_error
+        job = owned_job(job_id, x_job_token)
+        if isinstance(job, JSONResponse):
+            return job
+        if job.status != "complete" or not job.output_path.is_file():
+            return JSONResponse({"error": "Result is not ready"}, status_code=409)
+        return FileResponse(job.output_path, media_type="video/mp4", filename="disc-flight.mp4")
+
+    @app.delete("/api/disc-flight/jobs/{job_id}")
+    async def cancel_disc_flight_job(
+        job_id: str,
+        x_app_key: str | None = Header(None),
+        x_job_token: str | None = Header(None),
+    ):
+        if auth_error := require_api_key(x_app_key):
+            return auth_error
+        job = owned_job(job_id, x_job_token)
+        if isinstance(job, JSONResponse):
+            return job
+        flight_jobs.cancel(job)
+        return {"jobId": job.id, "status": job.status}
 
     @app.post("/api/training/upload")
     def upload_training_sample(
@@ -220,6 +323,9 @@ def create_app(settings: Settings, storage: StorageBackend | None = None) -> Fas
                 "GET  /api/training/status",
                 "GET  /api/model/version",
                 "GET  /api/model/download",
+                "POST /api/disc-flight/jobs",
+                "GET  /api/disc-flight/jobs/{jobId}",
+                "DELETE /api/disc-flight/jobs/{jobId}",
                 "GET  /health",
             ],
         }

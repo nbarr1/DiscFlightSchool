@@ -25,7 +25,7 @@ import com.discflightschool.app.ui.theme.AppColors
  */
 object PrivacyPolicy {
 
-    const val LAST_UPDATED = "August 2026"
+    const val LAST_UPDATED = "September 2026"
 
     const val INTRO = "Disc Flight School is a coaching and analysis tool. This policy " +
         "explains what the app accesses on your device, what it sends elsewhere, and " +
@@ -40,14 +40,24 @@ object PrivacyPolicy {
                 "record your throws for Form Coach and Flight Tracker, and for photo " +
                 "library access so you can pick an existing video or save an analyzed one. " +
                 "By default, recorded video, extracted frames, and analysis results stay on " +
-                "your device — the app does not upload them anywhere unless you explicitly " +
-                "opt in to training data collection (below).",
+                "your device. A video is uploaded only when you explicitly choose cloud " +
+                "flight tracing or training data collection (below).",
         ),
         Section(
             title = "On-device analysis",
-            body = "Pose detection (Form Coach) and disc detection (Flight Tracker) both run " +
-                "entirely on your device using a bundled machine-learning model. Your video " +
-                "is not sent to a server for this analysis.",
+            body = "Pose detection (Form Coach) and the Flight Tracker's on-device option run " +
+                "entirely on your device using bundled machine-learning models. Your video " +
+                "is not sent to a server when you choose the on-device tracker.",
+        ),
+        Section(
+            title = "Optional: cloud flight tracing",
+            body = "When you tap \"Trace in cloud,\" the selected video is sent to the Disc " +
+                "Flight School server, which securely submits it to Roboflow to detect and " +
+                "draw the disc trajectory. The source upload is removed after processing or " +
+                "cancellation. The annotated result remains on the server so your device can " +
+                "download it; contact the server operator for its retention and deletion " +
+                "policy. Do not use cloud tracing if you do not want the video processed by " +
+                "these services.",
         ),
         Section(
             title = "Optional: training data collection",
