@@ -15,3 +15,8 @@ minio>=7.2,<8.0
 
 # Test-only tooling (not part of the production runtime).
 pytest>=8.0.0
+# starlette 1.x moved its TestClient off httpx, so `from fastapi.testclient
+# import TestClient` raises at import time without this. The server itself
+# never imports it, which is why it belongs here rather than in
+# requirements.txt.
+httpx2>=2.13.0,<3.0.0

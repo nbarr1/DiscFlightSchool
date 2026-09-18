@@ -174,6 +174,12 @@ class RoboflowVideoProcessor:
             config=StreamConfig(
                 stream_output=[],
                 data_output=["output_image", "disc_detections", "tracked_disc"],
+                # Must match the source's flag. The source's value is what the
+                # server is told; this one is what the client uses to decide
+                # whether to acknowledge frames. Left at its default the two
+                # disagree: the server queues every frame while the client
+                # sends no acknowledgements back.
+                realtime_processing=False,
             ),
         )
         self.active_session = session
