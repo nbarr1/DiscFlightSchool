@@ -117,8 +117,7 @@ The root `docker-compose.yml` defines services for:
 - `training-worker`
 - `postgres`
 - `redis`
-- `minio`
-- `minio-init`
+- `object-storage`
 
 `training-api` and `training-worker` both run with the durable env vars set, so this stack exercises `PostgresMinioStorage` and the Redis training queue, not the filesystem backend. `./scripts/test_compose_integration.sh` boots this stack and exercises it end-to-end (see `.github/workflows/compose-integration.yml`, which runs it on push to `main`).
 
@@ -308,6 +307,6 @@ placeholders can never become live credentials:
 ```bash
 export APP_API_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
 export POSTGRES_DB=discflight POSTGRES_USER=discflight
-export POSTGRES_PASSWORD='...' MINIO_ROOT_USER='...' MINIO_ROOT_PASSWORD='...'
+export POSTGRES_PASSWORD='...' OBJECT_STORAGE_ROOT_USER='...' OBJECT_STORAGE_ROOT_PASSWORD='...'
 docker compose up
 ```
