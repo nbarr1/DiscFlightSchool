@@ -1,0 +1,93 @@
+name: Roboflow Workflow Smoke Test
+
+# Manual only, and deliberately not on push or pull_request: every run sends a
+# video through the published Roboflow Workflow and spends inference credits.
+# The rest of CI fakes the processor and spends none.
+on:
+  workflow_dispatch:
+    inputs:
+      video_url:
+        description: >-
+          URL of a short throw video (MP4, MOV, WebM or MKV). Leave empty to use
+          a generated synthetic clip, which checks that the session connects and
+          the Workflow returns its named outputs, but cannot detect a real disc.
+        required: false
+        type: string
+
+jobs:
+  roboflow-smoke-test:
+    name: Real Workflow smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Confirm the Roboflow key is configured
+        env:
+          ROBOFLOW_API_KEY: ${{ secrets.ROBOFLOW_API_KEY }}
+        run: |
+          if [ -z "$ROBOFLOW_API_KEY" ]; then
+            echo "ROBOFLOW_API_KEY is not set as a repository secret." >&2
+            echo "Add it under Settings -> Secrets and variables -> Actions." >&2
+            exit 1
+          fi
+          # Length only, never the value.
+          echo "ROBOFLOW_API_KEY is present (${#ROBOFLOW_API_KEY} characters)."
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      # requirements-test.txt covers the server import chain, since
+      # training_server/__init__.py imports the FastAPI app. The three video
+      # packages are read out of requirements.txt rather than written here, so
+      # these pins cannot drift from production the way a hand-written list
+      # would. ultralytics is not needed and its torch dependency would add
+      # gigabytes to a job that never trains anything.
+      - name: Install dependencies
+        run: |
+          grep -E '^(inference-sdk|opencv-python-headless|numpy)' \
+            server/requirements.txt > "${RUNNER_TEMP}/roboflow-extra.txt"
+          cat "${RUNNER_TEMP}/roboflow-extra.txt"
+          python -m pip install --upgrade pip
+          python -m pip install \
+            -r server/requirements-test.txt \
+            -r "${RUNNER_TEMP}/roboflow-extra.txt"
+
+      # The URL is passed through the environment rather than interpolated into
+      # the script, so a dispatch input cannot inject shell.
+      - name: Prepare the test video
+        env:
+          VIDEO_URL: ${{ inputs.video_url }}
+        run: |
+          if [ -n "$VIDEO_URL" ]; then
+            echo "Downloading the supplied video."
+            curl -fsSL "$VIDEO_URL" -o "${RUNNER_TEMP}/throw.mp4"
+          else
+            echo "No video_url given; generating a synthetic clip."
+            python scripts/make_synthetic_throw.py "${RUNNER_TEMP}/throw.mp4"
+          fi
+          ls -l "${RUNNER_TEMP}/throw.mp4"
+
+      # Fails when the Workflow cannot be reached, when it returns no annotated
+      # frames (which is what checks the `output_image` name), or when the
+      # assembled MP4 will not open. Its summary line reports how many frames
+      # carried `disc_detections`.
+      - name: Run the Workflow smoke test
+        env:
+          ROBOFLOW_API_KEY: ${{ secrets.ROBOFLOW_API_KEY }}
+          ROBOFLOW_TEST_VIDEO: ${{ runner.temp }}/throw.mp4
+          ROBOFLOW_TEST_OUTPUT: ${{ runner.temp }}/disc-flight-annotated.mp4
+        run: python scripts/test_roboflow_integration.py
+
+      - name: Upload the annotated video
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: disc-flight-annotated
+          path: ${{ runner.temp }}/disc-flight-annotated.mp4
+          if-no-files-found: ignore
