@@ -17,7 +17,7 @@ RUNTIME_REQUIREMENTS = SERVER_DIR / "requirements.txt"
 TEST_REQUIREMENTS = SERVER_DIR / "requirements-test.txt"
 
 # Packages allowed to appear in only one of the two files.
-TEST_ONLY_PACKAGES = {"pytest"}
+TEST_ONLY_PACKAGES = {"pytest", "httpx2"}
 RUNTIME_ONLY_PACKAGES = {
     "ultralytics",
     "uvicorn",
