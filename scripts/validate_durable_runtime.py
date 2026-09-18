@@ -14,8 +14,7 @@ REQUIRED_SERVICES = (
     "training-worker",
     "postgres",
     "redis",
-    "minio",
-    "minio-init",
+    "object-storage",
 )
 REQUIRED_ENV_KEYS = (
     "APP_API_KEY",
@@ -44,8 +43,8 @@ def main() -> None:
     forbidden_defaults = (
         "postgresql://discflight:discflight@",
         "POSTGRES_PASSWORD: discflight",
-        "MINIO_ROOT_USER: minioadmin",
-        "MINIO_ROOT_PASSWORD: minioadmin",
+        "OBJECT_STORAGE_ROOT_USER: minioadmin",
+        "OBJECT_STORAGE_ROOT_PASSWORD: minioadmin",
         "OBJECT_STORAGE_ACCESS_KEY: minioadmin",
         "OBJECT_STORAGE_SECRET_KEY: minioadmin",
     )
@@ -62,7 +61,7 @@ def main() -> None:
     # The compose stack reads server/.env.example for defaults, so every secret
     # must additionally be a required shell override. Otherwise the committed
     # placeholder becomes a live credential the moment someone runs the stack.
-    required_overrides = ("APP_API_KEY", "POSTGRES_PASSWORD", "MINIO_ROOT_PASSWORD")
+    required_overrides = ("APP_API_KEY", "POSTGRES_PASSWORD", "OBJECT_STORAGE_ROOT_PASSWORD")
     missing_overrides = [
         name for name in required_overrides if f"${{{name}:?" not in compose
     ]

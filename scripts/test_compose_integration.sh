@@ -14,8 +14,8 @@ export APP_API_KEY="${APP_API_KEY:-ci-test-$(date +%s)}"
 export POSTGRES_DB="${POSTGRES_DB:-discflight}"
 export POSTGRES_USER="${POSTGRES_USER:-discflight}"
 export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-ci-test-pg-$(date +%s)}"
-export MINIO_ROOT_USER="${MINIO_ROOT_USER:-ci-test-minio}"
-export MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-ci-test-minio-$(date +%s)}"
+export OBJECT_STORAGE_ROOT_USER="${OBJECT_STORAGE_ROOT_USER:-ci-test-object-store}"
+export OBJECT_STORAGE_ROOT_PASSWORD="${OBJECT_STORAGE_ROOT_PASSWORD:-ci-test-object-store-$(date +%s)}"
 
 API_URL="http://localhost:8000"
 
