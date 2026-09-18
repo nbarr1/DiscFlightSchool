@@ -101,6 +101,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # minio/minio and minio/mc are no longer served to anonymous pulls, so
+      # the image pull below fails with "pull access denied" without
+      # credentials. Both are repository secrets, which a pull request from a
+      # fork does not receive, so such a run fails at this step rather than at
+      # the pull. Either way it cannot reach MinIO, which is the state today.
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       # MinIO's image needs `server /data` as a command argument, which the
       # `services:` block can't pass (it only supports image/env/ports/
       # options) — so it's started by hand instead of as a service container.
