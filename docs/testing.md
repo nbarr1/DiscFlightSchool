@@ -8,7 +8,12 @@ spend inference credits. Run the server suite with `APP_API_KEY=test-key
 
 For the opt-in real Workflow check, install `server/requirements.txt`, set
 `ROBOFLOW_API_KEY` and `ROBOFLOW_TEST_VIDEO` to a short throw, then run
-`python scripts/test_roboflow_integration.py`. Confirm the generated MP4 opens,
+`python scripts/test_roboflow_integration.py`. The same check runs in CI as
+`Roboflow Workflow Smoke Test`, which is manual dispatch only because each run
+spends inference credits: it reads the `ROBOFLOW_API_KEY` repository secret,
+takes an optional `video_url` input (without one it generates a synthetic clip
+that exercises the connection but detects nothing), and uploads the annotated
+MP4 as an artifact. Confirm the generated MP4 opens,
 then configure the same backend in Android Training Settings and verify on a
 device: pick and record, preview, process, progress/indeterminate processing,
 playback, sharing, retry, cancellation, and duplicate-tap prevention. Do not
