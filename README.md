@@ -118,6 +118,7 @@ The root `docker-compose.yml` defines services for:
 - `postgres`
 - `redis`
 - `object-storage`
+- `cloudflared` (optional, `--profile tunnel`)
 
 `training-api` and `training-worker` both run with the durable env vars set, so this stack exercises `PostgresMinioStorage` and the Redis training queue, not the filesystem backend. `./scripts/test_compose_integration.sh` boots this stack and exercises it end-to-end (see `.github/workflows/compose-integration.yml`, which runs it on push to `main`).
 
@@ -310,3 +311,24 @@ export POSTGRES_DB=discflight POSTGRES_USER=discflight
 export POSTGRES_PASSWORD='...' OBJECT_STORAGE_ROOT_USER='...' OBJECT_STORAGE_ROOT_PASSWORD='...'
 docker compose up
 ```
+
+#### Reaching the stack from the Android client
+
+The client refuses plain HTTP anywhere but loopback, so a phone needs the server
+over HTTPS. The `cloudflared` service publishes it through a Cloudflare Tunnel
+with no open port, no certificate to manage, and no public IP:
+
+1. Create a tunnel in the Cloudflare dashboard and point its public hostname at
+   `http://training-api:8000`.
+2. Export the token it gives you, and the Roboflow key if you want cloud
+   tracing: `export CLOUDFLARE_TUNNEL_TOKEN='...' ROBOFLOW_API_KEY='...'`.
+3. Start the stack with the profile: `docker compose --profile tunnel up`.
+4. In Training Settings, enter the tunnel's `https://` hostname and the same
+   `APP_API_KEY`.
+
+A free Cloudflare Tunnel rejects request bodies over 100 MB, below the 200 MiB
+upload default, so lower the limit to match and let the server return its own
+413: `export DISC_FLIGHT_MAX_UPLOAD_BYTES=99000000`.
+
+Changing the server URL to a different origin clears the stored API key by
+design, so prefer a stable hostname over one that changes per restart.

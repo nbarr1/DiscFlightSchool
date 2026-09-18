@@ -28,6 +28,13 @@ services:
       # Empty keeps the existing training-only stack usable. Supply this only
       # to the API process to enable cloud flight tracing.
       ROBOFLOW_API_KEY: ${ROBOFLOW_API_KEY:-}
+      # Only .env.example set this before, and a shell value cannot override an
+      # env_file one, so the limit could not be lowered without editing a
+      # committed file. It needs lowering behind a proxy that caps request
+      # bodies below it — a free Cloudflare Tunnel cuts off at 100 MB, under
+      # this 200 MiB default. Set it below the proxy's cap so an oversized clip
+      # gets the server's own 413 instead of a truncated upload.
+      DISC_FLIGHT_MAX_UPLOAD_BYTES: ${DISC_FLIGHT_MAX_UPLOAD_BYTES:-209715200}
     ports:
       - "8000:8000"
     depends_on:
@@ -124,6 +131,31 @@ services:
       - "9000:9000"
     volumes:
       - object-storage-data:/data
+
+  # Publishes training-api over HTTPS without opening a port, managing a
+  # certificate, or having a public IP — which is what the Android client needs,
+  # since it refuses plain HTTP anywhere but loopback.
+  #
+  # Off by default: it only starts with `docker compose --profile tunnel up`.
+  # Create the tunnel in the Cloudflare dashboard, point its public hostname at
+  # http://training-api:8000, then export the token it gives you as
+  # CLOUDFLARE_TUNNEL_TOKEN. The token is a credential: keep it in your shell or
+  # a secret manager, never in a committed file.
+  #
+  # The token is deliberately not marked required (${VAR:?...}): compose
+  # interpolates every service in this file even when its profile is inactive,
+  # so that would break `docker compose up` for everyone not using the tunnel.
+  # cloudflared reports the missing token itself.
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.1
+    profiles:
+      - tunnel
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - training-api
+    restart: unless-stopped
 
 volumes:
   postgres-data:
