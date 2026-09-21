@@ -3,7 +3,13 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# ultralytics depends on the full opencv-python package, which needs
+# graphics libraries that python:3.11-slim doesn't include. Both packages
+# install into the same cv2 folder, so remove them and keep only the
+# headless build.
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip uninstall -y opencv-python opencv-python-headless \
+    && pip install --no-cache-dir "opencv-python-headless>=4.10,<5.0"
 
 COPY . .
 
