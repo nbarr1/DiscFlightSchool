@@ -172,8 +172,8 @@ class RoboflowVideoProcessor:
             workflow=WORKFLOW,
             image_input=IMAGE_INPUT,
             config=StreamConfig(
-                stream_output=[],
-                data_output=["output_image", "disc_detections", "tracked_disc"],
+                stream_output=["output_image"],
+                data_output=["disc_detections", "tracked_disc"],
                 # Must match the source's flag. The source's value is what the
                 # server is told; this one is what the client uses to decide
                 # whether to acknowledge frames. Left at its default the two
@@ -381,7 +381,11 @@ def _register_callback(session: Any, event: str, callback: Callable) -> None:
 
 def _write_mp4(frames, destination: Path, fallback_fps: float, cv2: Any, np: Any) -> None:
     if not frames:
-        raise RuntimeError("Workflow returned no annotated frames")
+        raise RuntimeError(
+            "Roboflow returned no output_image frames. "
+            "Check that the workflow exposes an output named 'output_image' "
+            "and that StreamConfig.stream_output includes it."
+        )
     ordered = sorted(frames, key=lambda item: item[0])
     timestamps = [item[1] for item in ordered if item[1] is not None]
     positive_deltas = [b - a for a, b in zip(timestamps, timestamps[1:]) if b > a]
@@ -391,6 +395,7 @@ def _write_mp4(frames, destination: Path, fallback_fps: float, cv2: Any, np: Any
         # SDK timestamps may be seconds or milliseconds.
         fps = (1000.0 / median) if median > 1.0 else (1.0 / median)
     fps = min(240.0, max(1.0, fps))
+
     def decode(path: Path):
         return cv2.imdecode(np.frombuffer(path.read_bytes(), dtype=np.uint8), cv2.IMREAD_COLOR)
 
@@ -418,5 +423,6 @@ def temporary_upload() -> Path:
     handle, name = tempfile.mkstemp(prefix="disc-flight-upload-")
     Path(name).chmod(0o600)
     import os
+
     os.close(handle)
     return Path(name)
