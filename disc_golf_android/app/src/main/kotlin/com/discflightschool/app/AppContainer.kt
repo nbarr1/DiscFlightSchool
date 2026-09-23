@@ -4,6 +4,7 @@ import android.content.Context
 import com.discflightschool.app.data.AiSearchClient
 import com.discflightschool.app.data.AssetContent
 import com.discflightschool.app.data.EncryptedSecretStore
+import com.discflightschool.app.data.DiscDetectionClient
 import com.discflightschool.app.data.DiscFlightClient
 import com.discflightschool.app.data.FileManifestStore
 import com.discflightschool.app.data.FlightGalleryRepository
@@ -100,6 +101,7 @@ class AppContainer(context: Context) {
         File(appContext.cacheDir, "disc_flight_results"),
         trainingDataRepository,
     )
+    val discDetectionClient = DiscDetectionClient(trainingDataRepository)
 
     /** The clip being worked on, shared across the screens of one flow. */
     val workbench = WorkbenchState()

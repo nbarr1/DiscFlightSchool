@@ -30,7 +30,7 @@ Implemented client areas currently present in source:
 - Form Coach screens for video trimming, posture analysis, phase selection/comparison, pose correction, and session history.
 - Disc Roulette screens, scoring models, scoring repository, and roulette history.
 - Knowledge Base screens and local JSON-backed content models/repositories.
-- Training Settings for opt-in sample collection, server URL/API-key configuration, pending upload management, and detector model update checks.
+- Training Settings for opt-in sample collection, server URL/API-key configuration, pending upload management, detector model update checks, and a cloud disc-detection test that sends one photo to the server's `POST /api/disc-detection`.
 
 Screen-to-screen state that is too large to encode in a navigation route — a
 pose analysis, a flight path — lives in `WorkbenchState`; the routes
@@ -100,6 +100,7 @@ Implemented server endpoints:
 | `GET` | `/api/disc-flight/jobs/{id}` | `X-App-Key` + `X-Job-Token` | Returns honest job phase, frame counts, and progress when a reliable total is available. |
 | `GET` | `/api/disc-flight/jobs/{id}/result` | `X-App-Key` + `X-Job-Token` | Streams the completed annotated MP4. |
 | `DELETE` | `/api/disc-flight/jobs/{id}` | `X-App-Key` + `X-Job-Token` | Cancels processing and removes temporary input/output files. |
+| `POST` | `/api/disc-detection` | `X-App-Key` | Runs one JPEG/PNG image through the Roboflow disc-detection Workflow and returns the disc boxes. |
 
 Important server facts:
 
@@ -223,6 +224,111 @@ app on a device. Rotate a Roboflow credential in the Roboflow dashboard, update
 only the server secret manager/environment, and restart the API. Never put the
 key in Android source, resources, `BuildConfig`, client-readable configuration,
 an APK, or Git history.
+
+#### Single-image disc detection
+
+`server/training_server/disc_detection.py` sends one still image through a
+second published Workflow in the same workspace:
+`disc-golf-flight-tracker-vdisc-golf-flight-tracker-2-rfdetr-small-t1-logic`.
+That Workflow wraps the `disc-golf-flight-tracker-2-rfdetr-small-t1` RF-DETR
+model. It takes one input, `image`, declares no runtime parameters, and
+returns one JSON output, `predictions`, which holds the image size and a list
+of boxes. It returns no annotated image. Video still goes through the WebRTC
+path described earlier.
+
+```python
+from pathlib import Path
+
+from training_server.config import Settings
+from training_server.disc_detection import DiscDetectionError, detect_discs
+
+settings = Settings.from_env()
+try:
+    result = detect_discs(Path("frame.jpg"), api_key=settings.roboflow_api_key)
+except DiscDetectionError as error:
+    ...  # every failure is a subclass of this
+for box in result.detections:
+    print(box.class_name, box.confidence, box.x, box.y, box.width, box.height)
+```
+
+The module behaves as follows:
+
+- The image is encoded JPEG or PNG bytes, a local file path, or an `https://`
+  URL. Plain `http://` URLs are rejected. inference-sdk downloads a URL on the
+  server before uploading it, so validate any URL that a client supplies.
+- The key comes from `ROBOFLOW_API_KEY`, as for video, and travels only in the
+  `Authorization: Bearer` header.
+- Each attempt has a 30-second timeout. Connection failures, timeouts, and
+  HTTP 429, 500, 502, 503, and 504 responses are retried twice, 0.5 seconds
+  and then 1 second apart. Any other failure is raised at once.
+  inference-sdk's own retries are turned off so that the two don't compound.
+- Failures raise `DiscDetectionNotConfigured`, `DiscDetectionInputError`,
+  `DiscDetectionRequestError` (which carries `status_code`),
+  `DiscDetectionTimeout`, or `DiscDetectionResponseError`.
+- Box coordinates are pixels in the submitted image, and `x`/`y` is the box
+  center.
+
+`POST /api/disc-detection` exposes the module over HTTP. It takes the image as
+a multipart field named `image`, requires `X-App-Key`, and applies the same
+JPEG/PNG checks and `MAX_UPLOAD_BYTES` limit as training uploads. It doesn't
+accept URLs, so the server never fetches an address a client supplies.
+
+```bash
+curl -H "X-App-Key: $APP_API_KEY" -F image=@frame.jpg \
+  https://your-server.example.com/api/disc-detection
+```
+
+A successful call returns HTTP 200:
+
+```json
+{
+  "imageWidth": 576,
+  "imageHeight": 1024,
+  "detections": [
+    {"x": 228.0, "y": 521.0, "width": 40.0, "height": 22.0,
+     "confidence": 0.82, "className": "disc"}
+  ]
+}
+```
+
+The endpoint returns these error statuses:
+
+| Status | Meaning |
+|---:|---|
+| `400` | The image is missing, too large, or not a decodable JPEG/PNG. |
+| `403` | `X-App-Key` is missing or wrong. |
+| `502` | Roboflow failed or answered in an unexpected shape. |
+| `503` | `ROBOFLOW_API_KEY` isn't set on the server. |
+| `504` | Every attempt timed out. |
+
+A `502` or `504` response doesn't include Roboflow's error. The server logs
+it as a `disc_detection.failed` event with the request ID, the error type, and
+the upstream HTTP status when there is one. The call can block for about 90
+seconds when every attempt times out, and each call spends inference credits.
+
+In the Android app, the **Cloud disc detection** card in Training Settings
+calls this endpoint. **Test cloud detection** opens the photo picker, scales
+the photo so its longer side is at most 1,280 pixels, and sends it as a JPEG
+with the training API key. It then shows the photo with a box on each disc and
+a one-line summary. The button stays disabled until a training API key is
+saved. `DiscDetectionClient` makes the request and reports the server's
+`error` message when a call fails.
+
+`server/test_disc_detection.py` covers the module and the endpoint by
+replaying a response captured from the real Workflow, so it needs no key and
+spends no credits. Its three tests that drive the real SDK against a local
+stub server skip when `inference-sdk` isn't installed, as in CI. The live
+check is opt-in:
+
+```bash
+ROBOFLOW_API_KEY='server-only-key' \
+ROBOFLOW_TEST_IMAGE=/absolute/path/to/throw-frame.jpg \
+python scripts/test_roboflow_image_workflow.py
+```
+
+`ROBOFLOW_TEST_IMAGE` also accepts an `https://` URL. Without it, the script
+sends a generated frame. The script fails unless the response contains the
+`predictions` output with its `image` and `predictions` fields.
 
 ### Android checks
 

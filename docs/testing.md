@@ -19,6 +19,27 @@ device: pick and record, preview, process, progress/indeterminate processing,
 playback, sharing, retry, cancellation, and duplicate-tap prevention. Do not
 mark the mobile integration verified until the annotated result plays there.
 
+## Roboflow single-image detection
+
+`server/test_disc_detection.py` replays a response captured from the real
+Workflow and spends no credits. Its three tests that drive the real
+`inference-sdk` against a local stub server check the request URL, the
+`Authorization: Bearer` header, the payload, and the retry count. They skip
+when `inference-sdk` isn't installed, which is the case in CI.
+
+For the opt-in real Workflow check, install `server/requirements.txt`, set
+`ROBOFLOW_API_KEY`, and run `python scripts/test_roboflow_image_workflow.py`.
+Set `ROBOFLOW_TEST_IMAGE` to a throw frame's path or `https://` URL to test a
+real image. Without it, the script sends a generated frame. The script fails
+unless the response contains the `predictions` output with its `image` and
+`predictions` fields. Each run spends inference credits.
+
+To check the Android side on a device, set the server URL and training API key
+in Training Settings, tap **Test cloud detection** in the **Cloud disc
+detection** card, and pick a photo of a disc. Confirm that the green box lands
+on the disc, that the summary line matches, and that a server error (for
+example, a stopped server) is shown as a message rather than a crash.
+
 ## Running the suites
 
 ```bash
@@ -47,6 +68,7 @@ CI runs both on every pull request (`.github/workflows/server-tests.yml`,
 | `test_training_manager.py` | the `running` state machine — every rejection path must release the flag so training stays retryable |
 | `test_config.py` | environment parsing and validation |
 | `test_requirements.py` | production and test dependency pins cannot drift |
+| `test_disc_detection.py` | single-image Roboflow Workflow client and `POST /api/disc-detection`: response parsing, input checks, per-attempt timeout, which failures retry, typed errors, the endpoint's status codes, and upload cleanup |
 
 Two guardrails worth knowing about, because they encode past incidents:
 
@@ -82,8 +104,10 @@ Everything ported out of Dart that can be tested without a device lives in
 `:app`'s own unit tests cover the helpers that are Android-free but live in the
 Android module: `FormattingTest.kt` (scorecard and history readouts),
 `FrameIndexTest.kt` and `FrameForFractionTest.kt` (timestamp-to-frame maths),
-and `FlightVideoExporterTest.kt` (which tracked frames get a pre-rendered
-overlay).
+`FlightVideoExporterTest.kt` (which tracked frames get a pre-rendered
+overlay), and `DiscDetectionClientTest.kt` (the `POST /api/disc-detection`
+request, response parsing, error messages, and cancellation, against
+`MockWebServer`).
 
 ### What these tests deliberately do not cover
 
@@ -99,6 +123,8 @@ emulator:
 - `PostureAnalyzer.analyze()` — needs ML Kit pose detection.
 - Every Compose screen, and the navigation graph wiring them together.
 - `FlightVideoExporter` — needs Media3 `Transformer` and a real encoder.
+- `loadDetectionPhoto()`, which decodes and re-encodes the photo picked for the
+  cloud detection test — needs `ImageDecoder` or `BitmapFactory`.
 - `EncryptedSharedPreferences` reads and writes, which fall back to an
   in-memory store when the keystore is unavailable.
 - Model download and upload against a real server.
