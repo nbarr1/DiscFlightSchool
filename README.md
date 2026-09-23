@@ -224,6 +224,64 @@ only the server secret manager/environment, and restart the API. Never put the
 key in Android source, resources, `BuildConfig`, client-readable configuration,
 an APK, or Git history.
 
+#### Single-image disc detection
+
+`server/training_server/disc_detection.py` sends one still image through a
+second published Workflow in the same workspace:
+`disc-golf-flight-tracker-vdisc-golf-flight-tracker-2-rfdetr-small-t1-logic`.
+That Workflow wraps the `disc-golf-flight-tracker-2-rfdetr-small-t1` RF-DETR
+model. It takes one input, `image`, declares no runtime parameters, and
+returns one JSON output, `predictions`, which holds the image size and a list
+of boxes. It returns no annotated image. Video still goes through the WebRTC
+path described earlier, and no HTTP endpoint calls this module.
+
+```python
+from pathlib import Path
+
+from training_server.config import Settings
+from training_server.disc_detection import DiscDetectionError, detect_discs
+
+settings = Settings.from_env()
+try:
+    result = detect_discs(Path("frame.jpg"), api_key=settings.roboflow_api_key)
+except DiscDetectionError as error:
+    ...  # every failure is a subclass of this
+for box in result.detections:
+    print(box.class_name, box.confidence, box.x, box.y, box.width, box.height)
+```
+
+The module behaves as follows:
+
+- The image is encoded JPEG or PNG bytes, a local file path, or an `https://`
+  URL. Plain `http://` URLs are rejected. inference-sdk downloads a URL on the
+  server before uploading it, so validate any URL that a client supplies.
+- The key comes from `ROBOFLOW_API_KEY`, as for video, and travels only in the
+  `Authorization: Bearer` header.
+- Each attempt has a 30-second timeout. Connection failures, timeouts, and
+  HTTP 429, 500, 502, 503, and 504 responses are retried twice, 0.5 seconds
+  and then 1 second apart. Any other failure is raised at once.
+  inference-sdk's own retries are turned off so that the two don't compound.
+- Failures raise `DiscDetectionNotConfigured`, `DiscDetectionInputError`,
+  `DiscDetectionRequestError` (which carries `status_code`),
+  `DiscDetectionTimeout`, or `DiscDetectionResponseError`.
+- Box coordinates are pixels in the submitted image, and `x`/`y` is the box
+  center.
+
+`server/test_disc_detection.py` replays a response captured from the real
+Workflow, so it needs no key and spends no credits. Its three tests that drive
+the real SDK against a local stub server skip when `inference-sdk` isn't
+installed, as in CI. The live check is opt-in:
+
+```bash
+ROBOFLOW_API_KEY='server-only-key' \
+ROBOFLOW_TEST_IMAGE=/absolute/path/to/throw-frame.jpg \
+python scripts/test_roboflow_image_workflow.py
+```
+
+`ROBOFLOW_TEST_IMAGE` also accepts an `https://` URL. Without it, the script
+sends a generated frame. The script fails unless the response contains the
+`predictions` output with its `image` and `predictions` fields.
+
 ### Android checks
 
 ```bash

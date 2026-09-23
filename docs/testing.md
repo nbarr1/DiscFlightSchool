@@ -19,6 +19,21 @@ device: pick and record, preview, process, progress/indeterminate processing,
 playback, sharing, retry, cancellation, and duplicate-tap prevention. Do not
 mark the mobile integration verified until the annotated result plays there.
 
+## Roboflow single-image detection
+
+`server/test_disc_detection.py` replays a response captured from the real
+Workflow and spends no credits. Its three tests that drive the real
+`inference-sdk` against a local stub server check the request URL, the
+`Authorization: Bearer` header, the payload, and the retry count. They skip
+when `inference-sdk` isn't installed, which is the case in CI.
+
+For the opt-in real Workflow check, install `server/requirements.txt`, set
+`ROBOFLOW_API_KEY`, and run `python scripts/test_roboflow_image_workflow.py`.
+Set `ROBOFLOW_TEST_IMAGE` to a throw frame's path or `https://` URL to test a
+real image. Without it, the script sends a generated frame. The script fails
+unless the response contains the `predictions` output with its `image` and
+`predictions` fields. Each run spends inference credits.
+
 ## Running the suites
 
 ```bash
@@ -47,6 +62,7 @@ CI runs both on every pull request (`.github/workflows/server-tests.yml`,
 | `test_training_manager.py` | the `running` state machine — every rejection path must release the flag so training stays retryable |
 | `test_config.py` | environment parsing and validation |
 | `test_requirements.py` | production and test dependency pins cannot drift |
+| `test_disc_detection.py` | single-image Roboflow Workflow client: response parsing, input checks, per-attempt timeout, which failures retry, and typed errors |
 
 Two guardrails worth knowing about, because they encode past incidents:
 

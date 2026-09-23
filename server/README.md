@@ -13,6 +13,7 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 - `training_server/training_job.py` runs the actual `yolo detect train` / `yolo export format=tflite` subprocess sequence — shared by both the in-process thread path and the worker's queue-consumption path, so it exists exactly once.
 - `training_server/training.py`'s `TrainingManager` starts training either as an in-process thread (default) or by enqueuing a job for the worker (durable mode); both paths expose the same `start()`/`status` shapes.
 - `training_server/validation.py` validates sample IDs, YOLO labels, file extensions, signatures, decodability, and safe child paths — shared by every storage backend.
+- `training_server/disc_detection.py` sends one still image through the Roboflow Workflow `disc-golf-flight-tracker-vdisc-golf-flight-tracker-2-rfdetr-small-t1-logic` with `inference-sdk`, and returns typed disc boxes. It applies a per-attempt timeout, retries transient failures with backoff, and raises `DiscDetectionError` subclasses. No endpoint calls it. See the root README's "Single-image disc detection" section.
 - `training_server/worker.py` is a real Redis-queue consumer when the durable stack is configured (pops a job, runs training, publishes the model, records status); it falls back to the original placeholder (log config booleans and sleep) when it isn't, so `docker compose up` with the durable vars unset still behaves predictably.
 
 ## Environment variables
@@ -34,6 +35,7 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 | `OBJECT_STORAGE_ACCESS_KEY` | No | none | Object storage access key. |
 | `OBJECT_STORAGE_SECRET_KEY` | No | none | Object storage secret key. |
 | `OBJECT_STORAGE_SECURE` | No | `true` | Whether the object storage client uses HTTPS. |
+| `ROBOFLOW_API_KEY` | No | none | Server-side Roboflow key for the disc-flight video jobs and `training_server/disc_detection.py`, which sends it only in the `Authorization: Bearer` header. |
 | `WORKER_POLL_SECONDS` | No | `30` | How long `training_server.worker` blocks on the Redis queue between checks (durable mode), or sleeps between log lines (placeholder mode). |
 
 ## Implemented endpoints
@@ -71,6 +73,8 @@ APP_API_KEY=test-key ./scripts/test_server.sh
 ```
 
 The script compiles the server modules, runs `pytest server`, and validates durable-runtime config files. The durable-adapter and queue tests (`test_durable_storage.py`, `test_queue.py`) skip themselves when `DATABASE_URL`/`OBJECT_STORAGE_*`/`REDIS_URL` aren't set, so this needs no services running locally. CI exercises them for real against Postgres/Redis/MinIO service containers (`.github/workflows/server-tests.yml`'s `test-server-durable` job).
+
+No test in this suite calls Roboflow. `test_disc_detection.py` replays a captured Workflow response, and its tests that drive the real `inference-sdk` against a local stub server skip when that package isn't installed. To check the live Workflow, run `scripts/test_roboflow_image_workflow.py` with `ROBOFLOW_API_KEY` set. That run spends inference credits.
 
 ## Docker Compose scaffold
 
