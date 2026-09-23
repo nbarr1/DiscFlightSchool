@@ -34,6 +34,12 @@ real image. Without it, the script sends a generated frame. The script fails
 unless the response contains the `predictions` output with its `image` and
 `predictions` fields. Each run spends inference credits.
 
+To check the Android side on a device, set the server URL and training API key
+in Training Settings, tap **Test cloud detection** in the **Cloud disc
+detection** card, and pick a photo of a disc. Confirm that the green box lands
+on the disc, that the summary line matches, and that a server error (for
+example, a stopped server) is shown as a message rather than a crash.
+
 ## Running the suites
 
 ```bash
@@ -98,8 +104,10 @@ Everything ported out of Dart that can be tested without a device lives in
 `:app`'s own unit tests cover the helpers that are Android-free but live in the
 Android module: `FormattingTest.kt` (scorecard and history readouts),
 `FrameIndexTest.kt` and `FrameForFractionTest.kt` (timestamp-to-frame maths),
-and `FlightVideoExporterTest.kt` (which tracked frames get a pre-rendered
-overlay).
+`FlightVideoExporterTest.kt` (which tracked frames get a pre-rendered
+overlay), and `DiscDetectionClientTest.kt` (the `POST /api/disc-detection`
+request, response parsing, error messages, and cancellation, against
+`MockWebServer`).
 
 ### What these tests deliberately do not cover
 
@@ -115,6 +123,8 @@ emulator:
 - `PostureAnalyzer.analyze()` — needs ML Kit pose detection.
 - Every Compose screen, and the navigation graph wiring them together.
 - `FlightVideoExporter` — needs Media3 `Transformer` and a real encoder.
+- `loadDetectionPhoto()`, which decodes and re-encodes the photo picked for the
+  cloud detection test — needs `ImageDecoder` or `BitmapFactory`.
 - `EncryptedSharedPreferences` reads and writes, which fall back to an
   in-memory store when the keystore is unavailable.
 - Model download and upload against a real server.

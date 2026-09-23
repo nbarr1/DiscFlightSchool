@@ -30,7 +30,7 @@ Implemented client areas currently present in source:
 - Form Coach screens for video trimming, posture analysis, phase selection/comparison, pose correction, and session history.
 - Disc Roulette screens, scoring models, scoring repository, and roulette history.
 - Knowledge Base screens and local JSON-backed content models/repositories.
-- Training Settings for opt-in sample collection, server URL/API-key configuration, pending upload management, and detector model update checks.
+- Training Settings for opt-in sample collection, server URL/API-key configuration, pending upload management, detector model update checks, and a cloud disc-detection test that sends one photo to the server's `POST /api/disc-detection`.
 
 Screen-to-screen state that is too large to encode in a navigation route — a
 pose analysis, a flight path — lives in `WorkbenchState`; the routes
@@ -305,6 +305,14 @@ A `502` or `504` response doesn't include Roboflow's error. The server logs
 it as a `disc_detection.failed` event with the request ID, the error type, and
 the upstream HTTP status when there is one. The call can block for about 90
 seconds when every attempt times out, and each call spends inference credits.
+
+In the Android app, the **Cloud disc detection** card in Training Settings
+calls this endpoint. **Test cloud detection** opens the photo picker, scales
+the photo so its longer side is at most 1,280 pixels, and sends it as a JPEG
+with the training API key. It then shows the photo with a box on each disc and
+a one-line summary. The button stays disabled until a training API key is
+saved. `DiscDetectionClient` makes the request and reports the server's
+`error` message when a call fails.
 
 `server/test_disc_detection.py` covers the module and the endpoint by
 replaying a response captured from the real Workflow, so it needs no key and

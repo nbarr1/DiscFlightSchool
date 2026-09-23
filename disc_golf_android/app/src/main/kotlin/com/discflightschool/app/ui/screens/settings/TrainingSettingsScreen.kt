@@ -1,13 +1,23 @@
 package com.discflightschool.app.ui.screens.settings
 
 import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,7 +65,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -63,11 +78,15 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.discflightschool.app.LocalAppContainer
+import com.discflightschool.app.data.CloudDiscDetections
+import com.discflightschool.app.data.loadDetectionPhoto
+import com.discflightschool.app.data.summary
 import com.discflightschool.app.ui.components.AppTopBar
 import com.discflightschool.app.ui.components.SectionCard
 import com.discflightschool.app.ui.theme.AppColors
 import java.io.File
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -109,6 +128,34 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
     var advancedExpanded by remember { mutableStateOf(false) }
     var hasTrainingKey by remember { mutableStateOf(training.hasApiKey) }
     var modelVersion by remember { mutableStateOf(training.modelVersion) }
+    var detectionRunning by remember { mutableStateOf(false) }
+    var detectionPhoto by remember { mutableStateOf<Bitmap?>(null) }
+    var detectionResult by remember { mutableStateOf<CloudDiscDetections?>(null) }
+    var detectionError by remember { mutableStateOf<String?>(null) }
+
+    val detectionPhotoPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            detectionRunning = true
+            detectionPhoto = null
+            detectionResult = null
+            detectionError = null
+            try {
+                val photo = loadDetectionPhoto(context.contentResolver, uri)
+                    ?: error("That photo couldn't be opened. Try a different one.")
+                detectionPhoto = photo.bitmap
+                detectionResult = container.discDetectionClient.detect(photo.jpeg)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                detectionError = e.message ?: "Cloud detection failed."
+            } finally {
+                detectionRunning = false
+            }
+        }
+    }
 
     val pendingCount = samples.count { !it.uploaded }
     val uploadedCount = samples.count { it.uploaded }
@@ -412,6 +459,60 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                 }
             }
 
+            Spacer(Modifier.height(16.dp))
+
+            SectionCard(title = "Cloud disc detection") {
+                Column {
+                    Text(
+                        "Send one photo to your server's Roboflow disc detector to check that " +
+                            "cloud detection works. Each test uses Roboflow inference credits.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppColors.Muted,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            detectionPhotoPicker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                            )
+                        },
+                        enabled = hasTrainingKey && !detectionRunning,
+                    ) {
+                        Icon(Icons.Default.CloudUpload, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Test cloud detection")
+                    }
+                    if (!hasTrainingKey) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Add the training API key under Advanced first.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AppColors.Muted,
+                        )
+                    }
+                    if (detectionRunning) {
+                        Spacer(Modifier.height(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Text("Detecting...", color = AppColors.Muted)
+                        }
+                    }
+                    detectionError?.let { message ->
+                        Spacer(Modifier.height(12.dp))
+                        Text(message, color = MaterialTheme.colorScheme.error)
+                    }
+                    val photo = detectionPhoto
+                    val found = detectionResult
+                    if (photo != null && found != null) {
+                        Spacer(Modifier.height(12.dp))
+                        DetectionPreview(photo, found)
+                        Spacer(Modifier.height(8.dp))
+                        Text(found.summary(), fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
             Spacer(Modifier.height(24.dp))
 
             TextButton(
@@ -557,6 +658,41 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                 TextButton(onClick = { confirmClear = false }) { Text("Cancel") }
             },
         )
+    }
+}
+
+/** The photo that was sent, with a box on each disc the server found. */
+@Composable
+private fun DetectionPreview(photo: Bitmap, result: CloudDiscDetections) {
+    val image = remember(photo) { photo.asImageBitmap() }
+    Box(
+        Modifier
+            .heightIn(max = 320.dp)
+            .aspectRatio(photo.width.toFloat() / photo.height),
+    ) {
+        Image(
+            bitmap = image,
+            contentDescription = "Photo sent for cloud detection",
+            contentScale = ContentScale.FillBounds,
+            modifier = Modifier.fillMaxSize(),
+        )
+        Canvas(Modifier.fillMaxSize()) {
+            if (result.imageWidth <= 0 || result.imageHeight <= 0) return@Canvas
+            // Boxes are in pixels of the uploaded image, which is this photo.
+            val scaleX = size.width / result.imageWidth
+            val scaleY = size.height / result.imageHeight
+            for (box in result.detections) {
+                drawRect(
+                    color = AppColors.Good,
+                    topLeft = Offset(
+                        ((box.x - box.width / 2) * scaleX).toFloat(),
+                        ((box.y - box.height / 2) * scaleY).toFloat(),
+                    ),
+                    size = Size((box.width * scaleX).toFloat(), (box.height * scaleY).toFloat()),
+                    style = Stroke(width = 3.dp.toPx()),
+                )
+            }
+        }
     }
 }
 
