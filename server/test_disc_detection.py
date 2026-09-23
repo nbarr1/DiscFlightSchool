@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
 import sys
 import threading
@@ -8,8 +9,11 @@ import types
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
+from fastapi.testclient import TestClient
+from PIL import Image
 
-from training_server import disc_detection
+import training_server.app as app_module
+from training_server import Settings, create_app, disc_detection
 from training_server.disc_detection import (
     DiscDetectionError,
     DiscDetectionInputError,
@@ -44,6 +48,16 @@ REAL_RESPONSE = [
     }
 ]
 IMAGE = b"\xff\xd8\xff\xe0jpeg-bytes"
+
+
+def _jpeg() -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", (8, 8), (40, 120, 40)).save(buffer, format="JPEG")
+    return buffer.getvalue()
+
+
+JPEG = _jpeg()
+AUTH = {"X-App-Key": "test-key"}
 
 
 def _sdk_errors(monkeypatch):
@@ -236,6 +250,114 @@ def test_each_attempt_times_out(use_client):
 def test_timeout_is_a_detection_error_and_a_timeout_error():
     assert issubclass(DiscDetectionTimeout, DiscDetectionError)
     assert issubclass(DiscDetectionTimeout, TimeoutError)
+
+
+@pytest.fixture
+def endpoint(tmp_path, monkeypatch):
+    """A test client for the app, plus the scratch path each upload is written to."""
+    upload = tmp_path / "upload"
+    monkeypatch.setattr(app_module, "temporary_upload", lambda: upload)
+
+    def build(roboflow_api_key="server-only", **overrides):
+        settings = Settings(
+            app_api_key="test-key",
+            base_dir=tmp_path,
+            roboflow_api_key=roboflow_api_key,
+            **overrides,
+        )
+        return TestClient(create_app(settings)), upload
+
+    return build
+
+
+def post_image(client, data=JPEG, filename="frame.jpg", content_type="image/jpeg"):
+    return client.post(
+        "/api/disc-detection", headers=AUTH, files={"image": (filename, data, content_type)}
+    )
+
+
+def test_endpoint_returns_detections(use_client, endpoint):
+    fake = use_client(FakeClient(REAL_RESPONSE))
+    client, upload = endpoint()
+
+    response = post_image(client)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "imageWidth": 576,
+        "imageHeight": 1024,
+        "detections": [
+            {
+                "x": 228.0,
+                "y": 521.0,
+                "width": 40.0,
+                "height": 22.0,
+                "confidence": pytest.approx(0.8215, abs=1e-4),
+                "className": "disc",
+            }
+        ],
+    }
+    assert fake.calls[0]["images"] == {"image": base64.b64encode(JPEG).decode()}
+    assert not upload.exists()
+
+
+def test_endpoint_requires_an_image(use_client, endpoint):
+    fake = use_client(FakeClient())
+    client, _ = endpoint()
+    response = client.post("/api/disc-detection", headers=AUTH)
+    assert response.status_code == 400
+    assert fake.calls == []
+
+
+def test_endpoint_without_roboflow_key_is_unavailable(use_client, endpoint):
+    fake = use_client(FakeClient())
+    client, _ = endpoint(roboflow_api_key=None)
+    assert post_image(client).status_code == 503
+    assert fake.calls == []
+
+
+@pytest.mark.parametrize(
+    "data, filename",
+    [(b"not an image", "frame.jpg"), (b"\xff\xd8\xffnot-a-real-jpeg", "frame.jpg"), (JPEG, "frame.png")],
+)
+def test_endpoint_rejects_invalid_images_before_calling_roboflow(use_client, endpoint, data, filename):
+    fake = use_client(FakeClient())
+    client, upload = endpoint()
+    response = post_image(client, data=data, filename=filename)
+    assert response.status_code == 400
+    assert fake.calls == []
+    assert not upload.exists()
+
+
+def test_endpoint_rejects_oversized_images(use_client, endpoint):
+    fake = use_client(FakeClient())
+    client, upload = endpoint(max_upload_bytes=len(JPEG) - 1)
+    assert post_image(client).status_code == 400
+    assert fake.calls == []
+    assert not upload.exists()
+
+
+def test_endpoint_hides_upstream_detail(use_client, endpoint, monkeypatch):
+    errors = _sdk_errors(monkeypatch)
+    use_client(FakeClient(errors.HTTPCallErrorError("secret upstream detail", 401, "bad key")))
+    client, upload = endpoint()
+
+    response = post_image(client)
+
+    assert response.status_code == 502
+    assert "secret upstream detail" not in response.text
+    assert "401" not in response.text
+    assert not upload.exists()
+
+
+def test_endpoint_reports_timeouts_and_bad_responses(use_client, endpoint):
+    timeout = DiscDetectionTimeout("slow")
+    use_client(FakeClient(timeout, timeout, timeout))
+    client, _ = endpoint()
+    assert post_image(client).status_code == 504
+
+    use_client(FakeClient([{"output_image": "base64"}]))
+    assert post_image(client).status_code == 502
 
 
 class _StubWorkflowServer:

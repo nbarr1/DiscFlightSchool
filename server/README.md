@@ -13,7 +13,7 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 - `training_server/training_job.py` runs the actual `yolo detect train` / `yolo export format=tflite` subprocess sequence — shared by both the in-process thread path and the worker's queue-consumption path, so it exists exactly once.
 - `training_server/training.py`'s `TrainingManager` starts training either as an in-process thread (default) or by enqueuing a job for the worker (durable mode); both paths expose the same `start()`/`status` shapes.
 - `training_server/validation.py` validates sample IDs, YOLO labels, file extensions, signatures, decodability, and safe child paths — shared by every storage backend.
-- `training_server/disc_detection.py` sends one still image through the Roboflow Workflow `disc-golf-flight-tracker-vdisc-golf-flight-tracker-2-rfdetr-small-t1-logic` with `inference-sdk`, and returns typed disc boxes. It applies a per-attempt timeout, retries transient failures with backoff, and raises `DiscDetectionError` subclasses. No endpoint calls it. See the root README's "Single-image disc detection" section.
+- `training_server/disc_detection.py` sends one still image through the Roboflow Workflow `disc-golf-flight-tracker-vdisc-golf-flight-tracker-2-rfdetr-small-t1-logic` with `inference-sdk`, and returns typed disc boxes. It applies a per-attempt timeout, retries transient failures with backoff, and raises `DiscDetectionError` subclasses. `POST /api/disc-detection` calls it. See the root README's "Single-image disc detection" section.
 - `training_server/worker.py` is a real Redis-queue consumer when the durable stack is configured (pops a job, runs training, publishes the model, records status); it falls back to the original placeholder (log config booleans and sleep) when it isn't, so `docker compose up` with the durable vars unset still behaves predictably.
 
 ## Environment variables
@@ -51,6 +51,7 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 | `GET` | `/api/training/status` | No | Returns training state — from an in-memory dict (default) or the `training_runs` table (durable mode); same JSON shape either way. |
 | `GET` | `/api/model/version` | No | Returns latest model metadata or `version: none`. |
 | `GET` | `/api/model/download` | No | Downloads the latest `.tflite` file or returns 404. |
+| `POST` | `/api/disc-detection` | `X-App-Key` | Runs one JPEG/PNG `image` upload through the Roboflow disc-detection Workflow and returns the disc boxes. Returns 503 without `ROBOFLOW_API_KEY`, and 502 or 504 when Roboflow fails or times out. |
 
 ## Local setup
 

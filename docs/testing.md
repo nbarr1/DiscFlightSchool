@@ -62,7 +62,7 @@ CI runs both on every pull request (`.github/workflows/server-tests.yml`,
 | `test_training_manager.py` | the `running` state machine — every rejection path must release the flag so training stays retryable |
 | `test_config.py` | environment parsing and validation |
 | `test_requirements.py` | production and test dependency pins cannot drift |
-| `test_disc_detection.py` | single-image Roboflow Workflow client: response parsing, input checks, per-attempt timeout, which failures retry, and typed errors |
+| `test_disc_detection.py` | single-image Roboflow Workflow client and `POST /api/disc-detection`: response parsing, input checks, per-attempt timeout, which failures retry, typed errors, the endpoint's status codes, and upload cleanup |
 
 Two guardrails worth knowing about, because they encode past incidents:
 

@@ -161,6 +161,7 @@ class TrainingServerContractTests(unittest.TestCase):
         for path, method in (
             ("/api/training/export", "GET"),
             ("/api/training/start", "POST"),
+            ("/api/disc-detection", "POST"),
         ):
             for key in ("wrong-key", "", "test-key-with-suffix", "TEST-KEY"):
                 with self.subTest(path=path, key=key):
@@ -177,6 +178,7 @@ class TrainingServerContractTests(unittest.TestCase):
         for path, method in (
             ("/api/training/export", "GET"),
             ("/api/training/start", "POST"),
+            ("/api/disc-detection", "POST"),
         ):
             with self.subTest(path=path):
                 response = self.request(app, method, path)

@@ -100,6 +100,7 @@ Implemented server endpoints:
 | `GET` | `/api/disc-flight/jobs/{id}` | `X-App-Key` + `X-Job-Token` | Returns honest job phase, frame counts, and progress when a reliable total is available. |
 | `GET` | `/api/disc-flight/jobs/{id}/result` | `X-App-Key` + `X-Job-Token` | Streams the completed annotated MP4. |
 | `DELETE` | `/api/disc-flight/jobs/{id}` | `X-App-Key` + `X-Job-Token` | Cancels processing and removes temporary input/output files. |
+| `POST` | `/api/disc-detection` | `X-App-Key` | Runs one JPEG/PNG image through the Roboflow disc-detection Workflow and returns the disc boxes. |
 
 Important server facts:
 
@@ -233,7 +234,7 @@ That Workflow wraps the `disc-golf-flight-tracker-2-rfdetr-small-t1` RF-DETR
 model. It takes one input, `image`, declares no runtime parameters, and
 returns one JSON output, `predictions`, which holds the image size and a list
 of boxes. It returns no annotated image. Video still goes through the WebRTC
-path described earlier, and no HTTP endpoint calls this module.
+path described earlier.
 
 ```python
 from pathlib import Path
@@ -267,10 +268,49 @@ The module behaves as follows:
 - Box coordinates are pixels in the submitted image, and `x`/`y` is the box
   center.
 
-`server/test_disc_detection.py` replays a response captured from the real
-Workflow, so it needs no key and spends no credits. Its three tests that drive
-the real SDK against a local stub server skip when `inference-sdk` isn't
-installed, as in CI. The live check is opt-in:
+`POST /api/disc-detection` exposes the module over HTTP. It takes the image as
+a multipart field named `image`, requires `X-App-Key`, and applies the same
+JPEG/PNG checks and `MAX_UPLOAD_BYTES` limit as training uploads. It doesn't
+accept URLs, so the server never fetches an address a client supplies.
+
+```bash
+curl -H "X-App-Key: $APP_API_KEY" -F image=@frame.jpg \
+  https://your-server.example.com/api/disc-detection
+```
+
+A successful call returns HTTP 200:
+
+```json
+{
+  "imageWidth": 576,
+  "imageHeight": 1024,
+  "detections": [
+    {"x": 228.0, "y": 521.0, "width": 40.0, "height": 22.0,
+     "confidence": 0.82, "className": "disc"}
+  ]
+}
+```
+
+The endpoint returns these error statuses:
+
+| Status | Meaning |
+|---:|---|
+| `400` | The image is missing, too large, or not a decodable JPEG/PNG. |
+| `403` | `X-App-Key` is missing or wrong. |
+| `502` | Roboflow failed or answered in an unexpected shape. |
+| `503` | `ROBOFLOW_API_KEY` isn't set on the server. |
+| `504` | Every attempt timed out. |
+
+A `502` or `504` response doesn't include Roboflow's error. The server logs
+it as a `disc_detection.failed` event with the request ID, the error type, and
+the upstream HTTP status when there is one. The call can block for about 90
+seconds when every attempt times out, and each call spends inference credits.
+
+`server/test_disc_detection.py` covers the module and the endpoint by
+replaying a response captured from the real Workflow, so it needs no key and
+spends no credits. Its three tests that drive the real SDK against a local
+stub server skip when `inference-sdk` isn't installed, as in CI. The live
+check is opt-in:
 
 ```bash
 ROBOFLOW_API_KEY='server-only-key' \

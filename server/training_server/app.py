@@ -17,11 +17,22 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 
 from .config import Settings
+from .disc_detection import (
+    DiscDetectionError,
+    DiscDetectionInputError,
+    DiscDetectionTimeout,
+    detect_discs,
+)
 from .disc_flight import ALLOWED_VIDEO_TYPES, DiscFlightJobManager, temporary_upload
 from .protocols import StorageBackend
 from .storage import FileStorage
 from .training import TrainingManager
-from .validation import sample_id_error, yolo_label_error
+from .validation import (
+    normalized_image_ext,
+    read_and_validate_upload,
+    sample_id_error,
+    yolo_label_error,
+)
 
 logger = logging.getLogger("disc_flight_school.training_server")
 
@@ -52,6 +63,18 @@ def _build_default_storage_and_trainer(
 
     file_storage = FileStorage(settings)
     return file_storage, TrainingManager(settings, file_storage)
+
+
+def _disc_detection_failure(exc: DiscDetectionError) -> JSONResponse:
+    # Upstream detail stays in the server log; the client only learns which
+    # side of the call failed.
+    if isinstance(exc, DiscDetectionTimeout):
+        return JSONResponse({"error": "Disc detection timed out. Please retry."}, status_code=504)
+    if isinstance(exc, DiscDetectionInputError):
+        return JSONResponse({"error": "The image could not be processed"}, status_code=400)
+    return JSONResponse(
+        {"error": "The disc-detection service could not process this image"}, status_code=502
+    )
 
 
 def create_app(
@@ -213,6 +236,66 @@ def create_app(
         flight_jobs.cancel(job)
         return {"jobId": job.id, "status": job.status}
 
+    # A plain `def`, so FastAPI runs the blocking Roboflow call on its thread
+    # pool instead of the event loop.
+    @app.post("/api/disc-detection")
+    def detect_disc_in_image(
+        request: Request,
+        image: UploadFile | None = File(None),
+        x_app_key: str | None = Header(None),
+    ):
+        if auth_error := require_api_key(x_app_key):
+            return auth_error
+        if image is None:
+            return JSONResponse({"error": "An image file is required"}, status_code=400)
+        if not settings.roboflow_api_key:
+            return JSONResponse(
+                {"error": "Roboflow processing is not configured on this server"},
+                status_code=503,
+            )
+        temporary = temporary_upload()
+        try:
+            try:
+                read_and_validate_upload(
+                    image,
+                    normalized_image_ext(image.filename),
+                    settings.max_upload_bytes,
+                    temporary,
+                )
+            except ValueError as exc:
+                return JSONResponse({"error": str(exc)}, status_code=400)
+            try:
+                result = detect_discs(temporary, api_key=settings.roboflow_api_key)
+            except DiscDetectionError as exc:
+                logger.error(
+                    json.dumps(
+                        {
+                            "event": "disc_detection.failed",
+                            "request_id": request.state.request_id,
+                            "error": type(exc).__name__,
+                            "status_code": getattr(exc, "status_code", None),
+                        }
+                    )
+                )
+                return _disc_detection_failure(exc)
+        finally:
+            temporary.unlink(missing_ok=True)
+        return {
+            "imageWidth": result.image_width,
+            "imageHeight": result.image_height,
+            "detections": [
+                {
+                    "x": box.x,
+                    "y": box.y,
+                    "width": box.width,
+                    "height": box.height,
+                    "confidence": box.confidence,
+                    "className": box.class_name,
+                }
+                for box in result.detections
+            ],
+        }
+
     @app.post("/api/training/upload")
     def upload_training_sample(
         sample_id: str = Form(...),
@@ -326,6 +409,7 @@ def create_app(
                 "POST /api/disc-flight/jobs",
                 "GET  /api/disc-flight/jobs/{jobId}",
                 "DELETE /api/disc-flight/jobs/{jobId}",
+                "POST /api/disc-detection",
                 "GET  /health",
             ],
         }
