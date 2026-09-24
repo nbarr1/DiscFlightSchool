@@ -1,12 +1,25 @@
 from __future__ import annotations
 
+import base64
+import inspect
+import json
+import logging
+import sys
+import threading
 import time
+import types
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from training_server import Settings, create_app
-from training_server.disc_flight import Cancelled, DiscFlightJobManager
+from training_server.disc_flight import (
+    Cancelled,
+    DiscFlightJobManager,
+    NoAnnotatedFrames,
+    RoboflowVideoProcessor,
+)
 from training_server.storage import FileStorage
 
 
@@ -23,6 +36,8 @@ class FakeProcessor:
         update(1, 2, "processing")
         if self.mode == "failure":
             raise ConnectionError("secret upstream detail")
+        if self.mode == "no-frames":
+            raise NoAnnotatedFrames("Roboflow processed no frames.")
         if self.mode == "wait":
             while not cancel.wait(0.01):
                 pass
@@ -101,6 +116,17 @@ def test_connection_failure_is_safe_and_cleans_input(tmp_path):
     assert not manager.jobs[created["jobId"]].input_path.exists()
 
 
+def test_no_frames_failure_logs_its_reason(tmp_path, caplog):
+    client, _ = make_client(tmp_path, "no-frames")
+    with caplog.at_level(logging.ERROR, logger="disc_flight_school.disc_flight"):
+        created = start(client).json()
+        result = wait_for_terminal(client, created["jobId"], created["jobToken"]).json()
+    assert result["status"] == "failed"
+    [event] = [json.loads(record.getMessage()) for record in caplog.records]
+    assert event["error"] == "NoAnnotatedFrames"
+    assert event["detail"] == "Roboflow processed no frames."
+
+
 def test_no_detections_and_per_frame_error_are_defensive(tmp_path):
     for mode, expected_errors in (("no-detections", 0), ("frame-error", 1)):
         client, _ = make_client(tmp_path / mode, mode)
@@ -160,3 +186,181 @@ def test_another_job_token_cannot_read_or_cancel(tmp_path):
         f"/api/disc-flight/jobs/{first['jobId']}",
         headers={**AUTH, "X-Job-Token": first["jobToken"]},
     )
+
+
+def _image(label: str) -> dict:
+    return {"type": "base64", "value": base64.b64encode(label.encode()).decode()}
+
+
+class _SdkRoutedSession:
+    """Delivers workflow outputs the way inference-sdk 1.7.1 does for a VideoFileSource.
+
+    The server sends every name in data_output and stream_output over the data
+    channel. The SDK then removes the stream_output names from what `on_data`
+    receives and queues those images for `session.video()`, which `wait()`
+    drains and discards (see `_on_data_message` in inference_sdk/webrtc/session.py).
+    A frame's "errors" entry is what the server reports as that frame's errors:
+    the SDK passes the list of strings to `on_error` handlers before `on_data`,
+    adding the frame's metadata when the handler takes a second parameter.
+    """
+
+    def __init__(self, config, outputs_per_frame):
+        self.config = config
+        self.outputs_per_frame = outputs_per_frame
+        self.on_data_handler = None
+        self.on_error_handlers = []
+        self.closed = False
+
+    def on_data(self, handler):
+        self.on_data_handler = handler
+
+    def on_error(self, handler):
+        self.on_error_handlers.append(handler)
+
+    def wait(self):
+        requested = [*self.config.data_output, *self.config.stream_output]
+        for frame_id, outputs in enumerate(self.outputs_per_frame):
+            errors = outputs.get("errors")
+            for handler in self.on_error_handlers if errors else ():
+                if len(inspect.signature(handler).parameters) >= 2:
+                    handler(errors, types.SimpleNamespace(frame_id=frame_id))
+                else:
+                    handler(errors)
+            self.on_data_handler(
+                {
+                    name: outputs[name]
+                    for name in requested
+                    if name in outputs and name not in self.config.stream_output
+                }
+            )
+
+    def close(self):
+        self.closed = True
+
+
+@pytest.fixture
+def fake_video_stack(monkeypatch):
+    """Stands in for inference-sdk, OpenCV, and NumPy, none of which CI installs."""
+    state = {"outputs_per_frame": [], "sessions": [], "written": []}
+
+    class StreamConfig:
+        def __init__(self, stream_output=None, data_output=None, **_):
+            self.stream_output = list(stream_output or [])
+            self.data_output = list(data_output or [])
+
+    class Client:
+        def __init__(self, api_url, api_key):
+            self.webrtc = self
+
+        def configure(self, configuration):
+            return self
+
+        def stream(self, source, workspace, workflow, image_input, config):
+            session = _SdkRoutedSession(config, state["outputs_per_frame"])
+            state["sessions"].append(session)
+            return session
+
+    class Frame:
+        def __init__(self, data):
+            self.data = data
+            self.shape = (4, 6, 3)
+
+    class Capture:
+        def __init__(self, path):
+            pass
+
+        def get(self, prop):
+            return 30.0 if prop == "fps" else len(state["outputs_per_frame"])
+
+        def release(self):
+            pass
+
+    class Writer:
+        def __init__(self, path, fourcc, fps, size):
+            pass
+
+        def isOpened(self):
+            return True
+
+        def write(self, frame):
+            state["written"].append(frame.data)
+
+        def release(self):
+            pass
+
+    sdk = types.ModuleType("inference_sdk")
+    sdk.InferenceConfiguration = lambda **_: None
+    sdk.InferenceHTTPClient = Client
+    webrtc = types.ModuleType("inference_sdk.webrtc")
+    webrtc.StreamConfig = StreamConfig
+    webrtc.VideoFileSource = lambda path, **_: path
+    cv2 = types.SimpleNamespace(
+        CAP_PROP_FPS="fps",
+        CAP_PROP_FRAME_COUNT="count",
+        IMREAD_COLOR=1,
+        VideoCapture=Capture,
+        VideoWriter=Writer,
+        VideoWriter_fourcc=lambda *_: 0,
+        imdecode=lambda data, flags: Frame(data),
+    )
+    numpy = types.SimpleNamespace(frombuffer=lambda data, dtype: bytes(data), uint8="uint8")
+    for name, module in (
+        ("inference_sdk", sdk),
+        ("inference_sdk.webrtc", webrtc),
+        ("cv2", cv2),
+        ("numpy", numpy),
+    ):
+        monkeypatch.setitem(sys.modules, name, module)
+    return state
+
+
+def _run_processor(tmp_path):
+    settings = Settings(app_api_key="test-key", base_dir=tmp_path, roboflow_api_key="server-only")
+    source = tmp_path / "throw.mp4"
+    source.write_bytes(VIDEO)
+    return RoboflowVideoProcessor(settings)(
+        source, tmp_path / "result.mp4", threading.Event(), lambda *_: None
+    )
+
+
+def test_annotated_frames_reach_the_mp4_through_the_sdk(tmp_path, fake_video_stack):
+    fake_video_stack["outputs_per_frame"] = [
+        {"output_image": _image("frame-0"), "disc_detections": {"predictions": [{"x": 1}]}},
+        {"output_image": _image("frame-1"), "disc_detections": {"predictions": []}},
+        {"output_image": _image("frame-2"), "disc_detections": {"predictions": [{"x": 3}]}},
+    ]
+    summary = _run_processor(tmp_path)
+    assert fake_video_stack["written"] == [b"frame-0", b"frame-1", b"frame-2"]
+    assert summary == {"framesWithDetections": 2, "detectionRate": 0.667, "frameErrors": 0}
+    [session] = fake_video_stack["sessions"]
+    assert session.closed
+
+
+def test_session_without_frames_names_the_reason(tmp_path, fake_video_stack):
+    fake_video_stack["outputs_per_frame"] = []
+    with pytest.raises(NoAnnotatedFrames, match="processed no frames"):
+        _run_processor(tmp_path)
+
+    fake_video_stack["outputs_per_frame"] = [{"disc_detections": {"predictions": []}}] * 2
+    with pytest.raises(NoAnnotatedFrames, match="returned 2 frames without an output_image"):
+        _run_processor(tmp_path)
+
+
+def test_server_reported_frame_errors_are_logged_without_the_key(
+    tmp_path, fake_video_stack, caplog
+):
+    leaked = "404 for https://api.roboflow.com/model?api_key=server-only"
+    fake_video_stack["outputs_per_frame"] = [
+        {"output_image": _image("frame-0")},
+        {"output_image": _image("frame-1"), "errors": ["tracked_disc: boom", leaked, "x" * 600]},
+    ]
+    with caplog.at_level(logging.WARNING, logger="disc_flight_school.disc_flight"):
+        summary = _run_processor(tmp_path)
+    assert summary["frameErrors"] == 1
+    [event] = [json.loads(record.getMessage()) for record in caplog.records]
+    assert event["event"] == "disc_flight.webrtc_frame_error"
+    assert event["frame_id"] == 1
+    assert event["errors"][0] == "tracked_disc: boom"
+    assert event["errors"][1] == "404 for https://api.roboflow.com/model?api_key=[redacted]"
+    assert len(event["errors"][2]) == 500
+    assert "server-only" not in caplog.text

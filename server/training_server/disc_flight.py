@@ -41,6 +41,14 @@ class Cancelled(Exception):
     """Raised when a caller cancels an active inference session."""
 
 
+class NoAnnotatedFrames(RuntimeError):
+    """The session ended without any `output_image` frames to assemble.
+
+    Its message never carries credentials or upstream text, so the job log
+    records it in full.
+    """
+
+
 class VideoProcessor(Protocol):
     def __call__(
         self,
@@ -123,13 +131,16 @@ class RoboflowVideoProcessor:
         detection_frames: set[int] = set()
         frame_errors: list[str] = []
         frames_lock = threading.Lock()
+        data_messages = 0
 
         def on_data(data: dict[str, Any]) -> None:
+            nonlocal data_messages
             if cancel.is_set():
                 self.close()
                 return
             try:
                 with frames_lock:
+                    data_messages += 1
                     default_frame_id = len(frames)
                 frame_id = _frame_id(data, default_frame_id)
                 timestamp = _timestamp(data)
@@ -157,9 +168,19 @@ class RoboflowVideoProcessor:
                 frame_errors.append(f"frame {_frame_id(data, len(frames))}: {type(exc).__name__}")
                 logger.warning(json.dumps({"event": "disc_flight.frame_error", "error": type(exc).__name__}))
 
-        def on_error(error: Any) -> None:
-            frame_errors.append(type(error).__name__)
-            logger.warning(json.dumps({"event": "disc_flight.webrtc_frame_error", "error": type(error).__name__}))
+        def on_error(errors: Any, metadata: Any = None) -> None:
+            # The SDK passes the list of error strings the server reported for
+            # one frame, plus that frame's metadata because this handler takes
+            # a second parameter.
+            frame_id = getattr(metadata, "frame_id", None)
+            messages = [
+                _loggable_error(message, self.settings.roboflow_api_key)
+                for message in (errors if isinstance(errors, list) else [errors])
+            ]
+            frame_errors.append(f"frame {frame_id}: {messages}")
+            logger.warning(
+                json.dumps({"event": "disc_flight.webrtc_frame_error", "frame_id": frame_id, "errors": messages})
+            )
 
         client = InferenceHTTPClient(
             api_url="https://serverless.roboflow.com",
@@ -172,8 +193,13 @@ class RoboflowVideoProcessor:
             workflow=WORKFLOW,
             image_input=IMAGE_INPUT,
             config=StreamConfig(
-                stream_output=["output_image"],
-                data_output=["disc_detections", "tracked_disc"],
+                # `output_image` has to be requested here, not in
+                # stream_output. For a VideoFileSource the SDK strips every
+                # stream_output name out of what `on_data` receives and queues
+                # those images for `session.video()` instead, which `wait()`
+                # drains and discards, so every frame would be lost.
+                stream_output=[],
+                data_output=["output_image", "disc_detections", "tracked_disc"],
                 # Must match the source's flag. The source's value is what the
                 # server is told; this one is what the client uses to decide
                 # whether to acknowledge frames. Left at its default the two
@@ -213,6 +239,19 @@ class RoboflowVideoProcessor:
                 raise TimeoutError("Roboflow session timed out")
             if cancel.is_set():
                 raise Cancelled()
+            if not frames:
+                # Two different failures end here, and telling them apart
+                # points at either the upload or the output routing.
+                if data_messages == 0:
+                    raise NoAnnotatedFrames(
+                        "Roboflow processed no frames. "
+                        "Check that the upload is a readable video file."
+                    )
+                raise NoAnnotatedFrames(
+                    f"Roboflow returned {data_messages} frames without an output_image. "
+                    "Check that the workflow exposes an output named 'output_image' "
+                    "and that StreamConfig.data_output requests it."
+                )
             update(len(frames), total, "finalizing")
             _write_mp4(frames, destination, input_fps, cv2, np)
         finally:
@@ -305,7 +344,10 @@ class DiscFlightJobManager:
             job.status = "failed"
             job.error = _safe_error(exc)
             job.output_path.unlink(missing_ok=True)
-            logger.error(json.dumps({"event": "disc_flight.job_failed", "job_id": job.id, "error": type(exc).__name__}))
+            event = {"event": "disc_flight.job_failed", "job_id": job.id, "error": type(exc).__name__}
+            if isinstance(exc, NoAnnotatedFrames):
+                event["detail"] = str(exc)
+            logger.error(json.dumps(event))
         finally:
             close = getattr(processor, "close", None)
             if callable(close):
@@ -330,6 +372,18 @@ def _safe_error(exc: Exception) -> str:
     if isinstance(exc, RuntimeError) and "not configured" in str(exc):
         return str(exc)
     return "The disc-flight service could not process this video. Please retry."
+
+
+def _loggable_error(message: Any, api_key: str | None) -> str:
+    """A server-reported frame error with the Roboflow key removed and its length capped.
+
+    The server builds these from arbitrary exception text, which can include a
+    request URL carrying the key.
+    """
+    text = str(message)
+    if api_key:
+        text = text.replace(api_key, "[redacted]")
+    return text[:500]
 
 
 def _output_value(value: Any) -> str | None:
@@ -381,11 +435,7 @@ def _register_callback(session: Any, event: str, callback: Callable) -> None:
 
 def _write_mp4(frames, destination: Path, fallback_fps: float, cv2: Any, np: Any) -> None:
     if not frames:
-        raise RuntimeError(
-            "Roboflow returned no output_image frames. "
-            "Check that the workflow exposes an output named 'output_image' "
-            "and that StreamConfig.stream_output includes it."
-        )
+        raise NoAnnotatedFrames("No annotated frames to write")
     ordered = sorted(frames, key=lambda item: item[0])
     timestamps = [item[1] for item in ordered if item[1] is not None]
     positive_deltas = [b - a for a, b in zip(timestamps, timestamps[1:]) if b > a]

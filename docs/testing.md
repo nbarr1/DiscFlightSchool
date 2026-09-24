@@ -13,7 +13,9 @@ For the opt-in real Workflow check, install `server/requirements.txt`, set
 spends inference credits: it reads the `ROBOFLOW_API_KEY` repository secret,
 takes an optional `video_url` input (without one it generates a synthetic clip
 that exercises the connection but detects nothing), and uploads the annotated
-MP4 as an artifact. Confirm the generated MP4 opens,
+MP4 as an artifact. The `video_url` has to download the file itself: a share
+page such as a Google Drive `.../view` link downloads HTML, which the script
+rejects before calling Roboflow. Confirm the generated MP4 opens,
 then configure the same backend in Android Training Settings and verify on a
 device: pick and record, preview, process, progress/indeterminate processing,
 playback, sharing, retry, cancellation, and duplicate-tap prevention. Do not
