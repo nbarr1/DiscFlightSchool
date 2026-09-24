@@ -8,7 +8,9 @@ on:
     inputs:
       video_url:
         description: >-
-          URL of a short throw video (MP4, MOV, WebM or MKV). Leave empty to use
+          Direct download URL of a short throw video (MP4, MOV, WebM or MKV).
+          A share page such as a Google Drive .../view link downloads HTML, not
+          the video, and the run fails before calling Roboflow. Leave empty to use
           a generated synthetic clip, which checks that the session connects and
           the Workflow returns its named outputs, but cannot detect a real disc.
         required: false
