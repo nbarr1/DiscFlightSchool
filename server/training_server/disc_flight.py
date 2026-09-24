@@ -168,9 +168,19 @@ class RoboflowVideoProcessor:
                 frame_errors.append(f"frame {_frame_id(data, len(frames))}: {type(exc).__name__}")
                 logger.warning(json.dumps({"event": "disc_flight.frame_error", "error": type(exc).__name__}))
 
-        def on_error(error: Any) -> None:
-            frame_errors.append(type(error).__name__)
-            logger.warning(json.dumps({"event": "disc_flight.webrtc_frame_error", "error": type(error).__name__}))
+        def on_error(errors: Any, metadata: Any = None) -> None:
+            # The SDK passes the list of error strings the server reported for
+            # one frame, plus that frame's metadata because this handler takes
+            # a second parameter.
+            frame_id = getattr(metadata, "frame_id", None)
+            messages = [
+                _loggable_error(message, self.settings.roboflow_api_key)
+                for message in (errors if isinstance(errors, list) else [errors])
+            ]
+            frame_errors.append(f"frame {frame_id}: {messages}")
+            logger.warning(
+                json.dumps({"event": "disc_flight.webrtc_frame_error", "frame_id": frame_id, "errors": messages})
+            )
 
         client = InferenceHTTPClient(
             api_url="https://serverless.roboflow.com",
@@ -362,6 +372,18 @@ def _safe_error(exc: Exception) -> str:
     if isinstance(exc, RuntimeError) and "not configured" in str(exc):
         return str(exc)
     return "The disc-flight service could not process this video. Please retry."
+
+
+def _loggable_error(message: Any, api_key: str | None) -> str:
+    """A server-reported frame error with the Roboflow key removed and its length capped.
+
+    The server builds these from arbitrary exception text, which can include a
+    request URL carrying the key.
+    """
+    text = str(message)
+    if api_key:
+        text = text.replace(api_key, "[redacted]")
+    return text[:500]
 
 
 def _output_value(value: Any) -> str | None:

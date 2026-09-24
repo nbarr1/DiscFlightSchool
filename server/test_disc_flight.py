@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import inspect
 import json
 import logging
 import sys
@@ -198,23 +199,33 @@ class _SdkRoutedSession:
     channel. The SDK then removes the stream_output names from what `on_data`
     receives and queues those images for `session.video()`, which `wait()`
     drains and discards (see `_on_data_message` in inference_sdk/webrtc/session.py).
+    A frame's "errors" entry is what the server reports as that frame's errors:
+    the SDK passes the list of strings to `on_error` handlers before `on_data`,
+    adding the frame's metadata when the handler takes a second parameter.
     """
 
     def __init__(self, config, outputs_per_frame):
         self.config = config
         self.outputs_per_frame = outputs_per_frame
         self.on_data_handler = None
+        self.on_error_handlers = []
         self.closed = False
 
     def on_data(self, handler):
         self.on_data_handler = handler
 
     def on_error(self, handler):
-        pass
+        self.on_error_handlers.append(handler)
 
     def wait(self):
         requested = [*self.config.data_output, *self.config.stream_output]
-        for outputs in self.outputs_per_frame:
+        for frame_id, outputs in enumerate(self.outputs_per_frame):
+            errors = outputs.get("errors")
+            for handler in self.on_error_handlers if errors else ():
+                if len(inspect.signature(handler).parameters) >= 2:
+                    handler(errors, types.SimpleNamespace(frame_id=frame_id))
+                else:
+                    handler(errors)
             self.on_data_handler(
                 {
                     name: outputs[name]
@@ -333,3 +344,23 @@ def test_session_without_frames_names_the_reason(tmp_path, fake_video_stack):
     fake_video_stack["outputs_per_frame"] = [{"disc_detections": {"predictions": []}}] * 2
     with pytest.raises(NoAnnotatedFrames, match="returned 2 frames without an output_image"):
         _run_processor(tmp_path)
+
+
+def test_server_reported_frame_errors_are_logged_without_the_key(
+    tmp_path, fake_video_stack, caplog
+):
+    leaked = "404 for https://api.roboflow.com/model?api_key=server-only"
+    fake_video_stack["outputs_per_frame"] = [
+        {"output_image": _image("frame-0")},
+        {"output_image": _image("frame-1"), "errors": ["tracked_disc: boom", leaked, "x" * 600]},
+    ]
+    with caplog.at_level(logging.WARNING, logger="disc_flight_school.disc_flight"):
+        summary = _run_processor(tmp_path)
+    assert summary["frameErrors"] == 1
+    [event] = [json.loads(record.getMessage()) for record in caplog.records]
+    assert event["event"] == "disc_flight.webrtc_frame_error"
+    assert event["frame_id"] == 1
+    assert event["errors"][0] == "tracked_disc: boom"
+    assert event["errors"][1] == "404 for https://api.roboflow.com/model?api_key=[redacted]"
+    assert len(event["errors"][2]) == 500
+    assert "server-only" not in caplog.text
