@@ -77,6 +77,35 @@ class WorldAnchorTest {
     }
 
     @Test
+    fun `a small roll of a right-to-left anchor line stays a small rotation`() {
+        // Point B is left of point A, so the line's angle sits at the ±π seam
+        // and a slight roll carries it across.
+        val transform = SimilarityTransform.fromTwoPointPairs(
+            Vec2(0.6, 0.5),
+            Vec2(0.4, 0.501),
+            Vec2(0.6, 0.5),
+            Vec2(0.4, 0.499),
+        )
+
+        assertTrue(
+            "expected a small rotation, got ${transform.rotation}",
+            abs(transform.rotation) < 0.02,
+        )
+    }
+
+    @Test
+    fun `interpolating across the seam turns the short way`() {
+        val before = SimilarityTransform(scale = 1.0, rotation = PI - 0.1, translation = Vec2.ZERO)
+        val after = SimilarityTransform(scale = 1.0, rotation = -PI + 0.1, translation = Vec2.ZERO)
+
+        val halfway = SimilarityTransform.lerp(before, after, 0.5)
+
+        // Half of the 0.2 rad between them, which lands on the seam itself,
+        // not the far side of the circle.
+        assertEquals(PI, abs(halfway.rotation), 1e-9)
+    }
+
+    @Test
     fun `apply and inverse round-trip a point`() {
         val transform = SimilarityTransform.fromTwoPointPairs(
             Vec2(0.2, 0.2),

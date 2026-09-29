@@ -2,6 +2,7 @@ package com.discflightschool.core.tracking
 
 import com.discflightschool.core.detection.DiscDetection
 import com.discflightschool.core.geometry.Vec2
+import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -63,7 +64,10 @@ data class SimilarityTransform(
             val scale = d2 / d1
             val angle1 = atan2(b1.y - a1.y, b1.x - a1.x)
             val angle2 = atan2(b2.y - a2.y, b2.x - a2.x)
-            val rotation = angle2 - angle1
+            // Each angle is in (-π, π], so their difference can land anywhere in
+            // (-2π, 2π). A small roll of an anchor line drawn right to left
+            // crosses the ±π seam and would come out as nearly a full turn.
+            val rotation = wrapAngle(angle2 - angle1)
 
             val c1 = Vec2((a1.x + b1.x) / 2, (a1.y + b1.y) / 2)
             val c2 = Vec2((a2.x + b2.x) / 2, (a2.y + b2.y) / 2)
@@ -81,14 +85,23 @@ data class SimilarityTransform(
             )
         }
 
+        /** Interpolate between [a] and [b], turning the short way round. */
         fun lerp(a: SimilarityTransform, b: SimilarityTransform, t: Double) = SimilarityTransform(
             scale = a.scale + (b.scale - a.scale) * t,
-            rotation = a.rotation + (b.rotation - a.rotation) * t,
+            rotation = wrapAngle(a.rotation + wrapAngle(b.rotation - a.rotation) * t),
             translation = Vec2(
                 a.translation.x + (b.translation.x - a.translation.x) * t,
                 a.translation.y + (b.translation.y - a.translation.y) * t,
             ),
         )
+
+        /** [angle] in radians, brought into (-π, π]. */
+        private fun wrapAngle(angle: Double): Double {
+            var wrapped = angle % (2 * PI)
+            if (wrapped <= -PI) wrapped += 2 * PI
+            if (wrapped > PI) wrapped -= 2 * PI
+            return wrapped
+        }
     }
 }
 
