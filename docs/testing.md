@@ -94,7 +94,7 @@ Everything ported out of Dart that can be tested without a device lives in
 | `AngleCalculatorTest.kt` | 2-D/3-D joint angles, X-factor sign and magnitude, Catmull-Rom control-point interpolation, anchor filling |
 | `ScoringRepositoryTest.kt` | round persistence (including the undo/re-enter duplicate-save regression), corrupt-store resilience, statistics |
 | `PostureMathTest.kt` | lead/trail knee labelling per throw type, physiological-limit clamping vs dropping, angle and keypoint smoothing, pro deviation scoring |
-| `KnowledgeSearchTest.kt` | local keyword search plus the Anthropic request shape and response parsing, including thinking-block handling, refusals, truncation, and transport errors |
+| `KnowledgeSearchTest.kt` | local keyword search: tokenizing, ranking, source citations, and the no-keyword and no-match messages |
 | `DiscDetectionTest.kt` | model-output parsing for both YOLO tensor layouts, input-layout detection, both preprocessing write orders, spatial-coherence filtering, smoothing, gap interpolation, frame-index alignment |
 | `DetectionQualityTest.kt` | the coverage/interpolation/confidence heuristic, its thresholds against the user's sensitivity setting, and seed-point sampling |
 | `TrackerTest.kt` | the spline tracker, the frame budget derived from a trimmed span, and frame-index maths |

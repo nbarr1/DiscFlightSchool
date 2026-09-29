@@ -47,7 +47,9 @@ object PrivacyPolicy {
             title = "On-device analysis",
             body = "Pose detection (Form Coach) and the Flight Tracker's on-device option run " +
                 "entirely on your device using bundled machine-learning models. Your video " +
-                "is not sent to a server when you choose the on-device tracker.",
+                "is not sent to a server when you choose the on-device tracker. Questions " +
+                "you ask in the Knowledge Base are answered from the research bundled with " +
+                "the app and never leave your device.",
         ),
         Section(
             title = "Optional: cloud flight tracing",
@@ -55,9 +57,9 @@ object PrivacyPolicy {
                 "Flight School server, which securely submits it to Roboflow to detect and " +
                 "draw the disc trajectory. The source upload is removed after processing or " +
                 "cancellation. The annotated result remains on the server so your device can " +
-                "download it; contact the server operator for its retention and deletion " +
-                "policy. Do not use cloud tracing if you do not want the video processed by " +
-                "these services.",
+                "download it, and the server deletes it 24 hours after processing finishes. " +
+                "Do not use cloud tracing if you do not want the video processed by these " +
+                "services.",
         ),
         Section(
             title = "Optional: training data collection",
@@ -71,16 +73,6 @@ object PrivacyPolicy {
                 "future versions of the on-device detection model. \"Clear all training data\" " +
                 "in Training Settings deletes the locally stored copies immediately, but does " +
                 "not retract copies already uploaded to the server.",
-        ),
-        Section(
-            title = "Optional: AI Search (Anthropic)",
-            body = "The Knowledge Base screen offers an \"AI Search\" feature that you can " +
-                "enable by adding your own Anthropic API key in Training Settings. If you use " +
-                "it, your search question is sent directly from your device to Anthropic's " +
-                "Claude API to generate an answer. Your API key is stored only in your " +
-                "device's secure credential storage, never on our servers. Anthropic's " +
-                "handling of that request is governed by Anthropic's own privacy policy, not " +
-                "this one.",
         ),
         Section(
             title = "What we don't collect",

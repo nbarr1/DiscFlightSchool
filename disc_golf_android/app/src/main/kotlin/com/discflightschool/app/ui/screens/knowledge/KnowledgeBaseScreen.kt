@@ -25,7 +25,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Article
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Psychology
@@ -150,13 +149,6 @@ private fun SearchEntry(onClick: () -> Unit) {
         Icon(Icons.Default.Search, contentDescription = null, tint = AppColors.KnowledgeBase)
         Spacer(Modifier.width(12.dp))
         Text("Ask a question...", color = AppColors.Muted)
-        Spacer(Modifier.weight(1f))
-        Icon(
-            Icons.Default.AutoAwesome,
-            contentDescription = null,
-            tint = AppColors.KnowledgeBase,
-            modifier = Modifier.size(20.dp),
-        )
     }
 }
 

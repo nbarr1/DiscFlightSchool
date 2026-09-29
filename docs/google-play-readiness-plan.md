@@ -38,7 +38,7 @@ marked ✅ below; the rest are still open exactly as originally scoped.
 - 🧑‍⚖️ Enter the chosen URL into Play Console → App Content → Privacy Policy (Console access, not code).
 
 ### 1.2 Complete the Data Safety form — still open (Play Console)
-- 🧑‍⚖️ Play Console UI task, not a code change. Use the "Data Safety Form Declarations" section of the audit report as the answer key (Photos/Videos — collected, app functionality purpose; Audio — collected, justified by RECORD_AUDIO; App activity/search terms — shared with Anthropic only when AI Search is used; no account/identity data).
+- 🧑‍⚖️ Play Console UI task, not a code change. Use the "Data Safety Form Declarations" section of the audit report as the answer key (Photos/Videos — collected, app functionality purpose; Audio — collected, justified by RECORD_AUDIO; no account/identity data). The audit also listed search terms shared with Anthropic through AI Search; that feature has been removed, and knowledge base questions never leave the device, so there is no search-term sharing to declare.
 - 🔧 Optional but recommended: turn that same answer key into a short `docs/data-safety-answers.md` checklist so it's reproducible on every future Data Safety re-certification (Play requires periodic reconfirmation), and stays in sync automatically if a future PR adds a new data flow (add a rule of thumb: "new `http`/API call touching user content → update this doc").
 
 ---

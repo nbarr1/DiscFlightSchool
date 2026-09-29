@@ -25,7 +25,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
@@ -95,10 +94,10 @@ import okhttp3.Request
 
 /**
  * Detector sensitivity, training data collection, the server it uploads to, and
- * the keys those things need.
+ * the key that server needs.
  *
- * Both keys live in encrypted storage and are write-only from here: the screen
- * can say whether one is set and can remove it, but never shows it back.
+ * The key lives in encrypted storage and is write-only from here: the screen
+ * can say whether it is set and can remove it, but never shows it back.
  */
 @Composable
 fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) {
@@ -109,19 +108,16 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
 
     val training = container.trainingDataRepository
     val collector = container.trainingDataCollector
-    val knowledgeBase = container.knowledgeBaseRepository
 
     val threshold by container.detectionSettings.confidenceThreshold.collectAsStateWithLifecycle()
     val isOptedIn by training.isOptedIn.collectAsStateWithLifecycle()
     val serverUrl by training.serverUrl.collectAsStateWithLifecycle()
     val samples by training.samples.collectAsStateWithLifecycle()
-    val hasAnthropicKey by knowledgeBase.hasApiKey.collectAsStateWithLifecycle()
 
     var serverOnline by remember { mutableStateOf<Boolean?>(null) }
     var checkingServer by remember { mutableStateOf(false) }
     var serverUrlDraft by remember(serverUrl) { mutableStateOf(serverUrl) }
     var busyMessage by remember { mutableStateOf<String?>(null) }
-    var anthropicKeyDialog by remember { mutableStateOf(false) }
     var trainingKeyDialog by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     var modelUpdatePrompt by remember { mutableStateOf(false) }
@@ -358,39 +354,6 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
 
             Spacer(Modifier.height(24.dp))
 
-            SectionCard(title = "AI search (knowledge base)", accent = AppColors.KnowledgeBase) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = AppColors.KnowledgeBase,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "Add your own Anthropic API key to answer knowledge base " +
-                                "questions with Claude.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = AppColors.Muted,
-                        )
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    KeyStatusRow(
-                        hasKey = hasAnthropicKey,
-                        setLabel = "API key saved",
-                        unsetLabel = "No API key set",
-                        onAdd = { anthropicKeyDialog = true },
-                        onRemove = {
-                            knowledgeBase.clearApiKey()
-                            scope.launch { snackbarHostState.showSnackbar("API key removed") }
-                        },
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
             SectionCard {
                 Column {
                     Row(
@@ -544,24 +507,6 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                     Spacer(Modifier.width(16.dp))
                     Text(message)
                 }
-            },
-        )
-    }
-
-    if (anthropicKeyDialog) {
-        ApiKeyDialog(
-            title = "Anthropic API key",
-            explanation = "Your key is stored in the device's encrypted storage. When you use " +
-                "AI search, your question is sent directly from this device to Anthropic to " +
-                "generate an answer; no one else sees it. Anthropic's handling of that " +
-                "request is governed by their own privacy policy, not this app's.",
-            label = "API key",
-            placeholder = "sk-ant-...",
-            onDismiss = { anthropicKeyDialog = false },
-            onSave = { key ->
-                knowledgeBase.setApiKey(key)
-                anthropicKeyDialog = false
-                scope.launch { snackbarHostState.showSnackbar("API key saved") }
             },
         )
     }

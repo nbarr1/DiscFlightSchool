@@ -20,10 +20,10 @@ import com.discflightschool.app.ui.screens.formcoach.PoseCorrectionScreen
 import com.discflightschool.app.ui.screens.formcoach.PostureAnalysisScreen
 import com.discflightschool.app.ui.screens.formcoach.VideoTrimScreen
 import com.discflightschool.app.ui.screens.gallery.VideoGalleryScreen
-import com.discflightschool.app.ui.screens.knowledge.AiSearchScreen
 import com.discflightschool.app.ui.screens.knowledge.ArticleDetailScreen
 import com.discflightschool.app.ui.screens.knowledge.CategoryScreen
 import com.discflightschool.app.ui.screens.knowledge.KnowledgeBaseScreen
+import com.discflightschool.app.ui.screens.knowledge.ResearchSearchScreen
 import com.discflightschool.app.ui.screens.roulette.PlayRoundScreen
 import com.discflightschool.app.ui.screens.roulette.RouletteHistoryScreen
 import com.discflightschool.app.ui.screens.roulette.RouletteScreen
@@ -237,7 +237,7 @@ fun AppNavHost(startOnHome: Boolean) {
         composable(Destinations.KNOWLEDGE_BASE) {
             KnowledgeBaseScreen(
                 onBack = { navController.popBackStack() },
-                onOpenSearch = { navController.navigate(Destinations.AI_SEARCH) },
+                onOpenSearch = { navController.navigate(Destinations.KNOWLEDGE_SEARCH) },
                 onOpenCategory = { id -> navController.navigate(Destinations.category(id)) },
             )
         }
@@ -267,8 +267,8 @@ fun AppNavHost(startOnHome: Boolean) {
             )
         }
 
-        composable(Destinations.AI_SEARCH) {
-            AiSearchScreen(onBack = { navController.popBackStack() })
+        composable(Destinations.KNOWLEDGE_SEARCH) {
+            ResearchSearchScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Destinations.TRAINING_SETTINGS) {

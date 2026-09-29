@@ -24,16 +24,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,64 +46,39 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.discflightschool.app.LocalAppContainer
 import com.discflightschool.app.ui.components.AppTopBar
 import com.discflightschool.app.ui.theme.AppColors
 import kotlinx.coroutines.launch
 
 /** One question and the answer it got. */
-private data class QaPair(
-    val question: String,
-    val answer: String? = null,
-    val isAi: Boolean = false,
-)
+private data class QaPair(val question: String, val answer: String)
 
 /**
  * Question and answer over the bundled research.
  *
- * Local keyword search is the default and needs nothing configured. With an
- * Anthropic key saved, the toggle sends the question to Claude instead,
- * grounded in the same library.
+ * A keyword search of the knowledge base's articles, run entirely on the
+ * device: nothing typed here leaves the phone.
  */
 @Composable
-fun AiSearchScreen(onBack: () -> Unit) {
+fun ResearchSearchScreen(onBack: () -> Unit) {
     val container = LocalAppContainer.current
     val repository = container.knowledgeBaseRepository
-    val hasApiKey by repository.hasApiKey.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
     val history = remember { mutableStateListOf<QaPair>() }
     var input by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-    var useAi by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { repository.load() }
 
     fun ask(question: String) {
         val trimmed = question.trim()
-        if (trimmed.isEmpty() || isLoading) return
+        if (trimmed.isEmpty()) return
 
-        val viaAi = useAi && hasApiKey
-        history += QaPair(question = trimmed)
+        history += QaPair(trimmed, repository.searchLocal(trimmed))
         input = ""
-        isLoading = viaAi
-
-        scope.launch {
-            val answer = if (viaAi) {
-                container.aiSearchClient.ask(
-                    question = trimmed,
-                    apiKey = repository.apiKey(),
-                    studies = repository.studies,
-                )
-            } else {
-                repository.searchLocal(trimmed)
-            }
-            history[history.lastIndex] = QaPair(trimmed, answer, viaAi)
-            isLoading = false
-            listState.animateScrollToItem(history.lastIndex)
-        }
+        scope.launch { listState.animateScrollToItem(history.lastIndex) }
     }
 
     Scaffold(
@@ -132,33 +104,10 @@ fun AiSearchScreen(onBack: () -> Unit) {
                 }
             }
 
-            if (isLoading) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CircularProgressIndicator(
-                        strokeWidth = 2.dp,
-                        color = AppColors.KnowledgeBase,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "Asking Claude...",
-                        color = AppColors.KnowledgeBase,
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                }
-            }
-
             InputBar(
                 value = input,
                 onValueChange = { input = it },
                 onSend = { ask(input) },
-                sendEnabled = !isLoading,
-                showAiToggle = hasApiKey,
-                useAi = useAi,
-                onUseAiChange = { useAi = it },
             )
         }
     }
@@ -225,43 +174,37 @@ private fun QaBubble(qa: QaPair) {
             }
         }
 
-        qa.answer?.let { answer ->
-            Column(
-                modifier = Modifier
-                    .padding(end = 48.dp, bottom = 16.dp)
-                    .background(
-                        AppColors.KnowledgeBase.copy(alpha = 0.12f),
-                        RoundedCornerShape(12.dp),
-                    )
-                    .border(
-                        1.dp,
-                        AppColors.KnowledgeBase.copy(alpha = 0.25f),
-                        RoundedCornerShape(12.dp),
-                    )
-                    .padding(14.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        if (qa.isAi) {
-                            Icons.Default.AutoAwesome
-                        } else {
-                            Icons.AutoMirrored.Filled.MenuBook
-                        },
-                        contentDescription = null,
-                        tint = AppColors.KnowledgeBase,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        if (qa.isAi) "AI answer" else "Research says",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = AppColors.KnowledgeBase,
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(answer, style = MaterialTheme.typography.bodyMedium)
+        Column(
+            modifier = Modifier
+                .padding(end = 48.dp, bottom = 16.dp)
+                .background(
+                    AppColors.KnowledgeBase.copy(alpha = 0.12f),
+                    RoundedCornerShape(12.dp),
+                )
+                .border(
+                    1.dp,
+                    AppColors.KnowledgeBase.copy(alpha = 0.25f),
+                    RoundedCornerShape(12.dp),
+                )
+                .padding(14.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.AutoMirrored.Filled.MenuBook,
+                    contentDescription = null,
+                    tint = AppColors.KnowledgeBase,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "Research says",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = AppColors.KnowledgeBase,
+                )
             }
+            Spacer(Modifier.height(8.dp))
+            Text(qa.answer, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -271,67 +214,31 @@ private fun InputBar(
     value: String,
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
-    sendEnabled: Boolean,
-    showAiToggle: Boolean,
-    useAi: Boolean,
-    onUseAiChange: (Boolean) -> Unit,
 ) {
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(AppColors.Background)
             .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (showAiToggle) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "Local",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (useAi) AppColors.Muted else AppColors.KnowledgeBase,
-                )
-                Spacer(Modifier.width(6.dp))
-                Switch(checked = useAi, onCheckedChange = onUseAiChange)
-                Spacer(Modifier.width(6.dp))
-                Icon(
-                    Icons.Default.AutoAwesome,
-                    contentDescription = null,
-                    tint = if (useAi) AppColors.Roulette else AppColors.Muted,
-                    modifier = Modifier.size(14.dp),
-                )
-                Spacer(Modifier.width(3.dp))
-                Text(
-                    "AI",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (useAi) AppColors.Roulette else AppColors.Muted,
-                )
-            }
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                placeholder = { Text("Ask a question...") },
-                shape = RoundedCornerShape(24.dp),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { onSend() }),
-                modifier = Modifier.weight(1f),
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text("Ask a question...") },
+            shape = RoundedCornerShape(24.dp),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+            keyboardActions = KeyboardActions(onSend = { onSend() }),
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(8.dp))
+        IconButton(onClick = onSend) {
+            Icon(
+                Icons.AutoMirrored.Filled.Send,
+                contentDescription = "Send",
+                tint = AppColors.KnowledgeBase,
             )
-            Spacer(Modifier.width(8.dp))
-            IconButton(onClick = onSend, enabled = sendEnabled) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Send",
-                    tint = AppColors.KnowledgeBase,
-                )
-            }
         }
     }
 }

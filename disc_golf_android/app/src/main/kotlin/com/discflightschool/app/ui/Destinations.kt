@@ -33,7 +33,7 @@ object Destinations {
     const val ROULETTE_HISTORY = "roulette_history"
 
     const val KNOWLEDGE_BASE = "knowledge_base"
-    const val AI_SEARCH = "ai_search"
+    const val KNOWLEDGE_SEARCH = "knowledge_search"
     const val TRAINING_SETTINGS = "training_settings"
     const val PRIVACY_POLICY = "privacy_policy"
 

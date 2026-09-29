@@ -17,7 +17,7 @@ The Gradle project has two modules:
 
 - **`:core`** — a plain Kotlin/JVM module with no Android dependencies. It holds
   the detection maths, tracking state machines, posture calculations, scoring,
-  roulette, the knowledge-base search and Anthropic request/response handling,
+  roulette, the knowledge-base search,
   the server-URL allow-listing, and every persisted model. Because it is
   Android-free, all of it runs under a normal JVM test task.
 - **`:app`** — the Android module: Compose UI, ML Kit and TensorFlow Lite
