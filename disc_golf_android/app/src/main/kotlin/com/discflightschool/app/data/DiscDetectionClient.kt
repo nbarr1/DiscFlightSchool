@@ -4,19 +4,15 @@ import com.discflightschool.core.data.TrainingDataRepository
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.Response
 
 /** One disc the server found, in pixels of the uploaded image. `x`/`y` is the box center. */
 @Serializable
@@ -52,7 +48,9 @@ fun CloudDiscDetections.summary(): String {
  * Sends one JPEG to the server's `POST /api/disc-detection`, which runs it
  * through the Roboflow disc-detection Workflow.
  *
- * Only the app API key leaves the device. The Roboflow key stays on the server.
+ * Only the app's key for the server leaves the device (see
+ * [TrainingDataRepository.detectionApiKey]). The Roboflow key stays on the
+ * server.
  */
 class DiscDetectionClient(
     private val settings: TrainingDataRepository,
@@ -70,7 +68,7 @@ class DiscDetectionClient(
     suspend fun detect(jpeg: ByteArray): CloudDiscDetections {
         val endpoint = settings.endpoint("/api/disc-detection")
             ?: error("Set a valid server URL in Training Settings.")
-        val apiKey = settings.apiKey.takeIf { it.isNotBlank() }
+        val apiKey = settings.detectionApiKey
             ?: error("Set the app API key in Training Settings.")
         val request = Request.Builder()
             .url(endpoint.toString())
@@ -97,26 +95,4 @@ class DiscDetectionClient(
     private companion object {
         val JPEG = "image/jpeg".toMediaType()
     }
-}
-
-/**
- * Runs the call on OkHttp's own threads and returns its status and body.
- * Cancelling the caller cancels the request, so leaving the screen doesn't
- * leave a detection running.
- */
-private suspend fun Call.await(): Pair<Int, String> = suspendCancellableCoroutine { continuation ->
-    continuation.invokeOnCancellation { cancel() }
-    enqueue(
-        object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                continuation.resumeWith(Result.failure(e))
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                continuation.resumeWith(
-                    runCatching { response.use { it.code to it.body?.string().orEmpty() } },
-                )
-            }
-        },
-    )
 }

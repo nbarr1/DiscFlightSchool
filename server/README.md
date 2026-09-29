@@ -36,6 +36,7 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 | `OBJECT_STORAGE_SECRET_KEY` | No | none | Object storage secret key. |
 | `OBJECT_STORAGE_SECURE` | No | `true` | Whether the object storage client uses HTTPS. |
 | `ROBOFLOW_API_KEY` | No | none | Server-side Roboflow key for the disc-flight video jobs and `training_server/disc_detection.py`, which sends it only in the `Authorization: Bearer` header. |
+| `CLIENT_API_KEY` | No | none | A second key, built into the Android app, that the Roboflow endpoints (`/api/disc-flight/jobs...` and `/api/disc-detection`) accept in `X-App-Key` in place of `APP_API_KEY`. The training and export endpoints never accept it. Leave it unset to require `APP_API_KEY` everywhere. |
 | `WORKER_POLL_SECONDS` | No | `30` | How long `training_server.worker` blocks on the Redis queue between checks (durable mode), or sleeps between log lines (placeholder mode). |
 
 ## Implemented endpoints
@@ -51,7 +52,12 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 | `GET` | `/api/training/status` | No | Returns training state — from an in-memory dict (default) or the `training_runs` table (durable mode); same JSON shape either way. |
 | `GET` | `/api/model/version` | No | Returns latest model metadata or `version: none`. |
 | `GET` | `/api/model/download` | No | Downloads the latest `.tflite` file or returns 404. |
-| `POST` | `/api/disc-detection` | `X-App-Key` | Runs one JPEG/PNG `image` upload through the Roboflow disc-detection Workflow and returns the disc boxes. Returns 503 without `ROBOFLOW_API_KEY`, and 502 or 504 when Roboflow fails or times out. |
+| `POST` | `/api/disc-flight/jobs` | `X-App-Key` or `CLIENT_API_KEY` | Starts a Roboflow video job for a `video` upload. Optional `start_ms`/`end_ms` form fields limit it to that range. Returns `jobId` and `jobToken`. |
+| `GET` | `/api/disc-flight/jobs/{jobId}` | as above, + `X-Job-Token` | Returns the job's status and progress, with `resultVideoUrl` and `trackUrl` once complete. |
+| `GET` | `/api/disc-flight/jobs/{jobId}/result` | as above, + `X-Job-Token` | Streams the annotated MP4. |
+| `GET` | `/api/disc-flight/jobs/{jobId}/track` | as above, + `X-Job-Token` | Returns the disc's normalized position in each frame of the processed range. |
+| `DELETE` | `/api/disc-flight/jobs/{jobId}` | as above, + `X-Job-Token` | Cancels the job and removes its files. |
+| `POST` | `/api/disc-detection` | `X-App-Key` or `CLIENT_API_KEY` | Runs one JPEG/PNG `image` upload through the Roboflow disc-detection Workflow and returns the disc boxes. Returns 503 without `ROBOFLOW_API_KEY`, and 502 or 504 when Roboflow fails or times out. |
 
 ## Local setup
 
@@ -99,16 +105,16 @@ The compose stack starts the API, worker, PostgreSQL, Redis, MinIO, and a MinIO 
 
 **MinIO** object keys: `dataset/images/{sample_id}_full{ext}`, `dataset/images/{sample_id}_crop{ext}`, `models/{version}.tflite`. YOLO labels stay in Postgres (`training_samples.label`), not MinIO — they're one line, not worth a second round trip.
 
-**Redis**: a single list, `training:jobs`. `POST /api/training/start` inserts a `training_runs` row and `LPUSH`es its id; `training_server.worker` blocks on `BRPOP` and processes jobs one at a time. Delivery is at-most-once — a worker crash mid-job leaves that run stuck at `running` with no auto-requeue, which is an accepted tradeoff for a manually-triggered, low-frequency job type.
+**Redis**: a single list, `training:jobs`. `POST /api/training/start` inserts a `training_runs` row and `LPUSH`es its id; `training_server.worker` blocks on `BRPOP` and processes jobs one at a time. Delivery is at-most-once — a worker crash mid-job loses that run with no auto-requeue, which is an accepted tradeoff for a manually-triggered, low-frequency job type. So that the lost run doesn't block every later `POST /api/training/start` with a 409, the worker marks a `running` row as failed once it's older than `TRAINING_TIMEOUT_SECONDS` + `MODEL_EXPORT_TIMEOUT_SECONDS` plus 30 minutes, which is longer than any live run can last.
 
 **Model downloads**: `GET /api/model/download` always serves a local file (`FileResponse`) — `PostgresMinioStorage.latest_model_info()` downloads from MinIO into `models_dir` only on a cache miss (a fresh replica, or a non-compose deployment without the shared `training-models` volume); the common case (worker and API sharing that volume) never triggers a download at all.
 
 ## Training notes
 
-- `server/dataset/dataset.yaml` (or, in durable mode, a `materialized_dataset/dataset.yaml` assembled from Postgres/MinIO) is generated at runtime if absent.
+- `server/dataset/dataset.yaml` (or, in durable mode, a `materialized_dataset/dataset.yaml` assembled from Postgres/MinIO) is generated at runtime if absent. It trains on `train.txt`, a list of the labelled `*_full` images regenerated before each run, rather than on all of `images/train`: the unlabelled `*_crop` images there would otherwise be learned as background. A `dataset.yaml` still in the form earlier releases generated is regenerated; one you have edited is left alone.
 - Training requires at least 10 full-image samples.
 - The training command uses `yolo detect train` with `yolo11n.pt`.
-- Export uses `yolo export format=tflite`.
+- Export uses `yolo export format=tflite`. ultralytics 8.4.83 and later write `weights/best.tflite`; earlier 8.x releases write `weights/best_saved_model/best_float32.tflite`. Both are picked up.
 - The newest published `.tflite` model is served as the current detector model.
 
 ## Next steps

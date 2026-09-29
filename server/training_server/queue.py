@@ -80,6 +80,25 @@ class TrainingRunStore:
                 (status, result, run_id),
             )
 
+    def fail_stale_runs(self, *, older_than_seconds: int) -> int:
+        """Mark `running` runs that started more than `older_than_seconds` ago
+        as failed, returning how many there were.
+
+        A worker that dies mid-run (a restart, a deploy, the host going down)
+        never reaches `mark_finished`, and the partial unique index then
+        rejects every later `create_run` with "already in progress". Pass the
+        longest a live run can take: the train and export subprocesses are
+        each killed at their own timeout, so a row older than both combined
+        belongs to no running worker, however many workers there are.
+        """
+        with self._pool.connection() as conn:
+            cursor = conn.execute(
+                "UPDATE training_runs SET status = 'failed', result = %s, finished_at = now() "
+                "WHERE status = 'running' AND started_at < now() - %s * interval '1 second'",
+                ("failed: the worker stopped before the run finished", older_than_seconds),
+            )
+            return cursor.rowcount
+
     def latest_status(self) -> dict[str, Any]:
         """Shaped identically to `TrainingManager.status` in non-durable mode,
         so `app.py`'s `get_training_status` handler needs no changes."""

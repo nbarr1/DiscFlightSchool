@@ -167,7 +167,11 @@ fun PlayRoundScreen(
     }
 
     fun holedOut() {
-        val player = currentPlayer ?: return
+        // The same player the selector shows: after an undo, the stored
+        // current player can be one who has already finished this hole.
+        val player = currentPlayer?.takeIf { it in remainingPlayers }
+            ?: remainingPlayers.firstOrNull()
+            ?: return
         challenge?.let { spun ->
             currentThrows += ThrowRecord(
                 throwNumber = currentThrows.size + 1,
@@ -237,6 +241,10 @@ fun PlayRoundScreen(
             playerStrokes[player] = score.strokes
             playerThrows[player] = score.throws
         }
+        // Hand the turn to whoever still has this hole to play. Left as it
+        // was, it could name a player who has already holed out here.
+        updated.playerNames.firstOrNull { it !in completedPlayers }
+            ?.let { scoring.setCurrentPlayer(it) }
 
         currentThrows.clear()
         challenge = null

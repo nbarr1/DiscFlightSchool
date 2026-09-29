@@ -184,7 +184,7 @@ fun FlightTrackerScreen(onBack: () -> Unit, onVideoSelected: () -> Unit) {
                 OutlinedButton(
                     enabled = !processing.active,
                     onClick = onVideoSelected,
-                ) { Text("Use on-device tracker") }
+                ) { Text("Trim and track") }
                 Spacer(Modifier.height(24.dp))
             }
 

@@ -7,11 +7,35 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+TRAINING_IMAGE_LIST = "train.txt"
+
+
 def render_dataset_yaml(dataset_dir: Path) -> str:
     """YOLO dataset manifest shared by every StorageBackend that assembles a
     local training-ready directory (FileStorage's `dataset_dir`, or a durable
-    adapter's materialized copy)."""
+    adapter's materialized copy).
+
+    It points at the image list `write_training_image_list` writes rather than
+    at `images/train`, because that folder also holds each sample's crop.
+    Crops carry no label, and YOLO trains on an unlabelled image as background,
+    so pointing it at the folder would teach it that a close-up of a disc is
+    not a disc.
+    """
     return (
+        f"path: {dataset_dir.resolve()}\n"
+        f"train: {TRAINING_IMAGE_LIST}\n"
+        f"val: {TRAINING_IMAGE_LIST}\n"
+        "\n"
+        "names:\n"
+        "  0: disc\n"
+    )
+
+
+def is_legacy_dataset_yaml(text: str, dataset_dir: Path) -> bool:
+    """Whether `text` is the manifest earlier releases generated, which
+    trained on the whole of `images/train`, crops included. An operator's own
+    edits never match, so only an untouched default is ever replaced."""
+    legacy = (
         f"path: {dataset_dir.resolve()}\n"
         "train: images/train\n"
         "val: images/train\n"
@@ -19,6 +43,27 @@ def render_dataset_yaml(dataset_dir: Path) -> str:
         "names:\n"
         "  0: disc\n"
     )
+    return text == legacy
+
+
+def write_training_image_list(dataset_dir: Path) -> Path:
+    """Write the list of labelled full frames that `render_dataset_yaml` names.
+
+    Entries are `./`-relative, which ultralytics resolves against the list's
+    own folder, so an exported copy of the dataset still trains elsewhere.
+    """
+    images_dir = dataset_dir / "images" / "train"
+    names = sorted(
+        path.name
+        for path in images_dir.glob("*_full.*")
+        # Skips an upload still being written, which FileStorage names
+        # `.<final name>.<random>.tmp` until it is complete.
+        if path.is_file() and not path.name.startswith(".")
+        and path.suffix.lower() in {".jpg", ".jpeg", ".png"}
+    )
+    list_path = dataset_dir / TRAINING_IMAGE_LIST
+    list_path.write_text("".join(f"./images/train/{name}\n" for name in names))
+    return list_path
 
 
 @dataclass(frozen=True)
@@ -42,6 +87,10 @@ class Settings:
     object_storage_secret_key: str | None = None
     object_storage_secure: bool = True
     roboflow_api_key: str | None = None
+    # A key the Android app ships with. It is accepted only by the Roboflow
+    # detection endpoints, never by the training or export ones, because
+    # anyone with the app can extract it.
+    client_api_key: str | None = None
     disc_flight_max_upload_bytes: int = 200 * 1024 * 1024
     disc_flight_session_timeout_seconds: int = 900
 
@@ -139,6 +188,7 @@ class Settings:
             object_storage_secret_key=cls._optional_env("OBJECT_STORAGE_SECRET_KEY"),
             object_storage_secure=object_storage_secure,
             roboflow_api_key=cls._optional_env("ROBOFLOW_API_KEY"),
+            client_api_key=cls._optional_env("CLIENT_API_KEY"),
             disc_flight_max_upload_bytes=cls.positive_int_from_env(
                 "DISC_FLIGHT_MAX_UPLOAD_BYTES", 200 * 1024 * 1024
             ),

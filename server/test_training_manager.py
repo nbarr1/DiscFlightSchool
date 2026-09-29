@@ -19,6 +19,7 @@ os.environ.setdefault("APP_API_KEY", "test-key")
 
 from training_server import Settings  # noqa: E402
 from training_server.training import TrainingManager  # noqa: E402
+from training_server.training_job import find_exported_tflite  # noqa: E402
 
 
 class FakeStorage:
@@ -260,6 +261,41 @@ class TrainingManagerDurableModeTests(unittest.TestCase):
         run_store._status = {"running": True, "last_run": None, "result": None}
 
         self.assertEqual(run_store._status, manager.status)
+
+
+class FindExportedTfliteTests(unittest.TestCase):
+    """Where `yolo export format=tflite` puts its output depends on the
+    ultralytics release, and requirements.txt allows releases on both sides."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.weights = Path(self._tmp.name) / "weights"
+        self.weights.mkdir()
+        self.best_pt = self.weights / "best.pt"
+        self.best_pt.write_bytes(b"weights")
+
+    def test_finds_the_litert_export_beside_the_weights(self):
+        exported = self.weights / "best.tflite"
+        exported.write_bytes(b"model")
+
+        self.assertEqual(exported, find_exported_tflite(self.best_pt))
+
+    def test_finds_the_saved_model_export_of_older_releases(self):
+        saved_model = self.weights / "best_saved_model"
+        saved_model.mkdir()
+        (saved_model / "best_float16.tflite").write_bytes(b"model")
+        float32 = saved_model / "best_float32.tflite"
+        float32.write_bytes(b"model")
+
+        self.assertEqual(float32, find_exported_tflite(self.best_pt))
+
+    def test_ignores_a_model_left_by_an_earlier_run(self):
+        stale = self.weights / "best.tflite"
+        stale.write_bytes(b"old model")
+        os.utime(stale, (1_000, 1_000))
+
+        self.assertIsNone(find_exported_tflite(self.best_pt, not_before=2_000))
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ The Gradle project has two modules:
 
 - **`:core`** — a plain Kotlin/JVM module with no Android dependencies. It holds
   the detection maths, tracking state machines, posture calculations, scoring,
-  roulette, the knowledge-base search and Anthropic request/response handling,
+  roulette, the knowledge-base search,
   the server-URL allow-listing, and every persisted model. Because it is
   Android-free, all of it runs under a normal JVM test task.
 - **`:app`** — the Android module: Compose UI, ML Kit and TensorFlow Lite
@@ -96,15 +96,17 @@ Implemented server endpoints:
 | `GET` | `/api/training/status` | No | Returns training status (in-memory, or from PostgreSQL in durable mode — same JSON shape either way). |
 | `GET` | `/api/model/version` | No | Returns latest `.tflite` model metadata or the no-model sentinel. |
 | `GET` | `/api/model/download` | No | Downloads the latest `.tflite` model or returns 404 when none exists. |
-| `POST` | `/api/disc-flight/jobs` | `X-App-Key` | Uploads a supported throw video and starts one persistent Roboflow WebRTC Workflow session. |
-| `GET` | `/api/disc-flight/jobs/{id}` | `X-App-Key` + `X-Job-Token` | Returns honest job phase, frame counts, and progress when a reliable total is available. |
-| `GET` | `/api/disc-flight/jobs/{id}/result` | `X-App-Key` + `X-Job-Token` | Streams the completed annotated MP4. |
-| `DELETE` | `/api/disc-flight/jobs/{id}` | `X-App-Key` + `X-Job-Token` | Cancels processing and removes temporary input/output files. |
-| `POST` | `/api/disc-detection` | `X-App-Key` | Runs one JPEG/PNG image through the Roboflow disc-detection Workflow and returns the disc boxes. |
+| `POST` | `/api/disc-flight/jobs` | `X-App-Key` or client key | Uploads a supported throw video and starts one persistent Roboflow WebRTC Workflow session. Optional `start_ms` and `end_ms` form fields limit processing to that part of the video. |
+| `GET` | `/api/disc-flight/jobs/{id}` | `X-App-Key` or client key, + `X-Job-Token` | Returns honest job phase, frame counts, and progress when a reliable total is available. |
+| `GET` | `/api/disc-flight/jobs/{id}/result` | `X-App-Key` or client key, + `X-Job-Token` | Streams the completed annotated MP4. |
+| `GET` | `/api/disc-flight/jobs/{id}/track` | `X-App-Key` or client key, + `X-Job-Token` | Returns the disc's normalized position in each frame where the Workflow found it. |
+| `DELETE` | `/api/disc-flight/jobs/{id}` | `X-App-Key` or client key, + `X-Job-Token` | Cancels processing and removes temporary input/output files. |
+| `POST` | `/api/disc-detection` | `X-App-Key` or client key | Runs one JPEG/PNG image through the Roboflow disc-detection Workflow and returns the disc boxes. |
 
 Important server facts:
 
 - `APP_API_KEY` is required to start the server.
+- `CLIENT_API_KEY` is optional. The Android app ships with it, so it's accepted only by the Roboflow endpoints marked "client key" in the endpoint table, never by the training upload, export, or start endpoints. Anyone who extracts it from the app can spend Roboflow credits but can't read or change the dataset. For more information, see "The client key" later in this README.
 - Storage backend is selected automatically: `PostgresMinioStorage` (durable) when `DATABASE_URL`, `REDIS_URL`, and every `OBJECT_STORAGE_*` variable are set, otherwise `FileStorage` (filesystem, local dev, no infra required).
 - In durable mode, `POST /api/training/start` enqueues a job on a Redis list instead of spawning an in-process thread; `training_server.worker` consumes it, runs the same `yolo detect train`/`yolo export` sequence, and publishes the resulting model through the storage layer. Without durable config, `training_server.worker` falls back to its original placeholder behavior (log config booleans and sleep).
 - `server/dataset/dataset.yaml` (or, in durable mode, a materialized copy assembled from Postgres/MinIO) is generated at runtime if it is absent.
@@ -187,8 +189,11 @@ export ROBOFLOW_API_KEY='your-server-side-key'
 uvicorn main:app --app-dir server --host 0.0.0.0 --port 8000
 ```
 
-In Android **Training Settings**, set the server URL and the matching
-`APP_API_KEY`, then run the client with Android Studio or:
+Release builds of the app send Auto-detect and cloud tracing to the default
+server with the client key they're built with (see "The client key"). To point
+a build at your own server instead, set the server URL and the matching
+`APP_API_KEY` in Android **Training Settings**, then run the client with
+Android Studio or:
 
 ```bash
 cd disc_golf_android
@@ -198,7 +203,9 @@ cd disc_golf_android
 Accepted uploads are MP4, MOV, WebM, and MKV. The default limit is 200 MiB
 (`DISC_FLIGHT_MAX_UPLOAD_BYTES=209715200`) and the default session timeout is
 15 minutes (`DISC_FLIGHT_SESSION_TIMEOUT_SECONDS=900`). Job results are stored
-under `server/disc_flight_jobs/`, which is ignored by Git. The current
+under `server/disc_flight_jobs/`, which is ignored by Git, and are deleted 24
+hours after the job finishes, along with any job folders a previous server
+process left behind. The current
 in-process job registry is appropriate for a single API process; a deployment
 using multiple API replicas must move job state to its shared queue/database
 before scaling the API horizontally.
@@ -218,12 +225,67 @@ ROBOFLOW_TEST_VIDEO=/absolute/path/to/short-throw.mp4 \
 python scripts/test_roboflow_integration.py
 ```
 
-It verifies that OpenCV can open the resulting annotated MP4. A release is
+It verifies that OpenCV can open the resulting annotated MP4 and that the
+per-frame track holds positions inside the frame. A release is
 still not end-to-end verified until that output is also played in the Android
 app on a device. Rotate a Roboflow credential in the Roboflow dashboard, update
 only the server secret manager/environment, and restart the API. Never put the
 key in Android source, resources, `BuildConfig`, client-readable configuration,
 an APK, or Git history.
+
+#### Clip range and per-frame track
+
+`POST /api/disc-flight/jobs` takes two optional multipart fields, `start_ms`
+and `end_ms`. When either is present, the server copies only that range of the
+upload into a new MP4 before it opens the Roboflow session, because inference
+credits are spent per frame. A range that starts past the end of the video
+fails the job with "The selected part of the video has no frames."
+
+When a job completes, its status includes `trackUrl`. That endpoint returns the
+highest-confidence disc box in each frame, preferring the Workflow's
+`tracked_disc` output and falling back to `disc_detections`:
+
+```json
+{
+  "fps": 30.0,
+  "frameCount": 90,
+  "detections": [
+    {"frame": 0, "timeMs": 0, "x": 0.412, "y": 0.633,
+     "width": 0.021, "height": 0.018, "confidence": 0.87}
+  ]
+}
+```
+
+Frame 0 is the first frame of the processed range, and `timeMs` counts from
+there. `x`/`y` is the box center, and every value is a fraction of the frame
+width or height. The Android flight player's **Auto-detect** turns this into
+its trajectory.
+
+#### The client key
+
+The app needs to reach the Roboflow endpoints without each user entering the
+server's `APP_API_KEY`. `CLIENT_API_KEY` is a second, separate server key for
+that:
+
+1. Generate a value: `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
+2. Set it as `CLIENT_API_KEY` in the server's environment (for Render, the
+   service's **Environment** settings), next to `ROBOFLOW_API_KEY`, and
+   redeploy.
+3. Add the same value as a GitHub repository secret named `CLIENT_API_KEY`.
+   `.github/workflows/build.yml` passes it to Gradle as `DFS_CLIENT_API_KEY`,
+   which builds it into `BuildConfig.CLIENT_API_KEY`.
+
+The app sends the built-in key only to the default server,
+`https://discflightschool.onrender.com`. A user who saves their own key in
+Training Settings sends that key instead, to whichever server they set. A
+build without the secret has an empty client key, and its Auto-detect falls
+back to the on-device detector unless the user saves a key.
+
+Because the key is in every APK, treat it as public: it opens only the
+Roboflow endpoints, so its worst case is spent inference credits. To rotate it,
+change the server's `CLIENT_API_KEY` and the repository secret together, then
+ship a new build. Builds with the old key fall back to on-device detection
+until users update.
 
 #### Single-image disc detection
 
@@ -309,10 +371,11 @@ seconds when every attempt times out, and each call spends inference credits.
 In the Android app, the **Cloud disc detection** card in Training Settings
 calls this endpoint. **Test cloud detection** opens the photo picker, scales
 the photo so its longer side is at most 1,280 pixels, and sends it as a JPEG
-with the training API key. It then shows the photo with a box on each disc and
-a one-line summary. The button stays disabled until a training API key is
-saved. `DiscDetectionClient` makes the request and reports the server's
-`error` message when a call fails.
+with that key. It then shows the photo with a box on each disc and
+a one-line summary. The button is enabled when the app has a key for the
+server: the built-in client key on the default server, or a saved training API
+key. `DiscDetectionClient` makes the request and reports the server's `error`
+message when a call fails.
 
 `server/test_disc_detection.py` covers the module and the endpoint by
 replaying a response captured from the real Workflow, so it needs no key and

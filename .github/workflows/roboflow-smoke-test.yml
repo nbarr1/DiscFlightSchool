@@ -15,6 +15,13 @@ on:
           the Workflow returns its named outputs, but cannot detect a real disc.
         required: false
         type: string
+      clip_ms:
+        description: >-
+          Optional "start,end" range in milliseconds to process, as the app's
+          Auto-detect sends it, such as 500,2500. Either side may be empty.
+          Leave empty to process the whole video.
+        required: false
+        type: string
 
 jobs:
   roboflow-smoke-test:
@@ -72,24 +79,33 @@ jobs:
           else
             echo "No video_url given; generating a synthetic clip."
             python scripts/make_synthetic_throw.py "${RUNNER_TEMP}/throw.mp4"
+            # Lets the smoke test check each tracked position against the
+            # dot's known path.
+            echo "ROBOFLOW_TEST_SYNTHETIC=1" >> "$GITHUB_ENV"
           fi
           ls -l "${RUNNER_TEMP}/throw.mp4"
 
       # Fails when the Workflow cannot be reached, when it returns no annotated
-      # frames (which is what checks the `output_image` name), or when the
-      # assembled MP4 will not open. Its summary line reports how many frames
-      # carried `disc_detections`.
+      # frames (which is what checks the `output_image` name), when the
+      # assembled MP4 will not open, or when the per-frame track is malformed.
+      # On the synthetic clip it also fails when the tracked positions are
+      # far from the dot. Its summary line reports how many frames carried
+      # `disc_detections`.
       - name: Run the Workflow smoke test
         env:
           ROBOFLOW_API_KEY: ${{ secrets.ROBOFLOW_API_KEY }}
           ROBOFLOW_TEST_VIDEO: ${{ runner.temp }}/throw.mp4
           ROBOFLOW_TEST_OUTPUT: ${{ runner.temp }}/disc-flight-annotated.mp4
+          ROBOFLOW_TEST_TRACK: ${{ runner.temp }}/disc-flight-track.json
+          ROBOFLOW_TEST_CLIP_MS: ${{ inputs.clip_ms }}
         run: python scripts/test_roboflow_integration.py
 
-      - name: Upload the annotated video
+      - name: Upload the annotated video and track
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: disc-flight-annotated
-          path: ${{ runner.temp }}/disc-flight-annotated.mp4
+          path: |
+            ${{ runner.temp }}/disc-flight-annotated.mp4
+            ${{ runner.temp }}/disc-flight-track.json
           if-no-files-found: ignore

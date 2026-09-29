@@ -3,7 +3,6 @@ package com.discflightschool.app.data
 import android.content.Context
 import android.util.Log
 import com.discflightschool.core.baseline.ProBaselineDatabase
-import com.discflightschool.core.data.SecretStore
 import com.discflightschool.core.knowledge.KnowledgeSearch
 import com.discflightschool.core.model.KBArticle
 import com.discflightschool.core.model.KBCategory
@@ -32,16 +31,8 @@ class AssetContent(private val context: Context) {
     }
 }
 
-/**
- * The bundled research library, and the API key AI search needs.
- *
- * Content is parsed once on first use; the key is read from encrypted storage
- * and never from ordinary preferences.
- */
-class KnowledgeBaseRepository(
-    private val assets: AssetContent,
-    private val secrets: SecretStore,
-) {
+/** The bundled research library, parsed once on first use. */
+class KnowledgeBaseRepository(private val assets: AssetContent) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     private val loadMutex = Mutex()
 
@@ -50,11 +41,6 @@ class KnowledgeBaseRepository(
 
     private val _isLoaded = MutableStateFlow(false)
     val isLoaded: StateFlow<Boolean> = _isLoaded.asStateFlow()
-
-    private val _hasApiKey = MutableStateFlow(
-        runCatching { secrets.read(API_KEY) }.getOrNull().orEmpty().isNotEmpty(),
-    )
-    val hasApiKey: StateFlow<Boolean> = _hasApiKey.asStateFlow()
 
     val studies: List<KBStudy> get() = _content.value.studies
     val articles: List<KBArticle> get() = _content.value.articles
@@ -100,21 +86,8 @@ class KnowledgeBaseRepository(
     fun searchLocal(query: String): String =
         KnowledgeSearch.searchLocal(query, articles, studies)
 
-    fun apiKey(): String = runCatching { secrets.read(API_KEY) }.getOrNull().orEmpty()
-
-    fun setApiKey(key: String) {
-        val trimmed = key.trim()
-        runCatching {
-            if (trimmed.isEmpty()) secrets.delete(API_KEY) else secrets.write(API_KEY, trimmed)
-        }.onFailure { Log.w(TAG, "Could not update the stored Anthropic API key", it) }
-        _hasApiKey.value = trimmed.isNotEmpty()
-    }
-
-    fun clearApiKey() = setApiKey("")
-
     private companion object {
         const val TAG = "KnowledgeBaseRepository"
-        const val API_KEY = "anthropic_api_key"
     }
 }
 

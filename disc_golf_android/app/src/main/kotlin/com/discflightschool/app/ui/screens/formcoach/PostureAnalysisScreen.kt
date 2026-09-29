@@ -65,6 +65,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -108,6 +109,7 @@ fun PostureAnalysisScreen(
     onOpenArticle: (String) -> Unit,
 ) {
     val container = LocalAppContainer.current
+    val context = LocalContext.current
     val workbench = container.workbench
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -180,7 +182,9 @@ fun PostureAnalysisScreen(
             isAnalyzing = true
             val result = container.postureAnalyzer.analyzeForm(
                 videoPath = videoPath,
-                cacheDir = container.trainingDataDir.parentFile ?: container.trainingDataDir,
+                // The cache, not the files directory: frames orphaned by a
+                // process killed mid-analysis are then the system's to reclaim.
+                cacheDir = context.cacheDir,
                 startMs = startMs,
                 frameCount = workbench.analysisFrameCount.takeIf { it > 0 } ?: 30,
                 isLeftHanded = workbench.isLeftHanded,

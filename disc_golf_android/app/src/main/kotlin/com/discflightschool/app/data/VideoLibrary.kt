@@ -132,9 +132,20 @@ class VideoLibrary(private val context: Context) {
                 }
 
                 val uri = resolver.insert(collection, values) ?: return@runCatching false
-                resolver.openOutputStream(uri)?.use { output ->
-                    file.inputStream().use { input -> input.copyTo(output) }
-                } ?: return@runCatching false
+                // Removed again on any failure below, so a partial copy never
+                // lingers in the user's gallery as a broken entry.
+                val copied = runCatching {
+                    resolver.openOutputStream(uri)?.use { output ->
+                        file.inputStream().use { input -> input.copyTo(output) }
+                    } != null
+                }.getOrElse {
+                    Log.w(TAG, "Could not copy ${file.name} into the gallery", it)
+                    false
+                }
+                if (!copied) {
+                    runCatching { resolver.delete(uri, null, null) }
+                    return@runCatching false
+                }
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     values.clear()

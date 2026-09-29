@@ -78,9 +78,19 @@ fun FormCoachScreen(
     var playersLoaded by remember { mutableStateOf(false) }
     var proMenuExpanded by remember { mutableStateOf(false) }
 
-    var throwType by remember { mutableStateOf(workbench.throwType) }
+    // Handedness and throw type are remembered across launches — including the
+    // values carried over from the Flutter app — rather than resetting to a
+    // right-handed backhand every time the process starts.
+    val preferences = container.appPreferences
+    var throwType by remember {
+        mutableStateOf(
+            preferences.preferredThrowType
+                .takeIf { it == ThrowTypes.BACKHAND || it == ThrowTypes.FOREHAND }
+                ?: ThrowTypes.BACKHAND,
+        )
+    }
     var selectedPro by remember { mutableStateOf(workbench.proPlayer) }
-    var isLeftHanded by remember { mutableStateOf(workbench.isLeftHanded) }
+    var isLeftHanded by remember { mutableStateOf(preferences.isLeftHanded) }
 
     LaunchedEffect(Unit) {
         val database = container.proBaselineRepository.database()
@@ -138,6 +148,7 @@ fun FormCoachScreen(
                             selected = throwType == ThrowTypes.BACKHAND,
                             onClick = {
                                 throwType = ThrowTypes.BACKHAND
+                                preferences.preferredThrowType = ThrowTypes.BACKHAND
                             },
                             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                         ) {
@@ -147,6 +158,7 @@ fun FormCoachScreen(
                             selected = throwType == ThrowTypes.FOREHAND,
                             onClick = {
                                 throwType = ThrowTypes.FOREHAND
+                                preferences.preferredThrowType = ThrowTypes.FOREHAND
                                 // Not every pro has forehand data; a stale
                                 // selection would compare against nothing.
                                 if (selectedPro != null && selectedPro !in playersWithForehand) {
@@ -224,7 +236,13 @@ fun FormCoachScreen(
                                 color = AppColors.Muted,
                             )
                         }
-                        Switch(checked = isLeftHanded, onCheckedChange = { isLeftHanded = it })
+                        Switch(
+                            checked = isLeftHanded,
+                            onCheckedChange = {
+                                isLeftHanded = it
+                                preferences.isLeftHanded = it
+                            },
+                        )
                     }
                 }
             }

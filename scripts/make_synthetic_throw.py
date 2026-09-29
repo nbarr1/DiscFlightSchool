@@ -4,7 +4,9 @@
 A disc-sized dot on an arc over a green field. This is deliberately not a real
 throw: it exists so the smoke test can prove the WebRTC session connects and
 the Workflow returns its named outputs without anyone having to host a video.
-Expect no detections from it — pass a real clip to check those.
+The Workflow's detector does box the white dot and trace its arc, so the run
+exercises detection and tracking as well, but that says nothing about accuracy
+on real footage — pass a real clip to check that.
 """
 
 from __future__ import annotations
@@ -16,6 +18,16 @@ import cv2
 import numpy as np
 
 WIDTH, HEIGHT, FPS, SECONDS = 640, 360, 30, 3
+TOTAL_FRAMES = FPS * SECONDS
+
+
+def dot_position(index: int) -> tuple[int, int]:
+    """The dot's center in pixels on frame `index`, which the Roboflow smoke
+    test compares against the per-frame track."""
+    progress = index / max(1, TOTAL_FRAMES - 1)
+    x = int(60 + progress * (WIDTH - 140))
+    y = int(HEIGHT * 0.7 - np.sin(progress * np.pi) * HEIGHT * 0.45)
+    return x, y
 
 
 def main() -> None:
@@ -27,18 +39,14 @@ def main() -> None:
     )
     if not writer.isOpened():
         raise SystemExit(f"Could not open a writer for {destination}")
-    total = FPS * SECONDS
     try:
-        for index in range(total):
+        for index in range(TOTAL_FRAMES):
             frame = np.full((HEIGHT, WIDTH, 3), (40, 120, 40), dtype=np.uint8)
-            progress = index / max(1, total - 1)
-            x = int(60 + progress * (WIDTH - 140))
-            y = int(HEIGHT * 0.7 - np.sin(progress * np.pi) * HEIGHT * 0.45)
-            cv2.circle(frame, (x, y), 12, (245, 245, 245), -1)
+            cv2.circle(frame, dot_position(index), 12, (245, 245, 245), -1)
             writer.write(frame)
     finally:
         writer.release()
-    print(f"Wrote {destination} ({total} frames at {FPS} fps)")
+    print(f"Wrote {destination} ({TOTAL_FRAMES} frames at {FPS} fps)")
 
 
 if __name__ == "__main__":

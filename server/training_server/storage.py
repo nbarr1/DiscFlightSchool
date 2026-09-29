@@ -14,7 +14,12 @@ from typing import Any
 
 from fastapi import UploadFile
 
-from .config import Settings, render_dataset_yaml
+from .config import (
+    Settings,
+    is_legacy_dataset_yaml,
+    render_dataset_yaml,
+    write_training_image_list,
+)
 from .protocols import DatasetCounts, ModelInfo
 from .validation import normalized_image_ext, read_and_validate_upload, safe_child
 
@@ -32,8 +37,12 @@ class FileStorage:
         self.settings.images_dir.mkdir(parents=True, exist_ok=True)
         self.settings.labels_dir.mkdir(parents=True, exist_ok=True)
         self.settings.models_dir.mkdir(parents=True, exist_ok=True)
-        if not self.settings.dataset_yaml.exists():
-            self.settings.dataset_yaml.write_text(render_dataset_yaml(self.settings.dataset_dir))
+        dataset_yaml = self.settings.dataset_yaml
+        if not dataset_yaml.exists() or is_legacy_dataset_yaml(
+            dataset_yaml.read_text(), self.settings.dataset_dir
+        ):
+            dataset_yaml.write_text(render_dataset_yaml(self.settings.dataset_dir))
+        write_training_image_list(self.settings.dataset_dir)
 
     def load_stats(self) -> dict[str, Any]:
         if self.settings.stats_file.exists():
@@ -141,12 +150,15 @@ class FileStorage:
         export_dir = self.settings.export_dir
         export_dir.mkdir(parents=True, exist_ok=True)
         zip_path = export_dir / f"training_export_{uuid.uuid4().hex}.zip"
+        # Current as of this export, so the archive trains as it stands.
+        write_training_image_list(self.settings.dataset_dir)
         shutil.make_archive(str(zip_path.with_suffix("")), "zip", str(self.settings.dataset_dir))
         return zip_path
 
     def materialize_dataset(self) -> Path:
         # Already a local YOLO-shaped directory (dataset.yaml + images/train +
-        # labels/train) — nothing to assemble.
+        # labels/train); only the list of images to train on needs refreshing.
+        write_training_image_list(self.settings.dataset_dir)
         return self.settings.dataset_dir
 
     def publish_model(self, local_tflite_path: Path, *, version: str) -> ModelInfo:

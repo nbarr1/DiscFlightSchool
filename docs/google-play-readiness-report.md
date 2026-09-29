@@ -123,7 +123,7 @@ The blocking gaps are almost entirely **compliance/store-listing gaps**, not cod
 * Based on what the code actually does, the Data Safety form should declare:
   * **Photos and videos** — collected (training uploads, opt-in), processed on-device by default (pose detection via `google_mlkit_pose_detection`, disc detection via bundled `tflite_flutter` model — both on-device, not sent anywhere unless the user opts in).
   * **Audio** — collected as part of recorded throw videos (justified by `RECORD_AUDIO` + iOS `NSMicrophoneUsageDescription`).
-  * **App activity / search terms** — sent to a third party (Anthropic) only if/when the user adds their own API key and uses "AI Search."
+  * **App activity / search terms** — sent to a third party (Anthropic) only if/when the user adds their own API key and uses "AI Search." *AI Search has since been removed from the app; knowledge base questions are answered on the device and nothing is sent to Anthropic, so this item no longer applies.*
   * No account/identity data is collected — the app has no login system, which meaningfully reduces scope here versus TennisScoring (which has Firebase Auth, FCM tokens, messaging, etc.).
   * Data is **not encrypted in transit** by default only in the trivial sense that `_isAllowedServerUri` also permits plain `http://localhost`/`127.0.0.1`/`::1` — that's a developer-mode allowance, not reachable from a real device pointed at production, so it doesn't affect the Data Safety answer, but confirm the shipped default (`https://discflightschool.onrender.com`) is what ends up in the build.
 

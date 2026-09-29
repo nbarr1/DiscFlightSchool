@@ -188,7 +188,7 @@ fun PoseCorrectionScreen(
         val imagePosition = SkeletonOverlay.canvasToImage(canvasPosition, videoSize, frame)
         frame.keyPoints[key] = imagePosition
         recordCorrection(key, imagePosition)
-        container.postureAnalyzer.recalculateFrameAngles(frame)
+        container.postureAnalyzer.recalculateFrameAngles(frame, workbench.isLeftHanded)
         revision++
     }
 
@@ -207,7 +207,7 @@ fun PoseCorrectionScreen(
             corrections.getOrPut(key) { mutableMapOf() }[currentFrame] = moved
         }
         if (currentFrame !in correctedFrames) correctedFrames += currentFrame
-        container.postureAnalyzer.recalculateFrameAngles(frame)
+        container.postureAnalyzer.recalculateFrameAngles(frame, workbench.isLeftHanded)
         revision++
     }
 
@@ -218,7 +218,7 @@ fun PoseCorrectionScreen(
             corrections.getOrPut(key) { mutableMapOf() }[currentFrame] = position
         }
         if (currentFrame !in correctedFrames) correctedFrames += currentFrame
-        container.postureAnalyzer.recalculateFrameAngles(frame)
+        container.postureAnalyzer.recalculateFrameAngles(frame, workbench.isLeftHanded)
         revision++
     }
 
@@ -245,7 +245,11 @@ fun PoseCorrectionScreen(
 
     /**
      * Interpolate every correction across the frames it spans, then recompute
-     * the angles for the whole analysis.
+     * the angles of the frames whose landmarks moved.
+     *
+     * Frames outside every corrected span keep the angles the analysis
+     * measured: recomputing them from their 2-D landmarks would silently
+     * replace depth-aware angles, and the X-factor, that nobody edited.
      */
     fun applyCorrections() {
         if (corrections.isEmpty()) {
@@ -253,6 +257,7 @@ fun PoseCorrectionScreen(
             return
         }
 
+        val changedFrames = sortedSetOf<Int>()
         for ((landmark, anchors) in corrections) {
             if (anchors.isEmpty()) continue
             val interpolated = AngleCalculator.interpolateAnchors(anchors)
@@ -260,12 +265,17 @@ fun PoseCorrectionScreen(
             val last = anchors.keys.max()
             for (index in first..last) {
                 val position = interpolated[index] ?: continue
-                analysis.frames.getOrNull(index)?.keyPoints?.put(landmark, position)
+                val frame = analysis.frames.getOrNull(index) ?: continue
+                frame.keyPoints[landmark] = position
+                changedFrames += index
             }
         }
 
-        for (frame in analysis.frames) {
-            container.postureAnalyzer.recalculateFrameAngles(frame)
+        for (index in changedFrames) {
+            container.postureAnalyzer.recalculateFrameAngles(
+                analysis.frames[index],
+                workbench.isLeftHanded,
+            )
         }
 
         workbench.analysis = analysis

@@ -79,12 +79,20 @@ class PostureAnalyzer(private val frameExtractor: FrameExtractor) {
 
             var imageWidth: Double? = null
             var imageHeight: Double? = null
-            val frames = ArrayList<FormFrame>(extracted.size)
+            // One slot per sampled index, including any extraction skipped.
+            // Every screen maps a frame's list position straight to a
+            // playback time (start + position × interval), so a missing slot
+            // would pair each later skeleton with footage from the wrong moment.
+            val pathsByIndex = extracted.associate { it.index to it.path }
+            val sampledCount = extracted.last().index + 1
+            val frames = ArrayList<FormFrame>(sampledCount)
 
-            for ((i, frame) in extracted.withIndex()) {
-                onProgress?.invoke((i + 1).toFloat() / extracted.size)
+            for (i in 0 until sampledCount) {
+                onProgress?.invoke((i + 1).toFloat() / sampledCount)
 
-                val bitmap = runCatching { BitmapFactory.decodeFile(frame.path) }.getOrNull()
+                val bitmap = pathsByIndex[i]?.let { path ->
+                    runCatching { BitmapFactory.decodeFile(path) }.getOrNull()
+                }
                 if (bitmap == null) {
                     frames += FormFrame(
                         timestampMs = i * FrameExtractor.POSE_INTERVAL_MS,
@@ -102,7 +110,7 @@ class PostureAnalyzer(private val frameExtractor: FrameExtractor) {
                 val pose = runCatching {
                     Tasks.await(detector.process(InputImage.fromBitmap(bitmap, 0)))
                 }.getOrElse {
-                    Log.w(TAG, "Pose detection failed on frame ${frame.index}", it)
+                    Log.w(TAG, "Pose detection failed on frame $i", it)
                     null
                 }
                 bitmap.recycle()
@@ -145,6 +153,20 @@ class PostureAnalyzer(private val frameExtractor: FrameExtractor) {
                 )
             }
 
+            // Frames before the first decodable image have no size yet. Pose
+            // correction reads a frame without one as normalized coordinates,
+            // so a landmark placed there would be interpolated against pixel
+            // positions in its neighbours.
+            val knownWidth = imageWidth
+            val knownHeight = imageHeight
+            if (knownWidth != null && knownHeight != null) {
+                for (i in frames.indices) {
+                    if (frames[i].imageWidth == null) {
+                        frames[i] = frames[i].copy(imageWidth = knownWidth, imageHeight = knownHeight)
+                    }
+                }
+            }
+
             PostureMath.smoothFrameAngles(frames)
             PostureMath.smoothKeyPoints(frames)
 
@@ -163,11 +185,18 @@ class PostureAnalyzer(private val frameExtractor: FrameExtractor) {
         }
     }
 
-    /** Recompute a frame's angles after the user has moved its landmarks. */
-    fun recalculateFrameAngles(frame: FormFrame) {
+    /**
+     * Recompute a frame's angles after the user has moved its landmarks.
+     *
+     * Applies the same handedness mirroring and range limits as [analyzeForm].
+     * Without them, a left-handed thrower's corrected frames would compare
+     * their off arm against the pro's throwing arm.
+     */
+    fun recalculateFrameAngles(frame: FormFrame, isLeftHanded: Boolean) {
         val recalculated = AngleCalculator.calculateFromKeyPoints(frame.keyPoints)
+        val oriented = if (isLeftHanded) PostureMath.mirrorAngles(recalculated) else recalculated
         frame.angles.clear()
-        frame.angles.putAll(recalculated)
+        frame.angles.putAll(PostureMath.clampToPhysiologicalLimits(oriented))
     }
 
     fun close() {

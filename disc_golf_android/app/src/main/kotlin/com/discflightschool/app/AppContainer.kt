@@ -1,7 +1,6 @@
 package com.discflightschool.app
 
 import android.content.Context
-import com.discflightschool.app.data.AiSearchClient
 import com.discflightschool.app.data.AssetContent
 import com.discflightschool.app.data.EncryptedSecretStore
 import com.discflightschool.app.data.DiscDetectionClient
@@ -50,7 +49,12 @@ class AppContainer(context: Context) {
         // it visible to the repositories below.
         migrateFlutterPreferences(appContext, it)
     }
-    private val secretStore = EncryptedSecretStore(appContext)
+    private val secretStore = EncryptedSecretStore(appContext).also {
+        // Earlier versions let the user store an Anthropic API key for AI
+        // search. That feature is gone, so nothing reads the key any more;
+        // removing it keeps a credential from lingering on the device unused.
+        it.delete(LEGACY_ANTHROPIC_API_KEY)
+    }
 
     /** The root of everything the app collects for detector training. */
     val trainingDataDir: File = File(appContext.filesDir, "training_data")
@@ -66,11 +70,12 @@ class AppContainer(context: Context) {
         store = preferencesStore,
         secrets = secretStore,
         manifestStore = FileManifestStore(File(trainingDataDir, "manifest.json")),
+        builtInClientKey = BuildConfig.CLIENT_API_KEY,
     )
 
     private val assets = AssetContent(appContext)
 
-    val knowledgeBaseRepository = KnowledgeBaseRepository(assets, secretStore)
+    val knowledgeBaseRepository = KnowledgeBaseRepository(assets)
     val proBaselineRepository = ProBaselineRepository(assets)
 
     val frameExtractor = FrameExtractor()
@@ -96,7 +101,6 @@ class AppContainer(context: Context) {
         dataDir = trainingDataDir,
     )
 
-    val aiSearchClient = AiSearchClient()
     val discFlightClient = DiscFlightClient(
         File(appContext.cacheDir, "disc_flight_results"),
         trainingDataRepository,
@@ -111,5 +115,10 @@ class AppContainer(context: Context) {
     fun shutdown() {
         discDetector.close()
         postureAnalyzer.close()
+    }
+
+    private companion object {
+        /** Where the removed AI search feature kept its key in encrypted storage. */
+        const val LEGACY_ANTHROPIC_API_KEY = "anthropic_api_key"
     }
 }

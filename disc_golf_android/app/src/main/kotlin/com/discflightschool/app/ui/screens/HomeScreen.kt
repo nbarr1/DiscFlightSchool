@@ -113,7 +113,7 @@ fun HomeScreen(
             Spacer(Modifier.height(16.dp))
             FeatureCard(
                 title = "Knowledge Base",
-                description = "Research-backed tips and AI-powered FAQ",
+                description = "Research-backed tips and FAQ",
                 icon = Icons.AutoMirrored.Filled.MenuBook,
                 accent = AppColors.KnowledgeBase,
                 onClick = onOpenKnowledgeBase,

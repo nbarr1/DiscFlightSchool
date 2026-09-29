@@ -132,15 +132,21 @@ def create_app(
         )
         return response
 
-    def require_api_key(x_app_key: str | None) -> JSONResponse | None:
+    def require_api_key(x_app_key: str | None, *, allow_client: bool = False) -> JSONResponse | None:
         # compare_digest keeps the comparison constant-time with respect to the
         # secret, so a caller cannot recover the key byte-by-byte from response
         # timing. It requires str/bytes, hence the None guard.
-        if x_app_key is None or not hmac.compare_digest(
-            x_app_key, settings.app_api_key
-        ):
-            return JSONResponse({"error": "Invalid or missing API key"}, status_code=403)
-        return None
+        if x_app_key is not None:
+            if hmac.compare_digest(x_app_key, settings.app_api_key):
+                return None
+            # The client key ships inside the app, so it opens only the
+            # Roboflow detection endpoints: spending detection credits is the
+            # most anyone who extracts it can do.
+            if allow_client and settings.client_api_key and hmac.compare_digest(
+                x_app_key, settings.client_api_key
+            ):
+                return None
+        return JSONResponse({"error": "Invalid or missing API key"}, status_code=403)
 
     def owned_job(job_id: str, token: str | None):
         job = flight_jobs.get(job_id, token)
@@ -151,12 +157,23 @@ def create_app(
     @app.post("/api/disc-flight/jobs", status_code=202)
     async def create_disc_flight_job(
         video: UploadFile | None = File(None),
+        start_ms: int | None = Form(None),
+        end_ms: int | None = Form(None),
         x_app_key: str | None = Header(None),
     ):
-        if auth_error := require_api_key(x_app_key):
+        if auth_error := require_api_key(x_app_key, allow_client=True):
             return auth_error
         if video is None:
             return JSONResponse({"error": "A video file is required"}, status_code=400)
+        # Optional: process only this part of the upload, in milliseconds.
+        if (start_ms is not None and start_ms < 0) or (
+            end_ms is not None and end_ms <= (start_ms or 0)
+        ):
+            return JSONResponse(
+                {"error": "start_ms must be 0 or more, and end_ms must be after it"},
+                status_code=400,
+            )
+        clip = None if start_ms is None and end_ms is None else (start_ms or 0, end_ms)
         content_type = (video.content_type or "").split(";", 1)[0].lower()
         suffix = Path(video.filename or "").suffix.lower()
         expected_suffix = ALLOWED_VIDEO_TYPES.get(content_type)
@@ -165,6 +182,13 @@ def create_app(
             return JSONResponse(
                 {"error": "Unsupported video format. Use MP4, MOV, WebM, or MKV."},
                 status_code=415,
+            )
+        # Before copying and hashing the upload, which can be hundreds of
+        # megabytes that cannot be processed without the key.
+        if not settings.roboflow_api_key:
+            return JSONResponse(
+                {"error": "Roboflow processing is not configured on this server"},
+                status_code=503,
             )
         temporary = temporary_upload()
         size = 0
@@ -182,13 +206,12 @@ def create_app(
                     destination.write(chunk)
             if size == 0:
                 return JSONResponse({"error": "The uploaded video is empty"}, status_code=400)
-            if not settings.roboflow_api_key:
-                return JSONResponse(
-                    {"error": "Roboflow processing is not configured on this server"},
-                    status_code=503,
-                )
+            # Two ranges of one video are different jobs, not duplicates.
+            source_key = digest.hexdigest()
+            if clip is not None:
+                source_key = f"{source_key}:{clip[0]}:{clip[1]}"
             try:
-                job, token = flight_jobs.create(temporary, suffix, digest.hexdigest())
+                job, token = flight_jobs.create(temporary, suffix, source_key, clip=clip)
             except ValueError as exc:
                 return JSONResponse({"error": str(exc)}, status_code=409)
             return {"jobId": job.id, "status": "queued", "jobToken": token}
@@ -202,7 +225,7 @@ def create_app(
         x_app_key: str | None = Header(None),
         x_job_token: str | None = Header(None),
     ):
-        if auth_error := require_api_key(x_app_key):
+        if auth_error := require_api_key(x_app_key, allow_client=True):
             return auth_error
         job = owned_job(job_id, x_job_token)
         return job if isinstance(job, JSONResponse) else job.public()
@@ -213,7 +236,7 @@ def create_app(
         x_app_key: str | None = Header(None),
         x_job_token: str | None = Header(None),
     ):
-        if auth_error := require_api_key(x_app_key):
+        if auth_error := require_api_key(x_app_key, allow_client=True):
             return auth_error
         job = owned_job(job_id, x_job_token)
         if isinstance(job, JSONResponse):
@@ -222,13 +245,28 @@ def create_app(
             return JSONResponse({"error": "Result is not ready"}, status_code=409)
         return FileResponse(job.output_path, media_type="video/mp4", filename="disc-flight.mp4")
 
+    @app.get("/api/disc-flight/jobs/{job_id}/track")
+    async def get_disc_flight_track(
+        job_id: str,
+        x_app_key: str | None = Header(None),
+        x_job_token: str | None = Header(None),
+    ):
+        if auth_error := require_api_key(x_app_key, allow_client=True):
+            return auth_error
+        job = owned_job(job_id, x_job_token)
+        if isinstance(job, JSONResponse):
+            return job
+        if job.status != "complete" or job.track is None:
+            return JSONResponse({"error": "Track is not ready"}, status_code=409)
+        return job.track
+
     @app.delete("/api/disc-flight/jobs/{job_id}")
     async def cancel_disc_flight_job(
         job_id: str,
         x_app_key: str | None = Header(None),
         x_job_token: str | None = Header(None),
     ):
-        if auth_error := require_api_key(x_app_key):
+        if auth_error := require_api_key(x_app_key, allow_client=True):
             return auth_error
         job = owned_job(job_id, x_job_token)
         if isinstance(job, JSONResponse):
@@ -244,7 +282,7 @@ def create_app(
         image: UploadFile | None = File(None),
         x_app_key: str | None = Header(None),
     ):
-        if auth_error := require_api_key(x_app_key):
+        if auth_error := require_api_key(x_app_key, allow_client=True):
             return auth_error
         if image is None:
             return JSONResponse({"error": "An image file is required"}, status_code=400)
@@ -408,6 +446,8 @@ def create_app(
                 "GET  /api/model/download",
                 "POST /api/disc-flight/jobs",
                 "GET  /api/disc-flight/jobs/{jobId}",
+                "GET  /api/disc-flight/jobs/{jobId}/result",
+                "GET  /api/disc-flight/jobs/{jobId}/track",
                 "DELETE /api/disc-flight/jobs/{jobId}",
                 "POST /api/disc-detection",
                 "GET  /health",

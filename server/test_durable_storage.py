@@ -14,6 +14,7 @@ import os
 import tempfile
 import unittest
 import uuid
+import zipfile
 from pathlib import Path
 
 os.environ.setdefault("APP_API_KEY", "test-key")
@@ -103,6 +104,24 @@ class PostgresMinioStorageBehaviourTests(unittest.TestCase):
         label_path = dataset_dir / "labels" / "train" / f"{sample_id}_full.txt"
         self.assertTrue(label_path.exists())
         self.assertEqual(VALID_LABEL, label_path.read_text())
+
+    def test_export_does_not_touch_the_training_dataset_directory(self):
+        sample_id = self._sample_id()
+        self.store(sample_id)
+        dataset_dir = self.storage.materialize_dataset()
+        marker = dataset_dir / "in-use-by-training"
+        marker.write_text("")
+
+        zip_path = self.storage.build_training_export()
+
+        # Training reads materialize_dataset()'s directory; an export that
+        # rebuilt it would delete files out from under a running job.
+        self.assertTrue(marker.exists())
+        with zipfile.ZipFile(zip_path) as archive:
+            names = archive.namelist()
+        self.assertTrue(any(f"{sample_id}_full" in name for name in names), names)
+        leftovers = [p for p in self.settings.export_dir.iterdir() if p != zip_path]
+        self.assertEqual([], leftovers)
 
     def test_publish_model_round_trips_through_minio(self):
         with tempfile.NamedTemporaryFile(suffix=".tflite", delete=False) as tmp:

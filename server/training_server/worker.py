@@ -26,6 +26,8 @@ from .training_job import TrainingJobError, run_yolo_training_and_export
 
 logger = logging.getLogger("disc_flight_school.training_server.worker")
 
+STALE_RUN_SLACK_SECONDS = 1800
+
 
 def _run_durable_worker(settings: Settings, poll_seconds: int) -> None:
     from psycopg_pool import ConnectionPool
@@ -47,9 +49,22 @@ def _run_durable_worker(settings: Settings, poll_seconds: int) -> None:
 
     logger.info(json.dumps({"event": "worker.ready", "mode": "durable-queue"}))
 
+    # The longest a live run can last, plus slack for dataset download and
+    # model upload around the two subprocesses.
+    stale_after_seconds = (
+        settings.training_timeout_seconds + settings.export_timeout_seconds + STALE_RUN_SLACK_SECONDS
+    )
+
+    def release_stale_runs() -> None:
+        released = run_store.fail_stale_runs(older_than_seconds=stale_after_seconds)
+        if released:
+            logger.warning(json.dumps({"event": "worker.stale_runs_failed", "count": released}))
+
+    release_stale_runs()
     while True:
         job_id = job_queue.pop(poll_seconds)
         if job_id is None:
+            release_stale_runs()
             continue
 
         logger.info(json.dumps({"event": "worker.job.claimed", "job_id": job_id}))
