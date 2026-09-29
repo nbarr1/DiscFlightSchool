@@ -94,11 +94,14 @@ class FlightVideoExporter(private val context: Context) {
         val mediaItem = MediaItem.Builder()
             .setUri(File(videoPath).toURI().toString())
             .apply {
-                if (trimEndMs != null) {
+                // Clipped whenever either end is trimmed: the overlay's frame
+                // times are relative to the trim start, so an unclipped start
+                // would draw the whole trail that far ahead of the disc.
+                if (trimStartMs > 0 || trimEndMs != null) {
                     setClippingConfiguration(
                         MediaItem.ClippingConfiguration.Builder()
                             .setStartPositionMs(trimStartMs)
-                            .setEndPositionMs(trimEndMs)
+                            .apply { if (trimEndMs != null) setEndPositionMs(trimEndMs) }
                             .build(),
                     )
                 }

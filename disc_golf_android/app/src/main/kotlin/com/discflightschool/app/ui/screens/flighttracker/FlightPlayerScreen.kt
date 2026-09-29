@@ -185,6 +185,9 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
     var qualityReport by remember { mutableStateOf<DetectionQualityReport?>(null) }
 
     val keyframes = remember { mutableStateListOf<FlightKeyframe>() }
+    // Keyframes already turned into training samples. Processing again, or
+    // refining after processing, must not save the same marks a second time.
+    val collectedKeyframes = remember { mutableSetOf<FlightKeyframe>() }
     val anchors = remember { mutableStateListOf<WorldAnchorFrame>() }
     var pendingAnchor by remember { mutableStateOf<Vec2?>(null) }
 
@@ -251,8 +254,9 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
 
     suspend fun collectTrainingData() {
         if (!isOptedIn) return
-        val data = keyframes
-            .filterNot { it.derived }
+        val fresh = keyframes.filterNot { it.derived || it in collectedKeyframes }
+        collectedKeyframes += fresh
+        val data = fresh
             .map {
                 KeyframeData(
                     frameIndex = it.frameIndex,
@@ -481,14 +485,20 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
                 onProgress = { exportProgress = it },
             )
 
-            container.flightGalleryRepository.save(exported.absolutePath)
+            val savedToApp = container.flightGalleryRepository.save(exported.absolutePath) != null
             val savedToGallery = container.videoLibrary.saveToGallery(exported)
+            // Both destinations hold their own copy; this render is only a
+            // staging file, and each export would otherwise leave another
+            // full-length video in the cache.
+            exported.delete()
 
             snackbarHostState.showSnackbar(
-                if (savedToGallery) {
-                    "Saved to the Disc Flight School album and the app gallery."
-                } else {
-                    "Saved to the app gallery."
+                when {
+                    savedToApp && savedToGallery ->
+                        "Saved to the Disc Flight School album and the app gallery."
+                    savedToApp -> "Saved to the app gallery."
+                    savedToGallery -> "Saved to the Disc Flight School album."
+                    else -> "Couldn't save the video. Check your free storage and try again."
                 },
             )
         } catch (e: Exception) {

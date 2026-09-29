@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
@@ -60,8 +62,21 @@ class FlightGalleryRepository(
     private val _videos = MutableStateFlow<List<SavedFlightVideo>>(emptyList())
     val videos: StateFlow<List<SavedFlightVideo>> = _videos.asStateFlow()
 
+    /**
+     * Whether [_videos] holds the stored registry yet. Until it does, writing
+     * it back would replace every saved entry with whatever is in memory —
+     * which is nothing, when a clip is exported before the gallery has ever
+     * been opened.
+     */
+    private var loaded = false
+    private val mutex = Mutex()
+
     /** Load the registry, dropping entries whose file is gone. */
     suspend fun refresh() = withContext(Dispatchers.IO) {
+        mutex.withLock { loadLocked() }
+    }
+
+    private fun loadLocked() {
         val stored = store.getStringList(KEY).orEmpty()
         val videos = stored.mapNotNull { entry ->
             runCatching {
@@ -70,11 +85,19 @@ class FlightGalleryRepository(
         }.filter { File(it.path).exists() }
 
         _videos.value = videos
+        loaded = true
         persist()
     }
 
     /** Copy an exported clip into the gallery and register it. */
     suspend fun save(sourcePath: String): String? = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            if (!loaded) loadLocked()
+            saveLocked(sourcePath)
+        }
+    }
+
+    private suspend fun saveLocked(sourcePath: String): String? =
         runCatching {
             galleryDir.mkdirs()
             val destination = File(galleryDir, "flight_${System.currentTimeMillis()}.mp4")
@@ -100,14 +123,16 @@ class FlightGalleryRepository(
             persist()
             destination.absolutePath
         }.onFailure { Log.w(TAG, "Failed to save an exported flight video", it) }.getOrNull()
-    }
 
     /** Remove a clip from the app's gallery, leaving the device gallery alone. */
     suspend fun delete(video: SavedFlightVideo) = withContext(Dispatchers.IO) {
-        runCatching { File(video.path).delete() }
-        video.thumbnailPath?.let { runCatching { File(it).delete() } }
-        _videos.value = _videos.value.filterNot { it.path == video.path }
-        persist()
+        mutex.withLock {
+            if (!loaded) loadLocked()
+            runCatching { File(video.path).delete() }
+            video.thumbnailPath?.let { runCatching { File(it).delete() } }
+            _videos.value = _videos.value.filterNot { it.path == video.path }
+            persist()
+        }
     }
 
     private fun persist() {
