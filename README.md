@@ -198,7 +198,9 @@ cd disc_golf_android
 Accepted uploads are MP4, MOV, WebM, and MKV. The default limit is 200 MiB
 (`DISC_FLIGHT_MAX_UPLOAD_BYTES=209715200`) and the default session timeout is
 15 minutes (`DISC_FLIGHT_SESSION_TIMEOUT_SECONDS=900`). Job results are stored
-under `server/disc_flight_jobs/`, which is ignored by Git. The current
+under `server/disc_flight_jobs/`, which is ignored by Git, and are deleted 24
+hours after the job finishes, along with any job folders a previous server
+process left behind. The current
 in-process job registry is appropriate for a single API process; a deployment
 using multiple API replicas must move job state to its shared queue/database
 before scaling the API horizontally.

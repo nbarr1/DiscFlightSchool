@@ -166,6 +166,13 @@ def create_app(
                 {"error": "Unsupported video format. Use MP4, MOV, WebM, or MKV."},
                 status_code=415,
             )
+        # Before copying and hashing the upload, which can be hundreds of
+        # megabytes that cannot be processed without the key.
+        if not settings.roboflow_api_key:
+            return JSONResponse(
+                {"error": "Roboflow processing is not configured on this server"},
+                status_code=503,
+            )
         temporary = temporary_upload()
         size = 0
         digest = hashlib.sha256()
@@ -182,11 +189,6 @@ def create_app(
                     destination.write(chunk)
             if size == 0:
                 return JSONResponse({"error": "The uploaded video is empty"}, status_code=400)
-            if not settings.roboflow_api_key:
-                return JSONResponse(
-                    {"error": "Roboflow processing is not configured on this server"},
-                    status_code=503,
-                )
             try:
                 job, token = flight_jobs.create(temporary, suffix, digest.hexdigest())
             except ValueError as exc:

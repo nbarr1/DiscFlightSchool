@@ -4,6 +4,7 @@ import base64
 import inspect
 import json
 import logging
+import os
 import sys
 import threading
 import time
@@ -19,6 +20,7 @@ from training_server.disc_flight import (
     DiscFlightJobManager,
     NoAnnotatedFrames,
     RoboflowVideoProcessor,
+    UnreadableVideo,
 )
 from training_server.storage import FileStorage
 
@@ -169,6 +171,49 @@ def test_cancel_and_cleanup(tmp_path):
     assert not job.output_path.exists()
 
 
+def test_finished_jobs_expire_with_their_files(tmp_path):
+    client, manager = make_client(tmp_path)
+    manager.retention_seconds = 60
+    created = start(client).json()
+    wait_for_terminal(client, created["jobId"], created["jobToken"])
+    job = manager.jobs[created["jobId"]]
+    assert job.output_path.is_file()
+
+    job.finished_at = time.monotonic() - 61
+    headers = {**AUTH, "X-Job-Token": created["jobToken"]}
+    response = client.get(f"/api/disc-flight/jobs/{created['jobId']}", headers=headers)
+
+    assert response.status_code == 404
+    assert created["jobId"] not in manager.jobs
+    assert not job.directory.exists()
+
+
+def test_a_running_job_never_expires(tmp_path):
+    client, manager = make_client(tmp_path, "wait")
+    manager.retention_seconds = 0
+    created = start(client).json()
+    headers = {**AUTH, "X-Job-Token": created["jobToken"]}
+
+    assert client.get(f"/api/disc-flight/jobs/{created['jobId']}", headers=headers).status_code == 200
+    client.delete(f"/api/disc-flight/jobs/{created['jobId']}", headers=headers)
+
+
+def test_folders_left_by_an_earlier_process_are_swept(tmp_path):
+    root = tmp_path / "disc_flight_jobs"
+    stale = root / "stale-job"
+    recent = root / "recent-job"
+    stale.mkdir(parents=True)
+    recent.mkdir()
+    (stale / "result.mp4").write_bytes(b"old")
+    old = time.time() - 2 * 24 * 60 * 60
+    os.utime(stale, (old, old))
+
+    DiscFlightJobManager(Settings(app_api_key="test-key", base_dir=tmp_path))
+
+    assert not stale.exists()
+    assert recent.exists()
+
+
 def test_another_job_token_cannot_read_or_cancel(tmp_path):
     client, _ = make_client(tmp_path, "wait")
     first = start(client).json()
@@ -241,7 +286,7 @@ class _SdkRoutedSession:
 @pytest.fixture
 def fake_video_stack(monkeypatch):
     """Stands in for inference-sdk, OpenCV, and NumPy, none of which CI installs."""
-    state = {"outputs_per_frame": [], "sessions": [], "written": []}
+    state = {"outputs_per_frame": [], "sessions": [], "written": [], "readable": True}
 
     class StreamConfig:
         def __init__(self, stream_output=None, data_output=None, **_):
@@ -268,6 +313,12 @@ def fake_video_stack(monkeypatch):
     class Capture:
         def __init__(self, path):
             pass
+
+        def isOpened(self):
+            return state["readable"]
+
+        def read(self):
+            return state["readable"], None
 
         def get(self, prop):
             return 30.0 if prop == "fps" else len(state["outputs_per_frame"])
@@ -344,6 +395,13 @@ def test_session_without_frames_names_the_reason(tmp_path, fake_video_stack):
     fake_video_stack["outputs_per_frame"] = [{"disc_detections": {"predictions": []}}] * 2
     with pytest.raises(NoAnnotatedFrames, match="returned 2 frames without an output_image"):
         _run_processor(tmp_path)
+
+
+def test_unreadable_upload_is_rejected_before_a_session_opens(tmp_path, fake_video_stack):
+    fake_video_stack["readable"] = False
+    with pytest.raises(UnreadableVideo, match="not a readable video file"):
+        _run_processor(tmp_path)
+    assert fake_video_stack["sessions"] == []
 
 
 def test_server_reported_frame_errors_are_logged_without_the_key(

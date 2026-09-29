@@ -49,6 +49,15 @@ class NoAnnotatedFrames(RuntimeError):
     """
 
 
+class UnreadableVideo(RuntimeError):
+    """The upload could not be opened or decoded as a video.
+
+    Raised before a Roboflow session is opened, so an HTML page saved from a
+    share link, or any other non-video, never spends inference credits. Its
+    message never carries credentials or upstream text.
+    """
+
+
 class VideoProcessor(Protocol):
     def __call__(
         self,
@@ -72,6 +81,8 @@ class DiscFlightJob:
     total_frames: int | None = None
     summary: dict[str, Any] | None = None
     error: str | None = None
+    # time.monotonic() when the job reached a terminal status.
+    finished_at: float | None = None
     cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
     session: Any = field(default=None, repr=False)
 
@@ -118,9 +129,14 @@ class RoboflowVideoProcessor:
         from inference_sdk.webrtc import StreamConfig, VideoFileSource
 
         capture = cv2.VideoCapture(str(source))
-        input_fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
-        reliable_total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        capture.release()
+        try:
+            readable = capture.isOpened() and capture.read()[0]
+            input_fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
+            reliable_total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        finally:
+            capture.release()
+        if not readable:
+            raise UnreadableVideo("The upload is not a readable video file.")
         total = reliable_total if reliable_total > 0 else None
 
         # Keep only small frame metadata in memory. Annotated images can be
@@ -269,20 +285,68 @@ class RoboflowVideoProcessor:
         }
 
 
+TERMINAL_STATUSES = frozenset({"complete", "failed", "cancelled"})
+
+# How long a finished job, and its annotated video, stays available. The client
+# downloads the result as soon as it sees "complete", so this is generous; its
+# purpose is that results stop accumulating on disk without bound.
+RESULT_RETENTION_SECONDS = 24 * 60 * 60
+
+
 class DiscFlightJobManager:
-    def __init__(self, settings: Settings, processor_factory=None):
+    def __init__(
+        self,
+        settings: Settings,
+        processor_factory=None,
+        *,
+        retention_seconds: float = RESULT_RETENTION_SECONDS,
+    ):
         self.settings = settings
         self.root = settings.base_dir / "disc_flight_jobs"
         self.root.mkdir(parents=True, exist_ok=True)
         self.processor_factory = processor_factory or (lambda: RoboflowVideoProcessor(settings))
         self.jobs: dict[str, DiscFlightJob] = {}
         self.lock = threading.Lock()
+        self.retention_seconds = retention_seconds
+        self._sweep_abandoned_directories()
+
+    def _sweep_abandoned_directories(self) -> None:
+        """Remove job folders an earlier process left behind.
+
+        The registry lives in memory, so after a restart nothing can reach
+        them. Only folders untouched for the retention period are removed, in
+        case another process is still using a recent one.
+        """
+        cutoff = time.time() - self.retention_seconds
+        for directory in self.root.iterdir():
+            try:
+                if directory.is_dir() and directory.stat().st_mtime < cutoff:
+                    shutil.rmtree(directory, ignore_errors=True)
+            except OSError:
+                continue
+
+    def _prune_expired(self) -> None:
+        """Forget finished jobs older than the retention period and delete their files."""
+        now = time.monotonic()
+        with self.lock:
+            expired = [
+                job
+                for job in self.jobs.values()
+                if job.status in TERMINAL_STATUSES
+                and job.finished_at is not None
+                and now - job.finished_at > self.retention_seconds
+            ]
+            for job in expired:
+                del self.jobs[job.id]
+        for job in expired:
+            shutil.rmtree(job.directory, ignore_errors=True)
 
     @staticmethod
     def token_hash(token: str) -> str:
         return hashlib.sha256(token.encode()).hexdigest()
 
     def create(self, source: Path, suffix: str, source_hash: str) -> tuple[DiscFlightJob, str]:
+        self._prune_expired()
         token = secrets.token_urlsafe(32)
         job_id = str(uuid.uuid4())
         directory = self.root / job_id
@@ -294,8 +358,7 @@ class DiscFlightJobManager:
         )
         with self.lock:
             if any(
-                existing.source_hash == source_hash
-                and existing.status not in {"complete", "failed", "cancelled"}
+                existing.source_hash == source_hash and existing.status not in TERMINAL_STATUSES
                 for existing in self.jobs.values()
             ):
                 shutil.rmtree(directory, ignore_errors=True)
@@ -305,6 +368,7 @@ class DiscFlightJobManager:
         return job, token
 
     def get(self, job_id: str, token: str | None) -> DiscFlightJob | None:
+        self._prune_expired()
         with self.lock:
             job = self.jobs.get(job_id)
         if job is None or not token or not secrets.compare_digest(job.owner_hash, self.token_hash(token)):
@@ -316,7 +380,8 @@ class DiscFlightJobManager:
         close = getattr(job.session, "close", None)
         if callable(close):
             close()
-        if job.status not in {"complete", "failed", "cancelled"}:
+        if job.status not in TERMINAL_STATUSES:
+            job.finished_at = time.monotonic()
             job.status = "cancelled"
         self._cleanup_input(job)
 
@@ -336,18 +401,23 @@ class DiscFlightJobManager:
             job.summary = processor(job.input_path, job.output_path, job.cancel_event, update)
             if job.cancel_event.is_set():
                 raise Cancelled()
+            job.finished_at = time.monotonic()
             job.status = "complete"
         except Cancelled:
+            job.finished_at = time.monotonic()
             job.status = "cancelled"
             job.output_path.unlink(missing_ok=True)
         except Exception as exc:
-            job.status = "failed"
+            # Record the error and log it before publishing the terminal
+            # status, so a poller that sees "failed" also sees why.
             job.error = _safe_error(exc)
             job.output_path.unlink(missing_ok=True)
             event = {"event": "disc_flight.job_failed", "job_id": job.id, "error": type(exc).__name__}
-            if isinstance(exc, NoAnnotatedFrames):
+            if isinstance(exc, (NoAnnotatedFrames, UnreadableVideo)):
                 event["detail"] = str(exc)
             logger.error(json.dumps(event))
+            job.finished_at = time.monotonic()
+            job.status = "failed"
         finally:
             close = getattr(processor, "close", None)
             if callable(close):
@@ -369,6 +439,8 @@ class DiscFlightJobManager:
 def _safe_error(exc: Exception) -> str:
     if isinstance(exc, TimeoutError):
         return "Disc processing timed out. Try a shorter video."
+    if isinstance(exc, UnreadableVideo):
+        return "The uploaded file could not be read as a video. Upload the video file itself."
     if isinstance(exc, RuntimeError) and "not configured" in str(exc):
         return str(exc)
     return "The disc-flight service could not process this video. Please retry."
