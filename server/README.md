@@ -99,16 +99,16 @@ The compose stack starts the API, worker, PostgreSQL, Redis, MinIO, and a MinIO 
 
 **MinIO** object keys: `dataset/images/{sample_id}_full{ext}`, `dataset/images/{sample_id}_crop{ext}`, `models/{version}.tflite`. YOLO labels stay in Postgres (`training_samples.label`), not MinIO — they're one line, not worth a second round trip.
 
-**Redis**: a single list, `training:jobs`. `POST /api/training/start` inserts a `training_runs` row and `LPUSH`es its id; `training_server.worker` blocks on `BRPOP` and processes jobs one at a time. Delivery is at-most-once — a worker crash mid-job leaves that run stuck at `running` with no auto-requeue, which is an accepted tradeoff for a manually-triggered, low-frequency job type.
+**Redis**: a single list, `training:jobs`. `POST /api/training/start` inserts a `training_runs` row and `LPUSH`es its id; `training_server.worker` blocks on `BRPOP` and processes jobs one at a time. Delivery is at-most-once — a worker crash mid-job loses that run with no auto-requeue, which is an accepted tradeoff for a manually-triggered, low-frequency job type. So that the lost run doesn't block every later `POST /api/training/start` with a 409, the worker marks a `running` row as failed once it's older than `TRAINING_TIMEOUT_SECONDS` + `MODEL_EXPORT_TIMEOUT_SECONDS` plus 30 minutes, which is longer than any live run can last.
 
 **Model downloads**: `GET /api/model/download` always serves a local file (`FileResponse`) — `PostgresMinioStorage.latest_model_info()` downloads from MinIO into `models_dir` only on a cache miss (a fresh replica, or a non-compose deployment without the shared `training-models` volume); the common case (worker and API sharing that volume) never triggers a download at all.
 
 ## Training notes
 
-- `server/dataset/dataset.yaml` (or, in durable mode, a `materialized_dataset/dataset.yaml` assembled from Postgres/MinIO) is generated at runtime if absent.
+- `server/dataset/dataset.yaml` (or, in durable mode, a `materialized_dataset/dataset.yaml` assembled from Postgres/MinIO) is generated at runtime if absent. It trains on `train.txt`, a list of the labelled `*_full` images regenerated before each run, rather than on all of `images/train`: the unlabelled `*_crop` images there would otherwise be learned as background. A `dataset.yaml` still in the form earlier releases generated is regenerated; one you have edited is left alone.
 - Training requires at least 10 full-image samples.
 - The training command uses `yolo detect train` with `yolo11n.pt`.
-- Export uses `yolo export format=tflite`.
+- Export uses `yolo export format=tflite`. ultralytics 8.4.83 and later write `weights/best.tflite`; earlier 8.x releases write `weights/best_saved_model/best_float32.tflite`. Both are picked up.
 - The newest published `.tflite` model is served as the current detector model.
 
 ## Next steps

@@ -113,6 +113,30 @@ class TrainingRunStoreTests(unittest.TestCase):
         # No RunAlreadyActiveError now that the previous run is finished.
         self.run_store.create_run()
 
+    def test_fail_stale_runs_releases_a_run_its_worker_abandoned(self):
+        run_id = self.run_store.create_run()
+        self.run_store.mark_running(run_id)
+        with self.pool.connection() as conn:
+            conn.execute(
+                "UPDATE training_runs SET started_at = now() - interval '3 hours' WHERE id = %s",
+                (run_id,),
+            )
+
+        self.assertEqual(1, self.run_store.fail_stale_runs(older_than_seconds=3600))
+
+        status = self.run_store.latest_status()
+        self.assertFalse(status["running"])
+        self.assertIn("worker stopped", status["result"])
+        # The abandoned run no longer blocks the next one.
+        self.run_store.create_run()
+
+    def test_fail_stale_runs_leaves_a_live_run_alone(self):
+        run_id = self.run_store.create_run()
+        self.run_store.mark_running(run_id)
+
+        self.assertEqual(0, self.run_store.fail_stale_runs(older_than_seconds=3600))
+        self.assertTrue(self.run_store.latest_status()["running"])
+
 
 if __name__ == "__main__":
     unittest.main()

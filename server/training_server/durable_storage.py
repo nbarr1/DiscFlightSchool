@@ -18,7 +18,7 @@ from minio import Minio
 from psycopg.errors import UniqueViolation
 from psycopg_pool import ConnectionPool
 
-from .config import Settings, render_dataset_yaml
+from .config import Settings, render_dataset_yaml, write_training_image_list
 from .protocols import DatasetCounts, ModelInfo
 from .validation import normalized_image_ext, read_and_validate_upload
 
@@ -204,17 +204,24 @@ class PostgresMinioStorage:
         return {"path": local_path, "version": version, "sha256": sha256}
 
     def build_training_export(self) -> Path:
-        dataset_dir = self.materialize_dataset()
         export_dir = self.settings.export_dir
         export_dir.mkdir(parents=True, exist_ok=True)
         zip_path = export_dir / f"training_export_{uuid.uuid4().hex}.zip"
-        shutil.make_archive(str(zip_path.with_suffix("")), "zip", str(dataset_dir))
+        # A directory of its own rather than materialize_dataset()'s shared one,
+        # which the next export or training run deletes and rebuilds while
+        # this one may still be zipping it.
+        with tempfile.TemporaryDirectory(dir=export_dir) as tmp_dir:
+            dataset_dir = self._materialize_into(Path(tmp_dir) / "dataset")
+            shutil.make_archive(str(zip_path.with_suffix("")), "zip", str(dataset_dir))
         return zip_path
 
     def materialize_dataset(self) -> Path:
         target = self.settings.base_dir / "materialized_dataset"
         if target.exists():
             shutil.rmtree(target)
+        return self._materialize_into(target)
+
+    def _materialize_into(self, target: Path) -> Path:
         images_dir = target / "images" / "train"
         labels_dir = target / "labels" / "train"
         images_dir.mkdir(parents=True, exist_ok=True)
@@ -236,6 +243,7 @@ class PostgresMinioStorage:
             )
             (labels_dir / f"{sample_id}_full.txt").write_text(label)
 
+        write_training_image_list(target)
         (target / "dataset.yaml").write_text(render_dataset_yaml(target))
         return target
 

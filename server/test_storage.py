@@ -81,6 +81,12 @@ def run_storage_backend_contract(
     materialized_images = list((dataset_dir / "images" / "train").glob("contract-sample_full.*"))
     test_case.assertEqual(1, len(materialized_images))
 
+    # Training reads the image list, never the whole folder: the crop has no
+    # label, so YOLO would learn it as background.
+    test_case.assertIn("train: train.txt", (dataset_dir / "dataset.yaml").read_text())
+    training_images = (dataset_dir / "train.txt").read_text().splitlines()
+    test_case.assertEqual([f"./images/train/{materialized_images[0].name}"], training_images)
+
     with tempfile.NamedTemporaryFile(suffix=".tflite", delete=False) as tmp_model:
         tmp_model.write(b"fake-tflite-bytes")
         tmp_model_path = Path(tmp_model.name)
@@ -144,6 +150,33 @@ class FileStorageBehaviourTests(unittest.TestCase):
         self.settings.dataset_yaml.write_text("custom: true\n")
         self.storage.initialize()
         self.assertEqual("custom: true\n", self.settings.dataset_yaml.read_text())
+
+    def test_initialize_replaces_the_old_default_yaml(self):
+        # What earlier releases generated: it trained on every file in
+        # images/train, unlabelled crops included.
+        self.settings.dataset_yaml.write_text(
+            f"path: {self.settings.dataset_dir.resolve()}\n"
+            "train: images/train\n"
+            "val: images/train\n"
+            "\n"
+            "names:\n"
+            "  0: disc\n"
+        )
+
+        self.storage.initialize()
+
+        self.assertIn("train: train.txt", self.settings.dataset_yaml.read_text())
+
+    def test_image_list_skips_crops_and_uploads_in_progress(self):
+        self.store("listed")
+        (self.settings.images_dir / ".pending_full.jpg.abc123.tmp").write_bytes(b"partial")
+
+        dataset_dir = self.storage.materialize_dataset()
+
+        self.assertEqual(
+            ["./images/train/listed_full.jpg"],
+            (dataset_dir / "train.txt").read_text().splitlines(),
+        )
 
     # ---- store_training_sample ----
 
