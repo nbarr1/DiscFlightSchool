@@ -49,9 +49,7 @@ class TrainingDataRepository(
     private val _isOptedIn = MutableStateFlow(store.getBoolean(OPT_IN_KEY) ?: false)
     val isOptedIn: StateFlow<Boolean> = _isOptedIn.asStateFlow()
 
-    private val _serverUrl = MutableStateFlow(
-        store.getString(SERVER_URL_KEY)?.takeIf { it.isNotEmpty() } ?: DEFAULT_SERVER_URL,
-    )
+    private val _serverUrl = MutableStateFlow(loadServerUrl())
     val serverUrl: StateFlow<String> = _serverUrl.asStateFlow()
 
     private val _apiKey = MutableStateFlow(
@@ -144,6 +142,26 @@ class TrainingDataRepository(
         get() = store.getString(MODEL_VERSION_KEY) ?: BUNDLED_MODEL_VERSION
         set(value) = store.putString(MODEL_VERSION_KEY, value)
 
+    /**
+     * The saved server URL, or the default when none is saved.
+     *
+     * A URL on a former default's origin is dropped, so an install that saved
+     * the old default (the settings field is prefilled with it) follows the
+     * app to the new one. The stored API key stays: the user entered it for
+     * the app's own server, which the new default is, rather than pointing the
+     * app somewhere else as [setServerUrl] guards against.
+     */
+    private fun loadServerUrl(): String {
+        val saved = store.getString(SERVER_URL_KEY)?.takeIf { it.isNotEmpty() }
+            ?: return DEFAULT_SERVER_URL
+        val origin = ServerUris.originOf(saved)
+        if (origin != null && FORMER_DEFAULT_SERVER_URLS.any { ServerUris.originOf(it) == origin }) {
+            store.remove(SERVER_URL_KEY)
+            return DEFAULT_SERVER_URL
+        }
+        return saved
+    }
+
     private fun saveManifest() {
         manifestStore.write(JsonArray(_samples.value.map { it.toJson() }).toString())
     }
@@ -162,7 +180,14 @@ class TrainingDataRepository(
         const val SERVER_URL_KEY = "training_server_url"
         const val API_KEY_KEY = "training_api_key"
         const val MODEL_VERSION_KEY = "disc_model_version"
-        const val DEFAULT_SERVER_URL = "https://discflightschool.onrender.com"
+        const val DEFAULT_SERVER_URL = "https://discflightschool-1.onrender.com"
+
+        /**
+         * Hosts that were the default in earlier releases. A URL saved on one
+         * of them is replaced with [DEFAULT_SERVER_URL] when the app starts.
+         */
+        val FORMER_DEFAULT_SERVER_URLS = listOf("https://discflightschool.onrender.com")
+
         const val BUNDLED_MODEL_VERSION = "bundled-1.0.0"
 
         /** The normalized bounding-box size used when a keyframe carries none. */
