@@ -184,12 +184,24 @@ class FrameExtractor(private val io: CoroutineDispatcher = Dispatchers.IO) {
      * null when the source is already narrower and should not be upscaled.
      */
     private fun targetHeightFor(retriever: MediaMetadataRetriever): Int? {
-        val width = retriever
+        val storedWidth = retriever
             .extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull()
             ?: return null
-        val height = retriever
+        val storedHeight = retriever
             .extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull()
             ?: return null
+        val rotation = retriever
+            .extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+            ?.toIntOrNull() ?: 0
+        // The decoder hands back the frame already rotated upright, then fits it
+        // inside the requested box. A portrait phone clip is stored landscape
+        // with a 90° rotation, so a box sized from the stored dimensions would
+        // shrink the upright frame to under a third of the working width.
+        val (width, height) = if (rotation == 90 || rotation == 270) {
+            storedHeight to storedWidth
+        } else {
+            storedWidth to storedHeight
+        }
         if (width <= workingWidth) return null
         return (height * workingWidth.toDouble() / width).roundToInt().coerceAtLeast(2)
     }
