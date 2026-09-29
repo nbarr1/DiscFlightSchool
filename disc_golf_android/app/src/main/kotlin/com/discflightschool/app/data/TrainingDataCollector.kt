@@ -22,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -187,7 +188,9 @@ class TrainingDataCollector(
                     .build()
 
                 client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) uploaded += sample.id
+                    if (response.isSuccessful || isAlreadyStored(response.code, response.body?.string())) {
+                        uploaded += sample.id
+                    }
                 }
             }.onFailure { Log.w(TAG, "Failed to upload sample ${sample.id}", it) }
         }
@@ -216,7 +219,9 @@ class TrainingDataCollector(
                 for (sample in samples) {
                     addFile(File(sample.imagePath), "images/${sample.id}_full.jpg")
                     addFile(File(sample.cropPath), "images/${sample.id}_crop.jpg")
-                    addFile(File(labelsDir, "${sample.id}.txt"), "labels/${sample.id}.txt")
+                    // Named after the image it labels: YOLO pairs images/X.jpg
+                    // with labels/X.txt, and the server stores it the same way.
+                    addFile(File(labelsDir, "${sample.id}.txt"), "labels/${sample.id}_full.txt")
                 }
 
                 val manifest = buildString {
@@ -343,6 +348,20 @@ class TrainingDataCollector(
             .getOrDefault(false)
     }
 
+    /**
+     * Whether the server rejected an upload only because it already has the
+     * sample — an earlier attempt that succeeded after its response was lost.
+     * Treating that as a failure would retry the sample on every upload,
+     * forever.
+     */
+    private fun isAlreadyStored(code: Int, body: String?): Boolean {
+        if (code != 400 || body == null) return false
+        val error = runCatching {
+            json.parseToJsonElement(body).jsonObject["error"]?.jsonPrimitive?.content
+        }.getOrNull()
+        return error == SAMPLE_EXISTS_ERROR
+    }
+
     private fun generateId(): String {
         val suffix = Random.nextInt(0, 100_000).toString().padStart(5, '0')
         return "${System.currentTimeMillis()}_$suffix"
@@ -353,6 +372,13 @@ class TrainingDataCollector(
         const val MODEL_FILE = "disc_detector.tflite"
         const val PREVIOUS_MODEL_FILE = "disc_detector.previous.tflite"
         const val APP_VERSION = "1.0.0"
+
+        /**
+         * The server's message for a sample it has already stored. Its
+         * "already exists or is being uploaded" variant is deliberately not
+         * matched: that upload may still fail.
+         */
+        const val SAMPLE_EXISTS_ERROR = "sample_id already exists"
         val JPEG = "image/jpeg".toMediaType()
     }
 }
