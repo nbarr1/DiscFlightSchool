@@ -4,7 +4,9 @@
 A disc-sized dot on an arc over a green field. This is deliberately not a real
 throw: it exists so the smoke test can prove the WebRTC session connects and
 the Workflow returns its named outputs without anyone having to host a video.
-Expect no detections from it — pass a real clip to check those.
+The Workflow's detector does box the white dot and trace its arc, so the run
+exercises detection and tracking as well, but that says nothing about accuracy
+on real footage — pass a real clip to check that.
 """
 
 from __future__ import annotations
