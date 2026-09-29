@@ -209,6 +209,15 @@ fun StartRoundScreen(onBack: () -> Unit, onRoundStarted: () -> Unit) {
                         }
                         return@Button
                     }
+                    // Scores are keyed by player name, so two players with the
+                    // same name would share one scorecard and the round could
+                    // never be completed.
+                    if (names.distinctBy { it.lowercase() }.size != names.size) {
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Give each player a different name")
+                        }
+                        return@Button
+                    }
                     container.scoringRepository.startNewRound(
                         playerNames = names,
                         customPars = if (customPars) pars.toList() else null,
