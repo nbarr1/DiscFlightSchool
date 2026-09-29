@@ -36,6 +36,7 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 | `OBJECT_STORAGE_SECRET_KEY` | No | none | Object storage secret key. |
 | `OBJECT_STORAGE_SECURE` | No | `true` | Whether the object storage client uses HTTPS. |
 | `ROBOFLOW_API_KEY` | No | none | Server-side Roboflow key for the disc-flight video jobs and `training_server/disc_detection.py`, which sends it only in the `Authorization: Bearer` header. |
+| `CLIENT_API_KEY` | No | none | A second key, built into the Android app, that the Roboflow endpoints (`/api/disc-flight/jobs...` and `/api/disc-detection`) accept in `X-App-Key` in place of `APP_API_KEY`. The training and export endpoints never accept it. Leave it unset to require `APP_API_KEY` everywhere. |
 | `WORKER_POLL_SECONDS` | No | `30` | How long `training_server.worker` blocks on the Redis queue between checks (durable mode), or sleeps between log lines (placeholder mode). |
 
 ## Implemented endpoints
@@ -51,7 +52,12 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 | `GET` | `/api/training/status` | No | Returns training state — from an in-memory dict (default) or the `training_runs` table (durable mode); same JSON shape either way. |
 | `GET` | `/api/model/version` | No | Returns latest model metadata or `version: none`. |
 | `GET` | `/api/model/download` | No | Downloads the latest `.tflite` file or returns 404. |
-| `POST` | `/api/disc-detection` | `X-App-Key` | Runs one JPEG/PNG `image` upload through the Roboflow disc-detection Workflow and returns the disc boxes. Returns 503 without `ROBOFLOW_API_KEY`, and 502 or 504 when Roboflow fails or times out. |
+| `POST` | `/api/disc-flight/jobs` | `X-App-Key` or `CLIENT_API_KEY` | Starts a Roboflow video job for a `video` upload. Optional `start_ms`/`end_ms` form fields limit it to that range. Returns `jobId` and `jobToken`. |
+| `GET` | `/api/disc-flight/jobs/{jobId}` | as above, + `X-Job-Token` | Returns the job's status and progress, with `resultVideoUrl` and `trackUrl` once complete. |
+| `GET` | `/api/disc-flight/jobs/{jobId}/result` | as above, + `X-Job-Token` | Streams the annotated MP4. |
+| `GET` | `/api/disc-flight/jobs/{jobId}/track` | as above, + `X-Job-Token` | Returns the disc's normalized position in each frame of the processed range. |
+| `DELETE` | `/api/disc-flight/jobs/{jobId}` | as above, + `X-Job-Token` | Cancels the job and removes its files. |
+| `POST` | `/api/disc-detection` | `X-App-Key` or `CLIENT_API_KEY` | Runs one JPEG/PNG `image` upload through the Roboflow disc-detection Workflow and returns the disc boxes. Returns 503 without `ROBOFLOW_API_KEY`, and 502 or 504 when Roboflow fails or times out. |
 
 ## Local setup
 

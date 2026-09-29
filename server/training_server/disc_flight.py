@@ -58,6 +58,10 @@ class UnreadableVideo(RuntimeError):
     """
 
 
+class EmptyClip(UnreadableVideo):
+    """The requested start/end range holds no frames of the upload."""
+
+
 class VideoProcessor(Protocol):
     def __call__(
         self,
@@ -65,6 +69,7 @@ class VideoProcessor(Protocol):
         destination: Path,
         cancel: threading.Event,
         update: Callable[[int, int | None, str], None],
+        clip: tuple[int, int | None] | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -76,10 +81,14 @@ class DiscFlightJob:
     input_path: Path
     output_path: Path
     source_hash: str = ""
+    # (start_ms, end_ms) of the upload to process, or None for all of it.
+    clip: tuple[int, int | None] | None = None
     status: str = "queued"
     frames_processed: int = 0
     total_frames: int | None = None
     summary: dict[str, Any] | None = None
+    # Per-frame disc positions, served by GET .../track once complete.
+    track: dict[str, Any] | None = field(default=None, repr=False)
     error: str | None = None
     # time.monotonic() when the job reached a terminal status.
     finished_at: float | None = None
@@ -97,6 +106,7 @@ class DiscFlightJob:
             body["progress"] = min(1.0, self.frames_processed / max(1, self.total_frames))
         if self.status == "complete":
             body["resultVideoUrl"] = f"/api/disc-flight/jobs/{self.id}/result"
+            body["trackUrl"] = f"/api/disc-flight/jobs/{self.id}/track"
             body["summary"] = self.summary or {}
         if self.error:
             body["error"] = self.error
@@ -119,10 +129,24 @@ class RoboflowVideoProcessor:
                     closer()
                     break
 
-    def __call__(self, source, destination, cancel, update):
+    def __call__(self, source, destination, cancel, update, clip=None):
         if not self.settings.roboflow_api_key:
             raise RuntimeError("Roboflow processing is not configured on this server")
+        if clip is None:
+            return self._process(source, destination, cancel, update)
 
+        import cv2
+
+        # Only the clipped range goes to Roboflow: credits are spent per
+        # frame, and a phone recording is mostly footage around the throw.
+        clipped = destination.with_name("clip.mp4")
+        try:
+            _write_clip(source, clipped, clip, cv2)
+            return self._process(clipped, destination, cancel, update)
+        finally:
+            clipped.unlink(missing_ok=True)
+
+    def _process(self, source, destination, cancel, update):
         import cv2
         import numpy as np
         from inference_sdk import InferenceConfiguration, InferenceHTTPClient
@@ -133,6 +157,8 @@ class RoboflowVideoProcessor:
             readable = capture.isOpened() and capture.read()[0]
             input_fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
             reliable_total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            frame_width = float(capture.get(getattr(cv2, "CAP_PROP_FRAME_WIDTH", "width")) or 0)
+            frame_height = float(capture.get(getattr(cv2, "CAP_PROP_FRAME_HEIGHT", "height")) or 0)
         finally:
             capture.release()
         if not readable:
@@ -145,11 +171,17 @@ class RoboflowVideoProcessor:
         # the API worker's memory.
         frames: list[tuple[int, float | None, Path]] = []
         detection_frames: set[int] = set()
+        # frame id -> the frame's best box, for the per-frame track.
+        boxes: dict[int, dict[str, float]] = {}
+        seen_frames: set[int] = set()
         frame_errors: list[str] = []
         frames_lock = threading.Lock()
         data_messages = 0
 
-        def on_data(data: dict[str, Any]) -> None:
+        def on_data(data: dict[str, Any], metadata: Any = None) -> None:
+            # Taking a second parameter is what makes the SDK pass the frame's
+            # metadata; without it frame ids could only be guessed from
+            # arrival order.
             nonlocal data_messages
             if cancel.is_set():
                 self.close()
@@ -158,7 +190,12 @@ class RoboflowVideoProcessor:
                 with frames_lock:
                     data_messages += 1
                     default_frame_id = len(frames)
-                frame_id = _frame_id(data, default_frame_id)
+                metadata_frame_id = getattr(metadata, "frame_id", None)
+                frame_id = (
+                    int(metadata_frame_id)
+                    if isinstance(metadata_frame_id, int)
+                    else _frame_id(data, default_frame_id)
+                )
                 timestamp = _timestamp(data)
                 encoded = _output_value(data.get("output_image"))
                 if encoded:
@@ -175,7 +212,15 @@ class RoboflowVideoProcessor:
                         frame_path.write_bytes(compressed)
                         with frames_lock:
                             frames.append((frame_id, timestamp, frame_path))
+                # The tracker's output keeps one identity through the flight,
+                # so it is preferred; raw detections fill frames it skipped.
+                box = _best_box(data.get("tracked_disc"), frame_width, frame_height) or _best_box(
+                    data.get("disc_detections"), frame_width, frame_height
+                )
                 with frames_lock:
+                    seen_frames.add(frame_id)
+                    if box is not None:
+                        boxes[frame_id] = box
                     if _prediction_count(data.get("disc_detections")) > 0:
                         detection_frames.add(frame_id)
                     completed = len(frames)
@@ -282,6 +327,7 @@ class RoboflowVideoProcessor:
             "framesWithDetections": len(detection_frames),
             "detectionRate": round(len(detection_frames) / count, 3) if count else 0.0,
             "frameErrors": len(frame_errors),
+            "track": _build_track(boxes, seen_frames, input_fps),
         }
 
 
@@ -345,7 +391,13 @@ class DiscFlightJobManager:
     def token_hash(token: str) -> str:
         return hashlib.sha256(token.encode()).hexdigest()
 
-    def create(self, source: Path, suffix: str, source_hash: str) -> tuple[DiscFlightJob, str]:
+    def create(
+        self,
+        source: Path,
+        suffix: str,
+        source_hash: str,
+        clip: tuple[int, int | None] | None = None,
+    ) -> tuple[DiscFlightJob, str]:
         self._prune_expired()
         token = secrets.token_urlsafe(32)
         job_id = str(uuid.uuid4())
@@ -354,7 +406,13 @@ class DiscFlightJobManager:
         input_path = directory / f"input{suffix}"
         shutil.move(str(source), input_path)
         job = DiscFlightJob(
-            job_id, self.token_hash(token), directory, input_path, directory / "result.mp4", source_hash
+            job_id,
+            self.token_hash(token),
+            directory,
+            input_path,
+            directory / "result.mp4",
+            source_hash,
+            clip=clip,
         )
         with self.lock:
             if any(
@@ -398,7 +456,11 @@ class DiscFlightJobManager:
 
         try:
             job.status = "connecting"
-            job.summary = processor(job.input_path, job.output_path, job.cancel_event, update)
+            summary = processor(
+                job.input_path, job.output_path, job.cancel_event, update, clip=job.clip
+            )
+            job.track = summary.pop("track", None)
+            job.summary = summary
             if job.cancel_event.is_set():
                 raise Cancelled()
             job.finished_at = time.monotonic()
@@ -439,6 +501,8 @@ class DiscFlightJobManager:
 def _safe_error(exc: Exception) -> str:
     if isinstance(exc, TimeoutError):
         return "Disc processing timed out. Try a shorter video."
+    if isinstance(exc, EmptyClip):
+        return str(exc)
     if isinstance(exc, UnreadableVideo):
         return "The uploaded file could not be read as a video. Upload the video file itself."
     if isinstance(exc, RuntimeError) and "not configured" in str(exc):
@@ -464,6 +528,119 @@ def _output_value(value: Any) -> str | None:
     if isinstance(value, dict) and isinstance(value.get("value"), str):
         return value["value"]
     return None
+
+
+def _best_box(value: Any, frame_width: float, frame_height: float) -> dict[str, float] | None:
+    """The highest-confidence box in one Workflow detections output, normalized
+    to 0-1 of the frame, or None when it holds no usable box.
+
+    Workflow detections serialize as `{"image": {"width", "height"},
+    "predictions": [{"x", "y", "width", "height", "confidence", ...}]}`, with
+    `x`/`y` the box center in pixels, sometimes wrapped as `{"value": ...}`.
+    """
+    value = value.get("value", value) if isinstance(value, dict) and "predictions" not in value else value
+    image: Any = None
+    if isinstance(value, dict):
+        image = value.get("image")
+        value = value.get("predictions")
+    if not isinstance(value, list):
+        return None
+    width = _positive(image.get("width")) if isinstance(image, dict) else None
+    height = _positive(image.get("height")) if isinstance(image, dict) else None
+    width = width or _positive(frame_width)
+    height = height or _positive(frame_height)
+    if width is None or height is None:
+        return None
+
+    best: dict[str, float] | None = None
+    for prediction in value:
+        if not isinstance(prediction, dict):
+            continue
+        fields = [_finite(prediction.get(key)) for key in ("x", "y", "width", "height", "confidence")]
+        if any(field is None for field in fields):
+            continue
+        x, y, box_width, box_height, confidence = fields
+        if best is None or confidence > best["confidence"]:
+            best = {
+                "x": min(1.0, max(0.0, x / width)),
+                "y": min(1.0, max(0.0, y / height)),
+                "width": min(1.0, max(0.0, box_width / width)),
+                "height": min(1.0, max(0.0, box_height / height)),
+                "confidence": confidence,
+            }
+    return best
+
+
+def _build_track(
+    boxes: dict[int, dict[str, float]], seen_frames: set[int], fps: float
+) -> dict[str, Any]:
+    """Per-frame disc positions, with frame 0 as the first frame processed.
+
+    SDK frame ids may start at 0 or 1; counting from the first one seen keeps
+    frame 0 at the start of the (clipped) upload either way.
+    """
+    first = min(seen_frames) if seen_frames else 0
+    detections = []
+    for frame_id in sorted(boxes):
+        frame = frame_id - first
+        detections.append(
+            {
+                "frame": frame,
+                "timeMs": round(frame * 1000.0 / fps),
+                **{key: round(value, 5) for key, value in boxes[frame_id].items()},
+            }
+        )
+    return {"fps": fps, "frameCount": len(seen_frames), "detections": detections}
+
+
+def _finite(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if number == number and abs(number) != float("inf") else None
+
+
+def _positive(value: Any) -> float | None:
+    number = _finite(value)
+    return number if number is not None and number > 0 else None
+
+
+def _write_clip(source: Path, destination: Path, clip: tuple[int, int | None], cv2: Any) -> None:
+    """Copy the `clip` range of `source`, in milliseconds, into a new MP4.
+
+    Frames are counted from the source's frame rate rather than read back from
+    the decoder's position, which some containers report only approximately.
+    """
+    start_ms, end_ms = clip
+    capture = cv2.VideoCapture(str(source))
+    writer = None
+    written = 0
+    try:
+        if not capture.isOpened():
+            raise UnreadableVideo("The upload is not a readable video file.")
+        fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
+        start_frame = round(start_ms * fps / 1000.0)
+        last_frame = None if end_ms is None else round(end_ms * fps / 1000.0)
+        capture.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+        frame_index = start_frame
+        while last_frame is None or frame_index <= last_frame:
+            ok, frame = capture.read()
+            if not ok:
+                break
+            if writer is None:
+                height, width = frame.shape[:2]
+                writer = cv2.VideoWriter(str(destination), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
+                if not writer.isOpened():
+                    raise RuntimeError("Could not initialize the clip writer")
+            writer.write(frame)
+            written += 1
+            frame_index += 1
+    finally:
+        capture.release()
+        if writer is not None:
+            writer.release()
+    if written == 0:
+        raise EmptyClip("The selected part of the video has no frames. Choose a longer range.")
 
 
 def _prediction_count(value: Any) -> int:
