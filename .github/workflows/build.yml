@@ -36,8 +36,13 @@ jobs:
           done
           echo "All assets present."
 
+      # The key the default server accepts on its Roboflow detection
+      # endpoints only. Without the secret the APK still builds, and its
+      # Auto-detect falls back to the on-device detector.
       - name: Build debug APK
         working-directory: disc_golf_android
+        env:
+          DFS_CLIENT_API_KEY: ${{ secrets.CLIENT_API_KEY }}
         run: ./gradlew --no-daemon :app:assembleDebug
 
       - name: Upload APK

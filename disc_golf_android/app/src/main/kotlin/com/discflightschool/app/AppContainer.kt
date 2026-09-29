@@ -70,6 +70,7 @@ class AppContainer(context: Context) {
         store = preferencesStore,
         secrets = secretStore,
         manifestStore = FileManifestStore(File(trainingDataDir, "manifest.json")),
+        builtInClientKey = BuildConfig.CLIENT_API_KEY,
     )
 
     private val assets = AssetContent(appContext)

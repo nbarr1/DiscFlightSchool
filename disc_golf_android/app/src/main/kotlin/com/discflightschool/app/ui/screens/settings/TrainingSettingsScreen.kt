@@ -123,6 +123,9 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
     var modelUpdatePrompt by remember { mutableStateOf(false) }
     var advancedExpanded by remember { mutableStateOf(false) }
     var hasTrainingKey by remember { mutableStateOf(training.hasApiKey) }
+    // The built-in client key also reaches the default server's detection
+    // endpoint, so cloud detection can work without a training key.
+    val hasDetectionKey = remember(serverUrl, hasTrainingKey) { training.detectionApiKey != null }
     var modelVersion by remember { mutableStateOf(training.modelVersion) }
     var detectionRunning by remember { mutableStateOf(false) }
     var detectionPhoto by remember { mutableStateOf<Bitmap?>(null) }
@@ -439,13 +442,13 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                             )
                         },
-                        enabled = hasTrainingKey && !detectionRunning,
+                        enabled = hasDetectionKey && !detectionRunning,
                     ) {
                         Icon(Icons.Default.CloudUpload, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text("Test cloud detection")
                     }
-                    if (!hasTrainingKey) {
+                    if (!hasDetectionKey) {
                         Spacer(Modifier.height(8.dp))
                         Text(
                             "Add the training API key under Advanced first.",

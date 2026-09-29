@@ -11,15 +11,22 @@ For the opt-in real Workflow check, install `server/requirements.txt`, set
 `python scripts/test_roboflow_integration.py`. The same check runs in CI as
 `Roboflow Workflow Smoke Test`, which is manual dispatch only because each run
 spends inference credits: it reads the `ROBOFLOW_API_KEY` repository secret,
-takes an optional `video_url` input (without one it generates a synthetic clip
-that exercises the connection but detects nothing), and uploads the annotated
-MP4 as an artifact. The `video_url` has to download the file itself: a share
-page such as a Google Drive `.../view` link downloads HTML, which the script
-rejects before calling Roboflow. Confirm the generated MP4 opens,
-then configure the same backend in Android Training Settings and verify on a
-device: pick and record, preview, process, progress/indeterminate processing,
-playback, sharing, retry, cancellation, and duplicate-tap prevention. Do not
-mark the mobile integration verified until the annotated result plays there.
+takes an optional `video_url` input, and uploads the annotated MP4 and the
+per-frame track JSON as an artifact. Without a `video_url` it generates a
+synthetic clip of a white dot on an arc. The Workflow detects the dot, so the
+run also checks each tracked position against the dot's known path, which
+catches a track whose frame numbering or scaling is off. It says nothing about
+accuracy on real footage. The optional `clip_ms` input, such as `500,2500`,
+processes only that range, as the app's Auto-detect does. The `video_url` has
+to download the file itself: a share page such as a Google Drive `.../view`
+link downloads HTML, which the script rejects before calling Roboflow. Confirm
+the generated MP4 opens, then verify on a device: pick and record, preview,
+process, progress/indeterminate processing, playback, sharing, retry,
+cancellation, and duplicate-tap prevention on the Flight Tracker screen, and
+Auto-detect on a trimmed clip in the flight player, including its fallback to
+the on-device detector with the network off. Do not mark the mobile
+integration verified until the annotated result plays there and Auto-detect
+draws the trail.
 
 ## Roboflow single-image detection
 

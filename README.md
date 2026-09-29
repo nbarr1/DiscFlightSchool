@@ -371,10 +371,11 @@ seconds when every attempt times out, and each call spends inference credits.
 In the Android app, the **Cloud disc detection** card in Training Settings
 calls this endpoint. **Test cloud detection** opens the photo picker, scales
 the photo so its longer side is at most 1,280 pixels, and sends it as a JPEG
-with the training API key. It then shows the photo with a box on each disc and
-a one-line summary. The button stays disabled until a training API key is
-saved. `DiscDetectionClient` makes the request and reports the server's
-`error` message when a call fails.
+with that key. It then shows the photo with a box on each disc and
+a one-line summary. The button is enabled when the app has a key for the
+server: the built-in client key on the default server, or a saved training API
+key. `DiscDetectionClient` makes the request and reports the server's `error`
+message when a call fails.
 
 `server/test_disc_detection.py` covers the module and the endpoint by
 replaying a response captured from the real Workflow, so it needs no key and

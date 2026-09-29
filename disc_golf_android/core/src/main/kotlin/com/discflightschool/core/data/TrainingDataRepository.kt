@@ -38,6 +38,12 @@ class TrainingDataRepository(
     private val store: KeyValueStore,
     private val secrets: SecretStore,
     private val manifestStore: ManifestStore,
+    /**
+     * The client key the app is built with, or empty. The default server
+     * accepts it on its Roboflow detection endpoints only, never for training
+     * uploads or exports.
+     */
+    private val builtInClientKey: String = "",
 ) {
 
     private val _isOptedIn = MutableStateFlow(store.getBoolean(OPT_IN_KEY) ?: false)
@@ -98,6 +104,22 @@ class TrainingDataRepository(
 
     /** The endpoint for [path], or null when the configured server is not usable. */
     fun endpoint(path: String): URI? = ServerUris.endpoint(_serverUrl.value, path)
+
+    /**
+     * The key for the server's Roboflow detection endpoints, or null when
+     * there is none to send.
+     *
+     * The user's own key wins. Otherwise the built-in client key is used, but
+     * only while the server is the default one: it was issued by that server,
+     * and sending it anywhere else would hand it to whoever runs that host.
+     */
+    val detectionApiKey: String?
+        get() {
+            _apiKey.value.takeIf { it.isNotEmpty() }?.let { return it }
+            if (builtInClientKey.isEmpty()) return null
+            val defaultOrigin = ServerUris.originOf(DEFAULT_SERVER_URL)
+            return builtInClientKey.takeIf { ServerUris.originOf(_serverUrl.value) == defaultOrigin }
+        }
 
     fun addSamples(samples: List<TrainingSample>) {
         if (samples.isEmpty()) return

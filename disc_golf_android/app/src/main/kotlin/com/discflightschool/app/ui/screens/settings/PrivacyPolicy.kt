@@ -40,26 +40,29 @@ object PrivacyPolicy {
                 "record your throws for Form Coach and Flight Tracker, and for photo " +
                 "library access so you can pick an existing video or save an analyzed one. " +
                 "By default, recorded video, extracted frames, and analysis results stay on " +
-                "your device. A video is uploaded only when you explicitly choose cloud " +
-                "flight tracing or training data collection (below).",
+                "your device. A video is uploaded only when you choose Auto-detect or cloud " +
+                "flight tracing, or opt in to training data collection (below).",
         ),
         Section(
             title = "On-device analysis",
-            body = "Pose detection (Form Coach) and the Flight Tracker's on-device option run " +
-                "entirely on your device using bundled machine-learning models. Your video " +
-                "is not sent to a server when you choose the on-device tracker. Questions " +
-                "you ask in the Knowledge Base are answered from the research bundled with " +
-                "the app and never leave your device.",
+            body = "Pose detection (Form Coach) and marking the disc by hand in the Flight " +
+                "Tracker run entirely on your device, using bundled machine-learning models " +
+                "where needed. Your video is not sent to a server when you mark the disc by " +
+                "hand. When Auto-detect can't reach the server, it also runs on your device. " +
+                "Questions you ask in the Knowledge Base are answered from the research " +
+                "bundled with the app and never leave your device.",
         ),
         Section(
-            title = "Optional: cloud flight tracing",
-            body = "When you tap \"Trace in cloud,\" the selected video is sent to the Disc " +
-                "Flight School server, which securely submits it to Roboflow to detect and " +
-                "draw the disc trajectory. The source upload is removed after processing or " +
-                "cancellation. The annotated result remains on the server so your device can " +
-                "download it, and the server deletes it 24 hours after processing finishes. " +
-                "Do not use cloud tracing if you do not want the video processed by these " +
-                "services.",
+            title = "Optional: cloud disc detection",
+            body = "When you tap \"Auto-detect\" in the flight tracker, or \"Trace in " +
+                "cloud,\" the selected video is sent to the Disc Flight School server, which " +
+                "securely submits it to Roboflow to detect the disc. For Auto-detect, only " +
+                "the trimmed part of the video is processed, and your device receives the " +
+                "disc's position in each frame. The source upload is removed after " +
+                "processing or cancellation. The results, including an annotated copy of " +
+                "the video, remain on the server so your device can download them, and the " +
+                "server deletes them 24 hours after processing finishes. If you do not want " +
+                "the video processed by these services, mark the disc by hand instead.",
         ),
         Section(
             title = "Optional: training data collection",

@@ -138,10 +138,11 @@ class ServerUriTest {
 
     // ── server URL changes and the stored API key ────────────────────────
 
-    private fun repository() = TrainingDataRepository(
+    private fun repository(builtInClientKey: String = "") = TrainingDataRepository(
         store = InMemoryKeyValueStore(),
         secrets = InMemorySecretStore(),
         manifestStore = InMemoryManifestStore(),
+        builtInClientKey = builtInClientKey,
     )
 
     @Test
@@ -188,5 +189,41 @@ class ServerUriTest {
         repository.setServerUrl("https://server.example.com")
 
         assertTrue(repository.hasApiKey)
+    }
+
+    // ── which key the detection endpoints get ────────────────────────────
+
+    @Test
+    fun `the built-in client key goes to the default server`() {
+        val repository = repository(builtInClientKey = "shipped-key")
+
+        assertEquals("shipped-key", repository.detectionApiKey)
+    }
+
+    @Test
+    fun `the built-in client key never goes to another server`() {
+        val repository = repository(builtInClientKey = "shipped-key")
+
+        repository.setServerUrl("https://someone-elses-server.example.com")
+
+        assertNull(repository.detectionApiKey)
+    }
+
+    @Test
+    fun `the user's own key wins over the built-in one`() {
+        val repository = repository(builtInClientKey = "shipped-key")
+        repository.setServerUrl("https://my-server.example.com")
+        repository.setApiKey("my-key")
+
+        assertEquals("my-key", repository.detectionApiKey)
+    }
+
+    @Test
+    fun `a build without a client key has no detection key until the user adds one`() {
+        val repository = repository()
+
+        assertNull(repository.detectionApiKey)
+        repository.setApiKey("my-key")
+        assertEquals("my-key", repository.detectionApiKey)
     }
 }
