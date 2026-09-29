@@ -19,7 +19,7 @@ class ServerUriTest {
 
     @Test
     fun `allows any https origin`() {
-        assertTrue(ServerUris.isAllowedServerUri(URI("https://discflightschool.onrender.com")))
+        assertTrue(ServerUris.isAllowedServerUri(URI("https://discflightschool-1.onrender.com")))
         assertTrue(ServerUris.isAllowedServerUri(URI("https://example.com:8443/base")))
     }
 
@@ -138,9 +138,13 @@ class ServerUriTest {
 
     // ── server URL changes and the stored API key ────────────────────────
 
-    private fun repository(builtInClientKey: String = "") = TrainingDataRepository(
-        store = InMemoryKeyValueStore(),
-        secrets = InMemorySecretStore(),
+    private fun repository(
+        builtInClientKey: String = "",
+        store: InMemoryKeyValueStore = InMemoryKeyValueStore(),
+        secrets: InMemorySecretStore = InMemorySecretStore(),
+    ) = TrainingDataRepository(
+        store = store,
+        secrets = secrets,
         manifestStore = InMemoryManifestStore(),
         builtInClientKey = builtInClientKey,
     )
@@ -189,6 +193,54 @@ class ServerUriTest {
         repository.setServerUrl("https://server.example.com")
 
         assertTrue(repository.hasApiKey)
+    }
+
+    // ── the default server ───────────────────────────────────────────────
+
+    @Test
+    fun `a fresh install uses the default server`() {
+        assertEquals(
+            "https://discflightschool-1.onrender.com",
+            repository().serverUrl.value,
+        )
+    }
+
+    @Test
+    fun `a saved former default moves to the new default and keeps the key`() {
+        val store = InMemoryKeyValueStore()
+        store.putString(TrainingDataRepository.SERVER_URL_KEY, "https://discflightschool.onrender.com/")
+        val secrets = InMemorySecretStore()
+        secrets.write(TrainingDataRepository.API_KEY_KEY, "my-key")
+
+        val repository = repository(builtInClientKey = "shipped-key", store = store, secrets = secrets)
+
+        assertEquals(TrainingDataRepository.DEFAULT_SERVER_URL, repository.serverUrl.value)
+        assertNull(store.getString(TrainingDataRepository.SERVER_URL_KEY))
+        assertEquals("my-key", repository.apiKey)
+    }
+
+    @Test
+    fun `the built-in key reaches the new default after a former default is migrated`() {
+        val store = InMemoryKeyValueStore()
+        store.putString(TrainingDataRepository.SERVER_URL_KEY, "https://discflightschool.onrender.com")
+
+        val repository = repository(builtInClientKey = "shipped-key", store = store)
+
+        assertEquals("shipped-key", repository.detectionApiKey)
+    }
+
+    @Test
+    fun `a saved custom server is left alone`() {
+        val store = InMemoryKeyValueStore()
+        store.putString(TrainingDataRepository.SERVER_URL_KEY, "https://my-server.example.com")
+
+        val repository = repository(store = store)
+
+        assertEquals("https://my-server.example.com", repository.serverUrl.value)
+        assertEquals(
+            "https://my-server.example.com",
+            store.getString(TrainingDataRepository.SERVER_URL_KEY),
+        )
     }
 
     // ── which key the detection endpoints get ────────────────────────────

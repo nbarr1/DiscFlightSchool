@@ -276,10 +276,17 @@ that:
    which builds it into `BuildConfig.CLIENT_API_KEY`.
 
 The app sends the built-in key only to the default server,
-`https://discflightschool.onrender.com`. A user who saves their own key in
+`https://discflightschool-1.onrender.com`. A user who saves their own key in
 Training Settings sends that key instead, to whichever server they set. A
 build without the secret has an empty client key, and its Auto-detect falls
 back to the on-device detector unless the user saves a key.
+
+Earlier builds defaulted to `https://discflightschool.onrender.com`. An
+install that saved that URL is moved to the default when the app starts, and
+keeps any key the user saved. If Auto-detect or cloud tracing reports "Invalid
+or missing API key", check that the server's `CLIENT_API_KEY` matches the
+repository secret the APK was built with, and that no stale key is saved under
+Training Settings > Advanced: a saved key wins over the built-in one.
 
 Because the key is in every APK, treat it as public: it opens only the
 Roboflow endpoints, so its worst case is spent inference credits. To rotate it,

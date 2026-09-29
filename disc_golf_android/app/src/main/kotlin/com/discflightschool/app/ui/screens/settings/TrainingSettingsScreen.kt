@@ -83,6 +83,7 @@ import com.discflightschool.app.data.summary
 import com.discflightschool.app.ui.components.AppTopBar
 import com.discflightschool.app.ui.components.SectionCard
 import com.discflightschool.app.ui.theme.AppColors
+import com.discflightschool.core.data.TrainingDataRepository
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
@@ -377,7 +378,7 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                             value = serverUrlDraft,
                             onValueChange = { serverUrlDraft = it },
                             label = { Text("Custom server (optional)") },
-                            placeholder = { Text("https://discflightschool.onrender.com") },
+                            placeholder = { Text(TrainingDataRepository.DEFAULT_SERVER_URL) },
                             supportingText = { Text("Save after editing") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),

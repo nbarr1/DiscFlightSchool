@@ -75,7 +75,7 @@ The blocking gaps are almost entirely **compliance/store-listing gaps**, not cod
 
 #### Undisclosed data flows (the real gap, not permissions):
 
-* **Training-sample uploads** (`TrainingDataService.uploadPending()`): opt-in, uploads JPEG crops/full frames of the user's own throw videos plus YOLO labels to `https://discflightschool.onrender.com` (or a user-supplied server). This is collection of user-generated photo/video content by a first-party backend and **must** be declared in Play Console's Data Safety form (Photos/Videos — collected, not shared with third parties unless the backend forwards it, purpose: "App functionality"/"Analytics", user can request deletion via "Clear all training data" locally, but there's no way to request deletion of already-uploaded server-side copies — worth adding, see Recommendations).
+* **Training-sample uploads** (`TrainingDataService.uploadPending()`): opt-in, uploads JPEG crops/full frames of the user's own throw videos plus YOLO labels to `https://discflightschool-1.onrender.com` (or a user-supplied server). This is collection of user-generated photo/video content by a first-party backend and **must** be declared in Play Console's Data Safety form (Photos/Videos — collected, not shared with third parties unless the backend forwards it, purpose: "App functionality"/"Analytics", user can request deletion via "Clear all training data" locally, but there's no way to request deletion of already-uploaded server-side copies — worth adding, see Recommendations).
 * **Anthropic API pass-through** (`KnowledgeBaseService`, `training_settings_screen.dart` "AI Search"): the user supplies their own Anthropic API key, stored via `flutter_secure_storage`, and the app calls `https://api.anthropic.com/v1/messages` directly from the client with the user's search queries. This is a third-party data flow (search query text sent to Anthropic) and needs its own Data Safety disclosure, plus ideally a one-line in-app disclosure at the point the key is entered (currently the dialog only says the key is "used to query the Claude API for research answers," which is a reasonable start but doesn't mention this is a third-party service subject to Anthropic's own privacy terms).
 
 ---
@@ -125,7 +125,7 @@ The blocking gaps are almost entirely **compliance/store-listing gaps**, not cod
   * **Audio** — collected as part of recorded throw videos (justified by `RECORD_AUDIO` + iOS `NSMicrophoneUsageDescription`).
   * **App activity / search terms** — sent to a third party (Anthropic) only if/when the user adds their own API key and uses "AI Search." *AI Search has since been removed from the app; knowledge base questions are answered on the device and nothing is sent to Anthropic, so this item no longer applies.*
   * No account/identity data is collected — the app has no login system, which meaningfully reduces scope here versus TennisScoring (which has Firebase Auth, FCM tokens, messaging, etc.).
-  * Data is **not encrypted in transit** by default only in the trivial sense that `_isAllowedServerUri` also permits plain `http://localhost`/`127.0.0.1`/`::1` — that's a developer-mode allowance, not reachable from a real device pointed at production, so it doesn't affect the Data Safety answer, but confirm the shipped default (`https://discflightschool.onrender.com`) is what ends up in the build.
+  * Data is **not encrypted in transit** by default only in the trivial sense that `_isAllowedServerUri` also permits plain `http://localhost`/`127.0.0.1`/`::1` — that's a developer-mode allowance, not reachable from a real device pointed at production, so it doesn't affect the Data Safety answer, but confirm the shipped default (`https://discflightschool-1.onrender.com`) is what ends up in the build.
 
 ---
 
@@ -158,7 +158,7 @@ The blocking gaps are almost entirely **compliance/store-listing gaps**, not cod
 - [ ] Build and sign a real `.aab` via `flutter build appbundle --release`, then test it through Google Play **Internal Testing** on an API 34+ device.
 - [ ] Manually verify the Camera/Microphone/Photos runtime permission prompts show sensible rationale on first use.
 - [ ] Manually verify the opt-in toggle in Training Settings actually gates the upload flow end-to-end, and that "Clear all training data" behaves as the privacy policy will describe.
-- [ ] Confirm the shipped build's default training server URL (`https://discflightschool.onrender.com`) is the intended production endpoint and is reachable/healthy at submission time.
+- [ ] Confirm the shipped build's default training server URL (`https://discflightschool-1.onrender.com`) is the intended production endpoint and is reachable/healthy at submission time.
 
 ---
 
