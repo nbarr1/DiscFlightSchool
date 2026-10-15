@@ -95,7 +95,7 @@ jobs:
         run: ./gradlew --no-daemon :app:bundleRelease
 
       - name: Upload bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: disc-flight-school-release-${{ github.run_number }}
           path: disc_golf_android/app/build/outputs/bundle/release/app-release.aab
