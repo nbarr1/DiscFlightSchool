@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # minio/minio and minio/mc are no longer served to anonymous pulls, so
       # the image pull below fails with "pull access denied" without
