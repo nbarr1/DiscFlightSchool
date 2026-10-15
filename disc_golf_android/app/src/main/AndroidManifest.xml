@@ -3,15 +3,19 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Reading a video the user picked needs no permission on API 33+; these
-         cover the older pickers that hand back a file path instead. -->
+         cover the older pickers that hand back a file path instead.
+
+         RECORD_AUDIO and READ_MEDIA_VIDEO are deliberately absent. Recording
+         goes through the system camera app, which holds its own microphone
+         permission, and picking uses the photo picker, which needs none.
+         Google Play's photo and video permissions policy expects an app with
+         occasional media needs to use the picker instead. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />

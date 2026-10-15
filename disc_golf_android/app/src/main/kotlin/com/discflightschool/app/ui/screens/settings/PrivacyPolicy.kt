@@ -20,12 +20,13 @@ import com.discflightschool.app.ui.theme.AppColors
 /**
  * The canonical privacy policy copy.
  *
- * Kept as data rather than markup so a future public web page can reuse the
- * same text instead of maintaining a second copy that drifts.
+ * Kept as data rather than markup so the public copy in
+ * `docs/privacy-policy.md`, which Google Play links to, can be checked
+ * against it: PrivacyPolicyTest fails when the two differ.
  */
 object PrivacyPolicy {
 
-    const val LAST_UPDATED = "September 2026"
+    const val LAST_UPDATED = "October 2026"
 
     const val INTRO = "Disc Flight School is a coaching and analysis tool. This policy " +
         "explains what the app accesses on your device, what it sends elsewhere, and " +
@@ -35,10 +36,12 @@ object PrivacyPolicy {
 
     val SECTIONS = listOf(
         Section(
-            title = "Camera, microphone, and photo library access",
-            body = "Disc Flight School asks for camera and microphone access so you can " +
-                "record your throws for Form Coach and Flight Tracker, and for photo " +
-                "library access so you can pick an existing video or save an analyzed one. " +
+            title = "Camera and photo library access",
+            body = "Disc Flight School asks for camera access so you can record your " +
+                "throws for Form Coach and Flight Tracker. Your device's camera app makes " +
+                "the recording, including its sound. The app uses the system photo picker " +
+                "so you can choose an existing video, and saves analyzed videos to your " +
+                "gallery. " +
                 "By default, recorded video, extracted frames, and analysis results stay on " +
                 "your device. A video is uploaded only when you choose Auto-detect or cloud " +
                 "flight tracing, or opt in to training data collection (below).",

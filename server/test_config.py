@@ -79,5 +79,50 @@ class SettingsTests(unittest.TestCase):
                         Settings.from_env()
 
 
+    def test_partly_configured_durable_storage_is_refused(self):
+        settings = Settings(
+            app_api_key="test-key",
+            base_dir=Path("."),
+            database_url="postgresql://example/db",
+            redis_url="redis://example:6379/0",
+            object_storage_endpoint="http://minio:9000",
+        )
+        with self.assertRaises(RuntimeError) as raised:
+            settings.uses_durable_storage
+        self.assertIn("OBJECT_STORAGE_BUCKET", str(raised.exception))
+
+    def test_durable_storage_needs_every_variable(self):
+        base = Settings(app_api_key="test-key", base_dir=Path("."))
+        self.assertFalse(base.uses_durable_storage)
+        full = Settings(
+            app_api_key="test-key",
+            base_dir=Path("."),
+            database_url="postgresql://example/db",
+            redis_url="redis://example:6379/0",
+            object_storage_endpoint="http://minio:9000",
+            object_storage_bucket="bucket",
+            object_storage_access_key="access",
+            object_storage_secret_key="secret",
+        )
+        self.assertTrue(full.uses_durable_storage)
+
+    def test_spending_limits_load_from_env(self):
+        env = {
+            "APP_API_KEY": "test-key",
+            "UPLOAD_API_KEY": "contributor",
+            "DISC_FLIGHT_MAX_ACTIVE_JOBS": "5",
+            "CLIENT_RATE_LIMIT_PER_HOUR": "12",
+            "CLIENT_GLOBAL_LIMIT_PER_HOUR": "120",
+            "TRUSTED_PROXY_HOPS": "1",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            settings = Settings.from_env(base_dir=Path("."))
+        self.assertEqual(settings.upload_api_key, "contributor")
+        self.assertEqual(settings.disc_flight_max_active_jobs, 5)
+        self.assertEqual(settings.client_rate_limit_per_hour, 12)
+        self.assertEqual(settings.client_global_limit_per_hour, 120)
+        self.assertEqual(settings.trusted_proxy_hops, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

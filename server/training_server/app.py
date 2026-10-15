@@ -6,7 +6,9 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import time
+import traceback
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -23,8 +25,14 @@ from .disc_detection import (
     DiscDetectionTimeout,
     detect_discs,
 )
-from .disc_flight import ALLOWED_VIDEO_TYPES, DiscFlightJobManager, temporary_upload
+from .disc_flight import (
+    ALLOWED_VIDEO_TYPES,
+    DiscFlightJobManager,
+    JobCapacityError,
+    temporary_upload,
+)
 from .protocols import StorageBackend
+from .rate_limit import SlidingWindowLimiter, client_ip
 from .storage import FileStorage
 from .training import TrainingManager
 from .validation import (
@@ -43,7 +51,7 @@ def _build_default_storage_and_trainer(
     if storage is not None:
         return storage, TrainingManager(settings, storage)
 
-    if settings.database_url and settings.object_storage_endpoint and settings.redis_url:
+    if settings.uses_durable_storage:
         from psycopg_pool import ConnectionPool
         from redis import Redis
 
@@ -61,8 +69,29 @@ def _build_default_storage_and_trainer(
         )
         return durable_storage, trainer
 
+    # Fine on a laptop. On a host whose disk is replaced on every deploy, such
+    # as a Render service without a persistent disk, it loses every uploaded
+    # sample and trained model, so say so where an operator will see it.
+    logger.warning(
+        json.dumps(
+            {
+                "event": "storage.filesystem",
+                "base_dir": str(settings.base_dir),
+                "detail": "Training data and models are stored on this machine's disk. "
+                "Use a persistent disk, or set the durable storage variables, in production.",
+            }
+        )
+    )
     file_storage = FileStorage(settings)
     return file_storage, TrainingManager(settings, file_storage)
+
+
+def _too_many_requests(message: str, retry_after: float) -> JSONResponse:
+    return JSONResponse(
+        {"error": message},
+        status_code=429,
+        headers={"Retry-After": str(math.ceil(retry_after))},
+    )
 
 
 def _disc_detection_failure(exc: DiscDetectionError) -> JSONResponse:
@@ -92,6 +121,10 @@ def create_app(
     app.state.trainer = trainer
     flight_jobs = disc_flight_manager or DiscFlightJobManager(settings)
     app.state.disc_flight_jobs = flight_jobs
+    client_limiter = SlidingWindowLimiter(settings.client_rate_limit_per_hour, 3600)
+    global_client_limiter = SlidingWindowLimiter(settings.client_global_limit_per_hour, 3600)
+    app.state.client_limiter = client_limiter
+    app.state.global_client_limiter = global_client_limiter
 
     app.add_middleware(
         CORSMiddleware,
@@ -115,7 +148,26 @@ def create_app(
                 }
             )
         )
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            # Logged as one JSON line with the request id, so a log alert can
+            # match "request.error" and the line leads straight to the request.
+            logger.error(
+                json.dumps(
+                    {
+                        "event": "request.error",
+                        "request_id": request_id,
+                        "method": request.method,
+                        "path": request.url.path,
+                        "error": type(exc).__name__,
+                        "traceback": traceback.format_exc(),
+                    }
+                )
+            )
+            response = JSONResponse(
+                {"error": "Internal server error", "requestId": request_id}, status_code=500
+            )
         duration_ms = round((time.perf_counter() - start) * 1000, 3)
         response.headers["X-Request-ID"] = request_id
         logger.info(
@@ -132,7 +184,37 @@ def create_app(
         )
         return response
 
-    def require_api_key(x_app_key: str | None, *, allow_client: bool = False) -> JSONResponse | None:
+    def is_client_key(x_app_key: str | None) -> bool:
+        return bool(
+            x_app_key is not None
+            and settings.client_api_key
+            and hmac.compare_digest(x_app_key, settings.client_api_key)
+        )
+
+    def limit_client_spend(request: Request, x_app_key: str | None) -> JSONResponse | None:
+        """Count one Roboflow request against the client key's hourly limits.
+
+        Only the client key is limited: it ships in the app, so anyone can
+        extract it. APP_API_KEY holders are operators.
+        """
+        if not is_client_key(x_app_key):
+            return None
+        caller = client_ip(request, settings.trusted_proxy_hops)
+        if wait := client_limiter.acquire(caller):
+            logger.warning(json.dumps({"event": "rate_limit.caller", "request_id": request.state.request_id}))
+            return _too_many_requests("Too many detection requests. Try again later.", wait)
+        if wait := global_client_limiter.acquire("all"):
+            client_limiter.release(caller)
+            logger.warning(json.dumps({"event": "rate_limit.global", "request_id": request.state.request_id}))
+            return _too_many_requests(
+                "Cloud detection is busy right now. Try again later, or mark the disc by hand.",
+                wait,
+            )
+        return None
+
+    def require_api_key(
+        x_app_key: str | None, *, allow_client: bool = False, allow_upload: bool = False
+    ) -> JSONResponse | None:
         # compare_digest keeps the comparison constant-time with respect to the
         # secret, so a caller cannot recover the key byte-by-byte from response
         # timing. It requires str/bytes, hence the None guard.
@@ -142,8 +224,11 @@ def create_app(
             # The client key ships inside the app, so it opens only the
             # Roboflow detection endpoints: spending detection credits is the
             # most anyone who extracts it can do.
-            if allow_client and settings.client_api_key and hmac.compare_digest(
-                x_app_key, settings.client_api_key
+            if allow_client and is_client_key(x_app_key):
+                return None
+            # The upload key adds samples but can't read them back or train.
+            if allow_upload and settings.upload_api_key and hmac.compare_digest(
+                x_app_key, settings.upload_api_key
             ):
                 return None
         return JSONResponse({"error": "Invalid or missing API key"}, status_code=403)
@@ -156,6 +241,7 @@ def create_app(
 
     @app.post("/api/disc-flight/jobs", status_code=202)
     async def create_disc_flight_job(
+        request: Request,
         video: UploadFile | None = File(None),
         start_ms: int | None = Form(None),
         end_ms: int | None = Form(None),
@@ -190,6 +276,14 @@ def create_app(
                 {"error": "Roboflow processing is not configured on this server"},
                 status_code=503,
             )
+        # Before copying the upload, so a full server refuses in milliseconds
+        # rather than after receiving hundreds of megabytes.
+        if not flight_jobs.has_capacity():
+            return _too_many_requests(
+                "The server is busy processing other videos. Try again shortly.", 30
+            )
+        if limited := limit_client_spend(request, x_app_key):
+            return limited
         temporary = temporary_upload()
         size = 0
         digest = hashlib.sha256()
@@ -214,6 +308,8 @@ def create_app(
                 job, token = flight_jobs.create(temporary, suffix, source_key, clip=clip)
             except ValueError as exc:
                 return JSONResponse({"error": str(exc)}, status_code=409)
+            except JobCapacityError as exc:
+                return _too_many_requests(str(exc), 30)
             return {"jobId": job.id, "status": "queued", "jobToken": token}
         finally:
             temporary.unlink(missing_ok=True)
@@ -291,6 +387,8 @@ def create_app(
                 {"error": "Roboflow processing is not configured on this server"},
                 status_code=503,
             )
+        if limited := limit_client_spend(request, x_app_key):
+            return limited
         temporary = temporary_upload()
         try:
             try:
@@ -345,7 +443,7 @@ def create_app(
         crop_image: UploadFile = File(...),
         x_app_key: str | None = Header(None),
     ):
-        auth_error = require_api_key(x_app_key)
+        auth_error = require_api_key(x_app_key, allow_upload=True)
         if auth_error:
             return auth_error
 
@@ -386,8 +484,12 @@ def create_app(
             filename=info["path"].name,
         )
 
+    # Stats and status need the operator key: they describe the dataset and
+    # training runs, which the app never reads.
     @app.get("/api/training/stats")
-    async def get_training_stats():
+    async def get_training_stats(x_app_key: str | None = Header(None)):
+        if auth_error := require_api_key(x_app_key):
+            return auth_error
         stats = storage.load_stats()
         counts = storage.dataset_counts()
         return {
@@ -425,11 +527,25 @@ def create_app(
         return payload
 
     @app.get("/api/training/status")
-    async def get_training_status():
+    async def get_training_status(x_app_key: str | None = Header(None)):
+        if auth_error := require_api_key(x_app_key):
+            return auth_error
         return trainer.status
 
     @app.get("/health")
     async def health():
+        return {"status": "ok"}
+
+    # Liveness stays at /health; this one also proves storage answers, so a
+    # platform health check can catch an unreachable database or bucket.
+    @app.get("/ready")
+    def ready():
+        try:
+            storage.dataset_counts()
+            storage.load_stats()
+        except Exception as exc:  # noqa: BLE001 - any failure means not ready
+            logger.error(json.dumps({"event": "ready.failed", "error": type(exc).__name__}))
+            return JSONResponse({"status": "unavailable"}, status_code=503)
         return {"status": "ok"}
 
     @app.get("/")
@@ -451,6 +567,7 @@ def create_app(
                 "DELETE /api/disc-flight/jobs/{jobId}",
                 "POST /api/disc-detection",
                 "GET  /health",
+                "GET  /ready",
             ],
         }
 

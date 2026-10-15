@@ -1,0 +1,22 @@
+# Weekly update PRs for every dependency ecosystem in the repo. pip-audit in
+# dependency-audit.yml only covers the server's Python packages; this also
+# covers the Android app's Gradle dependencies and the workflows' actions.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /disc_golf_android
+    schedule:
+      interval: weekly
+    groups:
+      androidx:
+        patterns: ["androidx.*"]
+      kotlin:
+        patterns: ["org.jetbrains.kotlin*", "org.jetbrains.kotlinx*"]
+  - package-ecosystem: pip
+    directory: /server
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

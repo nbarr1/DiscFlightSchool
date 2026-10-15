@@ -70,13 +70,14 @@ class FakeProcessor:
         self.closed = True
 
 
-def make_client(tmp_path: Path, mode="success", *, max_bytes=1024, client_api_key=None):
+def make_client(tmp_path: Path, mode="success", *, max_bytes=1024, client_api_key=None, **overrides):
     settings = Settings(
         app_api_key="test-key",
         base_dir=tmp_path,
         roboflow_api_key="server-only",
         client_api_key=client_api_key,
         disc_flight_max_upload_bytes=max_bytes,
+        **overrides,
     )
     manager = DiscFlightJobManager(settings, lambda: FakeProcessor(mode))
     app = create_app(settings, FileStorage(settings), manager)
@@ -627,3 +628,109 @@ def test_server_reported_frame_errors_are_logged_without_the_key(
     assert event["errors"][1] == "404 for https://api.roboflow.com/model?api_key=[redacted]"
     assert len(event["errors"][2]) == 500
     assert "server-only" not in caplog.text
+
+
+# ── Spending limits on the client key ────────────────────────────────────
+
+
+def cancel_all(client, created):
+    for job in created:
+        client.delete(
+            f"/api/disc-flight/jobs/{job['jobId']}",
+            headers={**AUTH, "X-Job-Token": job["jobToken"]},
+        )
+
+
+def test_active_jobs_are_capped(tmp_path):
+    client, manager = make_client(tmp_path, "wait", disc_flight_max_active_jobs=2)
+    created = [start(client, data=VIDEO + bytes([i])).json() for i in range(2)]
+
+    refused = start(client, data=VIDEO + b"third")
+
+    assert refused.status_code == 429
+    assert refused.headers["Retry-After"] == "30"
+    assert len(manager.jobs) == 2
+    cancel_all(client, created)
+    for job in created:
+        wait_for_terminal(client, job["jobId"], job["jobToken"])
+    assert start(client, data=VIDEO + b"third").status_code == 202
+
+
+def test_the_client_key_is_limited_per_caller(tmp_path):
+    client, _ = make_client(
+        tmp_path, client_api_key="shipped-in-the-app", client_rate_limit_per_hour=2
+    )
+    assert start(client, headers=CLIENT, data=VIDEO + b"1").status_code == 202
+    assert start(client, headers=CLIENT, data=VIDEO + b"2").status_code == 202
+
+    refused = start(client, headers=CLIENT, data=VIDEO + b"3")
+
+    assert refused.status_code == 429
+    assert int(refused.headers["Retry-After"]) > 0
+    # Operators are never limited.
+    assert start(client, data=VIDEO + b"4").status_code == 202
+
+
+def test_the_client_key_has_a_global_limit(tmp_path):
+    client, _ = make_client(
+        tmp_path,
+        client_api_key="shipped-in-the-app",
+        client_global_limit_per_hour=1,
+        trusted_proxy_hops=1,
+    )
+    first = {**CLIENT, "X-Forwarded-For": "203.0.113.1"}
+    second = {**CLIENT, "X-Forwarded-For": "203.0.113.2"}
+    assert start(client, headers=first, data=VIDEO + b"1").status_code == 202
+
+    assert start(client, headers=second, data=VIDEO + b"2").status_code == 429
+
+
+def test_single_image_detection_counts_against_the_client_limit(tmp_path):
+    client, _ = make_client(
+        tmp_path, client_api_key="shipped-in-the-app", client_rate_limit_per_hour=1
+    )
+    assert start(client, headers=CLIENT).status_code == 202
+
+    response = client.post(
+        "/api/disc-detection",
+        headers=CLIENT,
+        files={"image": ("disc.jpg", b"not-an-image", "image/jpeg")},
+    )
+
+    assert response.status_code == 429
+
+
+def test_forwarded_addresses_are_trusted_only_as_far_as_configured(tmp_path):
+    from starlette.requests import Request
+
+    from training_server.rate_limit import client_ip
+
+    scope = {
+        "type": "http",
+        "headers": [(b"x-forwarded-for", b"198.51.100.9, 203.0.113.5")],
+        "client": ("10.0.0.1", 1234),
+    }
+    request = Request(scope)
+    assert client_ip(request, 0) == "10.0.0.1"
+    # The caller can write anything left of the last entry, so only the
+    # entry the trusted proxy appended counts.
+    assert client_ip(request, 1) == "203.0.113.5"
+    assert client_ip(request, 3) == "10.0.0.1"
+
+
+def test_finished_jobs_expire_without_any_request(tmp_path):
+    settings = Settings(app_api_key="test-key", base_dir=tmp_path, roboflow_api_key="server-only")
+    manager = DiscFlightJobManager(
+        settings, lambda: FakeProcessor(), retention_seconds=0, sweep_interval_seconds=0.01
+    )
+    source = tmp_path / "upload.mp4"
+    source.write_bytes(VIDEO)
+    job, _ = manager.create(source, ".mp4", "hash")
+    for _ in range(200):
+        if job.id not in manager.jobs:
+            break
+        time.sleep(0.01)
+    manager.close()
+
+    assert job.id not in manager.jobs
+    assert not job.directory.exists()

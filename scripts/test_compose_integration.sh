@@ -87,7 +87,7 @@ for i in 4 5 6 7 8 9 10; do
 done
 
 echo "Checking stats reflect 10 uploads..."
-stats=$(curl -sf "$API_URL/api/training/stats")
+stats=$(curl -sf "$API_URL/api/training/stats" -H "X-App-Key: $APP_API_KEY")
 echo "$stats" | grep -q '"total_samples":10' || {
   echo "expected total_samples:10 in stats, got: $stats" >&2
   exit 1

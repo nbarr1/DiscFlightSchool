@@ -37,6 +37,11 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 | `OBJECT_STORAGE_SECURE` | No | `true` | Whether the object storage client uses HTTPS. |
 | `ROBOFLOW_API_KEY` | No | none | Server-side Roboflow key for the disc-flight video jobs and `training_server/disc_detection.py`, which sends it only in the `Authorization: Bearer` header. |
 | `CLIENT_API_KEY` | No | none | A second key, built into the Android app, that the Roboflow endpoints (`/api/disc-flight/jobs...` and `/api/disc-detection`) accept in `X-App-Key` in place of `APP_API_KEY`. The training and export endpoints never accept it. Leave it unset to require `APP_API_KEY` everywhere. |
+| `UPLOAD_API_KEY` | No | none | A key that opens only `POST /api/training/upload`. Contributors can add samples with it but can't export the dataset, read stats, or start training. |
+| `DISC_FLIGHT_MAX_ACTIVE_JOBS` | No | `3` | Video jobs running at once, across every caller. A new job past this gets 429 with `Retry-After`, before its upload is copied. |
+| `CLIENT_RATE_LIMIT_PER_HOUR` | No | `30` | Roboflow requests (new video jobs plus single-image detections) one caller IP may make with `CLIENT_API_KEY` in any hour. `APP_API_KEY` requests aren't counted. |
+| `CLIENT_GLOBAL_LIMIT_PER_HOUR` | No | `300` | The same requests across all callers in any hour: the ceiling on what the shipped key can spend. |
+| `TRUSTED_PROXY_HOPS` | No | `0` | Proxies in front of the server that append to `X-Forwarded-For`. Set `1` on Render or behind one Cloudflare Tunnel so the per-caller limit sees real client addresses. A value higher than the real number of proxies lets callers choose their own address. |
 | `WORKER_POLL_SECONDS` | No | `30` | How long `training_server.worker` blocks on the Redis queue between checks (durable mode), or sleeps between log lines (placeholder mode). |
 
 ## Implemented endpoints
@@ -44,12 +49,13 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 | Method | Endpoint | Auth | Behavior |
 |---|---|---:|---|
 | `GET` | `/` | No | Lists implemented endpoints. |
-| `GET` | `/health` | No | Returns service health. |
-| `POST` | `/api/training/upload` | `X-App-Key` | Stores one validated full image, crop image, and class-0 YOLO label. |
-| `GET` | `/api/training/stats` | No | Returns upload stats and dataset file counts. |
+| `GET` | `/health` | No | Returns `ok` while the process is up. |
+| `GET` | `/ready` | No | Returns `ok` when storage answers, or 503. Point the platform health check here. |
+| `POST` | `/api/training/upload` | `X-App-Key` or `UPLOAD_API_KEY` | Stores one validated full image, crop image, and class-0 YOLO label. |
+| `GET` | `/api/training/stats` | `X-App-Key` | Returns upload stats and dataset file counts. |
 | `GET` | `/api/training/export` | `X-App-Key` | Returns a ZIP archive of the dataset directory when data exists. |
 | `POST` | `/api/training/start` | `X-App-Key` | Starts training (in-process thread, or a queued worker job in durable mode) when at least 10 full images exist. |
-| `GET` | `/api/training/status` | No | Returns training state — from an in-memory dict (default) or the `training_runs` table (durable mode); same JSON shape either way. |
+| `GET` | `/api/training/status` | `X-App-Key` | Returns training state — from an in-memory dict (default) or the `training_runs` table (durable mode); same JSON shape either way. |
 | `GET` | `/api/model/version` | No | Returns latest model metadata or `version: none`. |
 | `GET` | `/api/model/download` | No | Downloads the latest `.tflite` file or returns 404. |
 | `POST` | `/api/disc-flight/jobs` | `X-App-Key` or `CLIENT_API_KEY` | Starts a Roboflow video job for a `video` upload. Optional `start_ms`/`end_ms` form fields limit it to that range. Returns `jobId` and `jobToken`. |
@@ -58,6 +64,13 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 | `GET` | `/api/disc-flight/jobs/{jobId}/track` | as above, + `X-Job-Token` | Returns the disc's normalized position in each frame of the processed range. |
 | `DELETE` | `/api/disc-flight/jobs/{jobId}` | as above, + `X-Job-Token` | Cancels the job and removes its files. |
 | `POST` | `/api/disc-detection` | `X-App-Key` or `CLIENT_API_KEY` | Runs one JPEG/PNG `image` upload through the Roboflow disc-detection Workflow and returns the disc boxes. Returns 503 without `ROBOFLOW_API_KEY`, and 502 or 504 when Roboflow fails or times out. |
+
+## Production notes
+
+- **Storage.** Without the durable variables, the server keeps samples and models under its own directory and logs a `storage.filesystem` warning at startup. On a host whose disk is replaced on every deploy, such as a Render web service without a persistent disk, that loses every upload and model. Attach a persistent disk mounted at the server directory, or set every durable variable. Setting only some of them stops the server at startup with the list of what's missing.
+- **Spending limits.** The client key ships in the app, so the Roboflow endpoints cap concurrent jobs and hourly client-key requests (see the environment table). Also set a usage alert or cap in the Roboflow dashboard: these limits bound the rate, not the monthly total.
+- **Errors.** An unhandled exception is logged as one JSON line with `"event": "request.error"`, the request id, and the traceback, and the caller gets a 500 with the same request id. Alert on that event in your log provider.
+- **Restarts.** Video jobs live in memory, so a deploy or restart drops jobs in progress. The app reports this to the user, who can start the job again. Deploy when few jobs are running.
 
 ## Local setup
 
