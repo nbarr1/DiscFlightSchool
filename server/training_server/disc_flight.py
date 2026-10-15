@@ -62,6 +62,10 @@ class EmptyClip(UnreadableVideo):
     """The requested start/end range holds no frames of the upload."""
 
 
+class JobCapacityError(RuntimeError):
+    """The server is already running as many video jobs as it allows."""
+
+
 class VideoProcessor(Protocol):
     def __call__(
         self,
@@ -337,6 +341,7 @@ TERMINAL_STATUSES = frozenset({"complete", "failed", "cancelled"})
 # downloads the result as soon as it sees "complete", so this is generous; its
 # purpose is that results stop accumulating on disk without bound.
 RESULT_RETENTION_SECONDS = 24 * 60 * 60
+SWEEP_INTERVAL_SECONDS = 10 * 60
 
 
 class DiscFlightJobManager:
@@ -346,6 +351,7 @@ class DiscFlightJobManager:
         processor_factory=None,
         *,
         retention_seconds: float = RESULT_RETENTION_SECONDS,
+        sweep_interval_seconds: float = SWEEP_INTERVAL_SECONDS,
     ):
         self.settings = settings
         self.root = settings.base_dir / "disc_flight_jobs"
@@ -355,6 +361,30 @@ class DiscFlightJobManager:
         self.lock = threading.Lock()
         self.retention_seconds = retention_seconds
         self._sweep_abandoned_directories()
+        # Expiry otherwise runs only when a request arrives, so on a quiet
+        # server results would outlive the 24 hours the privacy policy states.
+        self._stop_sweeping = threading.Event()
+        self.sweep_interval_seconds = sweep_interval_seconds
+        threading.Thread(target=self._sweep_periodically, daemon=True).start()
+
+    def close(self) -> None:
+        """Stop the background expiry sweep."""
+        self._stop_sweeping.set()
+
+    def _sweep_periodically(self) -> None:
+        while not self._stop_sweeping.wait(self.sweep_interval_seconds):
+            try:
+                self._prune_expired()
+            except Exception:  # noqa: BLE001 - the sweep must outlive one bad pass
+                logger.exception("disc_flight.sweep_failed")
+
+    def _active_count(self) -> int:
+        return sum(1 for job in self.jobs.values() if job.status not in TERMINAL_STATUSES)
+
+    def has_capacity(self) -> bool:
+        """Whether a new job could start now. `create` checks again, atomically."""
+        with self.lock:
+            return self._active_count() < self.settings.disc_flight_max_active_jobs
 
     def _sweep_abandoned_directories(self) -> None:
         """Remove job folders an earlier process left behind.
@@ -421,6 +451,9 @@ class DiscFlightJobManager:
             ):
                 shutil.rmtree(directory, ignore_errors=True)
                 raise ValueError("This video already has an active processing job")
+            if self._active_count() >= self.settings.disc_flight_max_active_jobs:
+                shutil.rmtree(directory, ignore_errors=True)
+                raise JobCapacityError("The server is busy processing other videos. Try again shortly.")
             self.jobs[job_id] = job
         threading.Thread(target=self._run, args=(job,), daemon=True).start()
         return job, token

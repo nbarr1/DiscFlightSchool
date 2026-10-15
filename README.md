@@ -89,11 +89,12 @@ Implemented server endpoints:
 |---|---|---:|---|
 | `GET` | `/` | No | Lists implemented endpoints. |
 | `GET` | `/health` | No | Returns `{"status":"ok"}`. |
-| `POST` | `/api/training/upload` | `X-App-Key` | Validates sample ID, YOLO class-0 label, positive dimensions, JPEG/PNG signatures, and stores full image, crop image, and label on disk. |
-| `GET` | `/api/training/stats` | No | Returns stored stats and on-disk image/label counts. |
+| `GET` | `/ready` | No | Returns `{"status":"ok"}` when storage answers, or 503. |
+| `POST` | `/api/training/upload` | `X-App-Key` or upload key | Validates sample ID, YOLO class-0 label, positive dimensions, JPEG/PNG signatures, and stores full image, crop image, and label on disk. |
+| `GET` | `/api/training/stats` | `X-App-Key` | Returns stored stats and on-disk image/label counts. |
 | `GET` | `/api/training/export` | `X-App-Key` | Builds and returns a ZIP of the dataset directory when data exists. |
 | `POST` | `/api/training/start` | `X-App-Key` | Starts a background YOLO11 (`yolo11n.pt`) training/export thread if at least 10 full images exist. |
-| `GET` | `/api/training/status` | No | Returns training status (in-memory, or from PostgreSQL in durable mode — same JSON shape either way). |
+| `GET` | `/api/training/status` | `X-App-Key` | Returns training status (in-memory, or from PostgreSQL in durable mode — same JSON shape either way). |
 | `GET` | `/api/model/version` | No | Returns latest `.tflite` model metadata or the no-model sentinel. |
 | `GET` | `/api/model/download` | No | Downloads the latest `.tflite` model or returns 404 when none exists. |
 | `POST` | `/api/disc-flight/jobs` | `X-App-Key` or client key | Uploads a supported throw video and starts one persistent Roboflow WebRTC Workflow session. Optional `start_ms` and `end_ms` form fields limit processing to that part of the video. |
@@ -289,7 +290,12 @@ repository secret the APK was built with, and that no stale key is saved under
 Training Settings > Advanced: a saved key wins over the built-in one.
 
 Because the key is in every APK, treat it as public: it opens only the
-Roboflow endpoints, so its worst case is spent inference credits. To rotate it,
+Roboflow endpoints, so its worst case is spent inference credits. The server
+bounds that: it runs at most `DISC_FLIGHT_MAX_ACTIVE_JOBS` video jobs at once,
+and limits client-key requests per caller (`CLIENT_RATE_LIMIT_PER_HOUR`) and
+in total (`CLIENT_GLOBAL_LIMIT_PER_HOUR`), answering 429 past either. On
+Render, set `TRUSTED_PROXY_HOPS=1` so the per-caller limit sees real client
+addresses. Set a usage alert in the Roboflow dashboard as well. To rotate it,
 change the server's `CLIENT_API_KEY` and the repository secret together, then
 ship a new build. Builds with the old key fall back to on-device detection
 until users update.
@@ -447,6 +453,28 @@ cd disc_golf_android
 ```
 
 Without `key.properties` the release build has no signing config and fails; use `:app:assembleDebug` for local unsigned testing.
+
+CI builds the minified release bundle on every pull request
+(`.github/workflows/release-build.yml`, job `release-build-check`), signed
+with a throwaway key, so an R8 shrinking break fails CI instead of a release.
+To produce the bundle you upload to Google Play, run that workflow manually:
+its `signed-bundle` job signs with your upload key and attaches
+`app-release.aab` to the run. It needs these repository secrets:
+
+| Secret | Value |
+|---|---|
+| `RELEASE_KEYSTORE_BASE64` | The upload keystore, base64-encoded: `base64 -w0 upload.jks`. |
+| `RELEASE_STORE_PASSWORD` | The keystore password. |
+| `RELEASE_KEY_ALIAS` | The key's alias in the keystore. |
+| `RELEASE_KEY_PASSWORD` | The key's password. |
+| `CLIENT_API_KEY` | The client key, as for the debug build. |
+
+### The public privacy policy
+
+Google Play needs the privacy policy at a public URL.
+`docs/privacy-policy.md` is that copy, ready to publish with GitHub Pages (or
+anywhere else that serves Markdown or HTML). `PrivacyPolicyTest` fails when it
+differs from the in-app text in `PrivacyPolicy.kt`, so change both together.
 
 ### Bumping the app version for a release
 

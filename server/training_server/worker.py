@@ -87,7 +87,7 @@ def run_worker() -> None:
     settings = Settings.from_env(base_dir=Path(__file__).resolve().parents[1])
     poll_seconds = Settings.positive_int_from_env("WORKER_POLL_SECONDS", 30)
 
-    if settings.database_url and settings.redis_url and settings.object_storage_endpoint:
+    if settings.uses_durable_storage:
         _run_durable_worker(settings, poll_seconds)
         return
 

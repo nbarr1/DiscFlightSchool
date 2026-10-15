@@ -73,6 +73,7 @@ class DiscFlightClient(
         .readTimeout(60, TimeUnit.SECONDS)
         .build(),
     private val pollDelayMs: Long = 1_000,
+    private val retryDelayMs: Long = 1_000,
 ) : CloudTrackSource {
     private val outputDir = outputDirectory.also { it.mkdirs() }
     private val json = Json { ignoreUnknownKeys = true }
@@ -136,11 +137,13 @@ class DiscFlightClient(
     }
 
     suspend fun cancel() {
+        // Before cancelling the call, so the poll it interrupts sees a
+        // cancellation rather than a dropped connection worth retrying.
+        _state.value = DiscFlightUiState(DiscFlightPhase.CANCELLED)
         activeCall?.cancel()
         val id = activeJobId
         val token = activeJobToken
         val apiKey = activeApiKey
-        _state.value = DiscFlightUiState(DiscFlightPhase.CANCELLED)
         if (id != null && token != null && apiKey != null) {
             settings.endpoint("/api/disc-flight/jobs/$id")?.let { endpoint ->
                 runCatching {
@@ -199,7 +202,7 @@ class DiscFlightClient(
         var finished = false
         try {
             while (true) {
-                val body = send(request(job.toString()).build())
+                val body = pollWithRetries { send(request(job.toString()).build()) }
                 val frames = int(body, "framesProcessed") ?: 0
                 val total = int(body, "totalFrames")
                 when (string(body, "status")) {
@@ -250,10 +253,12 @@ class DiscFlightClient(
         val endpoint = settings.endpoint("/api/disc-flight/jobs/$id")
             ?: error("The server URL changed while processing.")
         while (true) {
-            val body = execute(
-                Request.Builder().url(endpoint.toString())
-                    .header("X-App-Key", apiKey).header("X-Job-Token", token).build(),
-            )
+            val body = pollWithRetries(cancelled = { _state.value.phase == DiscFlightPhase.CANCELLED }) {
+                execute(
+                    Request.Builder().url(endpoint.toString())
+                        .header("X-App-Key", apiKey).header("X-Job-Token", token).build(),
+                )
+            }
             val status = string(body, "status") ?: "processing"
             val frames = int(body, "framesProcessed") ?: 0
             val total = int(body, "totalFrames")
@@ -305,7 +310,7 @@ class DiscFlightClient(
         activeCall = call
         call.execute().use { response ->
             val body = response.body?.string().orEmpty()
-            if (!response.isSuccessful) throw IOException(serverError(body, response.code))
+            if (!response.isSuccessful) throw HttpStatusException(response.code, serverError(body, response.code))
             body
         }
     }
@@ -313,8 +318,38 @@ class DiscFlightClient(
     /** Like [execute], but cancelled with its caller rather than through [cancel]. */
     private suspend fun send(request: Request): String {
         val (code, body) = http.newCall(request).await()
-        if (code !in 200..299) throw IOException(serverError(body, code))
+        if (code !in 200..299) throw HttpStatusException(code, serverError(body, code))
         return body
+    }
+
+    /**
+     * Runs one status poll, retrying a dropped connection or a gateway error
+     * with backoff. The server keeps processing while the phone is briefly
+     * offline, so one failed poll shouldn't fail the whole job.
+     *
+     * A 404 means the server no longer knows the job, which happens when it
+     * restarts mid-run: its job list lives in memory. [cancelled] says whether
+     * a failure came from [cancel] aborting the call, which is never retried.
+     */
+    private suspend fun pollWithRetries(
+        cancelled: () -> Boolean = { false },
+        poll: suspend () -> String,
+    ): String {
+        var attempt = 0
+        while (true) {
+            try {
+                return poll()
+            } catch (error: HttpStatusException) {
+                if (error.code == 404) {
+                    throw IOException("The server restarted and lost this job. Start it again.", error)
+                }
+                if (error.code !in TRANSIENT_STATUS_CODES || attempt >= POLL_RETRIES) throw error
+            } catch (error: IOException) {
+                if (cancelled() || attempt >= POLL_RETRIES) throw error
+            }
+            delay(retryDelayMs shl attempt)
+            attempt++
+        }
     }
 
     private fun serverError(body: String?, code: Int): String = runCatching {
@@ -335,3 +370,10 @@ class DiscFlightClient(
     private fun double(body: String, key: String) =
         json.parseToJsonElement(body).jsonObject[key]?.jsonPrimitive?.doubleOrNull
 }
+
+/** A response outside 2xx, carrying the server's own message when it sent one. */
+internal class HttpStatusException(val code: Int, message: String) : IOException(message)
+
+/** Retries of one status poll before the job is reported as failed: about 31 s in all. */
+private const val POLL_RETRIES = 5
+private val TRANSIENT_STATUS_CODES = setOf(408, 429, 500, 502, 503, 504)

@@ -197,9 +197,71 @@ class TrainingServerContractTests(unittest.TestCase):
 
     def test_unauthenticated_endpoints_stay_open(self):
         app = self.build_app()
-        for path in ("/", "/health", "/api/training/stats", "/api/training/status"):
+        for path in ("/", "/health", "/ready", "/api/model/version"):
             with self.subTest(path=path):
                 self.assertEqual(self.request(app, "GET", path).status_code, 200)
+
+    def test_training_stats_and_status_need_the_operator_key(self):
+        app = self.build_app()
+        for path in ("/api/training/stats", "/api/training/status"):
+            with self.subTest(path=path):
+                self.assertEqual(self.request(app, "GET", path).status_code, 403)
+                self.assertEqual(
+                    self.request(app, "GET", path, headers={"x-app-key": "test-key"}).status_code,
+                    200,
+                )
+
+    def test_ready_reports_unavailable_storage(self):
+        app = self.build_app()
+
+        def broken():
+            raise OSError("disk gone")
+
+        app.state.storage.dataset_counts = broken
+        response = self.request(app, "GET", "/ready")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"status": "unavailable"})
+
+    def test_an_unhandled_error_is_logged_and_returns_json(self):
+        app = self.build_app()
+
+        def broken():
+            raise RuntimeError("boom")
+
+        app.state.storage.latest_model_info = broken
+        with self.assertLogs("disc_flight_school.training_server", level="ERROR") as logs:
+            response = self.request(app, "GET", "/api/model/version", headers={"x-request-id": "req-err"})
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json(), {"error": "Internal server error", "requestId": "req-err"})
+        self.assertTrue(any('"event": "request.error"' in line and "req-err" in line for line in logs.output))
+
+    def test_the_upload_key_adds_samples_but_cannot_read_or_train(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        settings = Settings(
+            app_api_key="test-key",
+            upload_api_key="contributor-key",
+            base_dir=Path(self.tmpdir.name),
+        )
+        app = create_app(settings)
+        body, content_type = multipart_body(
+            {"sample_id": "sample-1", "label": "0 0.5 0.5 0.1 0.1", "image_width": "100", "image_height": "100"},
+            {
+                "full_image": ("full.jpg", JPEG_1X1, "image/jpeg"),
+                "crop_image": ("crop.jpg", JPEG_1X1, "image/jpeg"),
+            },
+        )
+        upload = self.request(
+            app,
+            "POST",
+            "/api/training/upload",
+            headers={"content-type": content_type, "x-app-key": "contributor-key"},
+            body=body,
+        )
+        self.assertEqual(upload.status_code, 200)
+        headers = {"x-app-key": "contributor-key"}
+        self.assertEqual(self.request(app, "GET", "/api/training/export", headers=headers).status_code, 403)
+        self.assertEqual(self.request(app, "POST", "/api/training/start", headers=headers).status_code, 403)
+        self.assertEqual(self.request(app, "GET", "/api/training/stats", headers=headers).status_code, 403)
 
     def test_upload_rejects_invalid_label_before_file_write(self):
         app = self.build_app()
@@ -260,7 +322,7 @@ class TrainingServerContractTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
 
-        stats = self.request(app, "GET", "/api/training/stats").json()
+        stats = self.request(app, "GET", "/api/training/stats", headers={"x-app-key": "test-key"}).json()
         self.assertEqual(stats["total_samples"], 1)
         self.assertEqual(stats["images_on_disk"], 1)
         self.assertEqual(stats["labels_on_disk"], 1)
@@ -310,7 +372,7 @@ class TrainingServerContractTests(unittest.TestCase):
             (app.state.settings.images_dir / "sample-1_full.jpg").read_bytes(),
             original,
         )
-        stats = self.request(app, "GET", "/api/training/stats").json()
+        stats = self.request(app, "GET", "/api/training/stats", headers={"x-app-key": "test-key"}).json()
         self.assertEqual(stats["total_samples"], 1)
 
 

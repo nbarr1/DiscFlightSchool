@@ -49,6 +49,7 @@ class DiscFlightClientTest {
             repository,
             OkHttpClient(),
             pollDelayMs = 1,
+            retryDelayMs = 1,
         )
     }
 
@@ -91,6 +92,45 @@ class DiscFlightClientTest {
         server.enqueue(MockResponse().setBody("mp4"))
         client.process(video.absolutePath)
         assertEquals(DiscFlightPhase.COMPLETE, client.state.value.phase)
+    }
+
+    @Test
+    fun `a gateway error while polling is retried`() = runBlocking {
+        server.enqueue(json("""{"jobId":"one","status":"queued","jobToken":"owner"}"""))
+        server.enqueue(MockResponse().setResponseCode(502).setBody("bad gateway"))
+        server.enqueue(MockResponse().setResponseCode(503).setBody("""{"error":"Service unavailable"}"""))
+        server.enqueue(json("""{"jobId":"one","status":"complete","framesProcessed":1}"""))
+        server.enqueue(MockResponse().setBody("mp4"))
+
+        client.process(video.absolutePath)
+
+        assertEquals(DiscFlightPhase.COMPLETE, client.state.value.phase)
+    }
+
+    @Test
+    fun `polling gives up after repeated gateway errors`() = runBlocking {
+        server.enqueue(json("""{"jobId":"one","status":"queued","jobToken":"owner"}"""))
+        repeat(6) {
+            server.enqueue(MockResponse().setResponseCode(503).setBody("""{"error":"Service unavailable"}"""))
+        }
+
+        client.process(video.absolutePath)
+
+        assertEquals(DiscFlightPhase.FAILED, client.state.value.phase)
+        assertEquals("Service unavailable", client.state.value.error)
+        assertEquals(7, server.requestCount)
+    }
+
+    @Test
+    fun `a job the server no longer knows says the server restarted`() {
+        server.enqueue(json("""{"jobId":"one","status":"queued","jobToken":"owner"}"""))
+        server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"Job not found"}"""))
+
+        val error = assertThrows(java.io.IOException::class.java) {
+            runBlocking { client.fetchTrack(video.absolutePath, 0, null) { _, _ -> } }
+        }
+
+        assertEquals("The server restarted and lost this job. Start it again.", error.message)
     }
 
     @Test
