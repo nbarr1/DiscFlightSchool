@@ -11,7 +11,7 @@ python-multipart>=0.0.31,<1.0.0
 Pillow>=12.3.0
 psycopg[binary,pool]>=3.1,<4.0
 redis>=5.0,<6.0
-minio>=7.2,<8.0
+minio>=7.2.20,<8.0
 
 # Test-only tooling (not part of the production runtime).
 pytest>=8.0.0
