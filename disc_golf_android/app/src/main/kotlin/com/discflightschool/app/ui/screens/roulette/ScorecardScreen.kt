@@ -33,6 +33,9 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.discflightschool.app.ui.components.readableWidth
+import androidx.compose.ui.draw.clip
+import androidx.compose.material3.Button
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -86,16 +89,16 @@ fun ScorecardScreen(
         return
     }
 
+    fun finish() {
+        scoring.clearCurrentRound()
+        onFinish()
+    }
+
     Scaffold(
         topBar = {
             AppTopBar(title = "Scorecard", onBack = onBack) {
                 if (round.isComplete && savedRoundId == null) {
-                    IconButton(
-                        onClick = {
-                            scoring.clearCurrentRound()
-                            onFinish()
-                        },
-                    ) {
+                    IconButton(onClick = { finish() }) {
                         Icon(Icons.Default.Home, contentDescription = "Finish and go home")
                     }
                 }
@@ -107,6 +110,7 @@ fun ScorecardScreen(
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .readableWidth()
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -142,6 +146,15 @@ fun ScorecardScreen(
             if (round.isComplete) {
                 Spacer(Modifier.height(8.dp))
                 Leaderboard(round)
+                // The end of a round deserves more than an app-bar icon.
+                if (savedRoundId == null) {
+                    Spacer(Modifier.height(24.dp))
+                    Button(onClick = { finish() }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Home, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Finish round")
+                    }
+                }
             }
 
             Spacer(Modifier.height(24.dp))
@@ -263,8 +276,10 @@ private fun PlayerScorecard(
                 )
                 Spacer(Modifier.height(12.dp))
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(9),
-                    modifier = Modifier.heightIn(max = 220.dp),
+                    // Nine across leaves each tile ~30dp on a phone: too small to
+                    // tap and too narrow for the multiplier. A 48dp minimum fits both.
+                    columns = GridCells.Adaptive(minSize = 48.dp),
+                    modifier = Modifier.heightIn(max = 320.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
@@ -299,9 +314,14 @@ private fun HoleTile(score: HoleScore, onClick: () -> Unit) {
     val color = scoreColor(score.strokes - score.par)
     Column(
         modifier = Modifier
-            .background(color.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(4.dp))
+            .background(color.copy(alpha = 0.2f))
             .border(1.dp, color, RoundedCornerShape(4.dp))
-            .clickable(onClick = onClick)
+            .clickable(
+                onClickLabel = "Show the throws on hole ${score.holeNumber}",
+                onClick = onClick,
+            )
+            .heightIn(min = 48.dp)
             .padding(vertical = 4.dp)
             .fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,

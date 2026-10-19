@@ -49,6 +49,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,7 +60,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -87,6 +90,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.discflightschool.app.LocalAppContainer
@@ -617,7 +621,12 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
                 .padding(padding)
                 .fillMaxSize(),
         ) {
-            PhaseBanner(phase = phase, pendingAnchor = pendingAnchor, report = qualityReport)
+            PhaseBanner(
+                phase = phase,
+                pendingAnchor = pendingAnchor,
+                report = qualityReport,
+                usedAnchoring = anchors.isNotEmpty() || pendingAnchor != null,
+            )
 
             // Taps and overlays live inside the stage, so they share the
             // letterboxed image's coordinates rather than the whole pane's.
@@ -774,6 +783,13 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
                 onRefine = { scope.launch { refineWithDetection() } },
                 onAutoDetect = { scope.launch { runAutoDetection() } },
                 onClear = {
+                    // Clearing throws away every mark and anchor at once, so it
+                    // is one tap to do and one tap to take back.
+                    val keptKeyframes = keyframes.toList()
+                    val keptAnchors = anchors.toList()
+                    val keptResult = workbench.flightResult
+                    val keptSource = resultSource
+                    val keptReport = qualityReport
                     keyframes.clear()
                     anchors.clear()
                     pendingAnchor = null
@@ -782,6 +798,20 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
                     resultSource = null
                     qualityReport = null
                     phase = SetupPhase.MARKING
+                    scope.launch {
+                        val choice = snackbarHostState.showSnackbar(
+                            message = "Cleared ${keptKeyframes.size} points",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Long,
+                        )
+                        if (choice == SnackbarResult.ActionPerformed) {
+                            keyframes.addAll(keptKeyframes)
+                            anchors.addAll(keptAnchors)
+                            workbench.flightResult = keptResult
+                            resultSource = keptSource
+                            qualityReport = keptReport
+                        }
+                    }
                 },
                 onEditPoints = { convertResultToKeyframes() },
                 onBackToMarking = { phase = SetupPhase.MARKING },
@@ -808,6 +838,12 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
             },
             secondaryLabel = "Mark manually",
             primaryLabel = "Auto-detect",
+            // Backing out of the first question means not tracking this clip
+            // now; leave the screen rather than strand it with no path chosen.
+            onDismiss = {
+                showModeSheet = false
+                onBack()
+            },
             onSecondary = {
                 showModeSheet = false
                 showCameraSheet = true
@@ -825,6 +861,10 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
             body = "If the camera panned or zoomed during the throw, we'll correct for it first.",
             secondaryLabel = "Yes, camera was fixed",
             primaryLabel = "It moved",
+            onDismiss = {
+                showCameraSheet = false
+                showModeSheet = true
+            },
             onSecondary = {
                 showCameraSheet = false
                 phase = SetupPhase.MARKING
@@ -837,8 +877,15 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
     }
 
     if (showDetectionDialog) {
+        val cancelDetection: () -> Unit = {
+            val cloud = cloudTracker
+            if (cloud != null) cloud.cancel() else container.discDetector.cancelProcessing()
+        }
         AlertDialog(
-            onDismissRequest = {},
+            // Back cancels, the same as the button: a run nobody can leave
+            // except by finding the button is a trap.
+            onDismissRequest = cancelDetection,
+            properties = DialogProperties(dismissOnClickOutside = false),
             title = { Text("Finding the disc") },
             text = {
                 Column {
@@ -872,12 +919,7 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        val cloud = cloudTracker
-                        if (cloud != null) cloud.cancel() else container.discDetector.cancelProcessing()
-                    },
-                ) {
+                TextButton(onClick = cancelDetection) {
                     Text("Cancel")
                 }
             },
@@ -928,13 +970,15 @@ private fun ChoiceSheet(
     body: String,
     secondaryLabel: String,
     primaryLabel: String,
+    onDismiss: () -> Unit,
     onSecondary: () -> Unit,
     onPrimary: () -> Unit,
 ) {
     ModalBottomSheet(
-        // The sheet is the question; dismissing it would leave the screen with
-        // no path chosen and nothing to do.
-        onDismissRequest = {},
+        // The sheet is the question, so dismissing it is a step back through
+        // the setup rather than a no-op: a sheet that ignores Back traps the
+        // user on it.
+        onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = AppColors.Background,
     ) {
@@ -949,15 +993,11 @@ private fun ChoiceSheet(
             Spacer(Modifier.height(28.dp))
             Row {
                 OutlinedButton(onClick = onSecondary, modifier = Modifier.weight(1f)) {
-                    Text(secondaryLabel)
+                    Text(secondaryLabel, textAlign = TextAlign.Center)
                 }
                 Spacer(Modifier.width(12.dp))
-                Button(
-                    onClick = onPrimary,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = AppColors.Roulette),
-                ) {
-                    Text(primaryLabel)
+                Button(onClick = onPrimary, modifier = Modifier.weight(1f)) {
+                    Text(primaryLabel, textAlign = TextAlign.Center)
                 }
             }
         }
@@ -969,6 +1009,7 @@ private fun PhaseBanner(
     phase: SetupPhase,
     pendingAnchor: Vec2?,
     report: DetectionQualityReport?,
+    usedAnchoring: Boolean,
 ) {
     val content = when (phase) {
         SetupPhase.ANCHORING -> Triple(
@@ -981,7 +1022,8 @@ private fun PhaseBanner(
             AppColors.KnowledgeBase,
         )
         SetupPhase.MARKING -> Triple(
-            "Step 2 of 2 — mark the disc",
+            // A fixed camera skips anchoring, so there is no step 1 to count.
+            if (usedAnchoring) "Step 2 of 2 — mark the disc" else "Mark the disc",
             "Tap the disc in two or more frames (hold for a zoomed view), then tap Process.",
             AppColors.TopBar,
         )
@@ -1368,10 +1410,12 @@ private fun ActionBar(
                     Spacer(Modifier.width(6.dp))
                     Text("Undo")
                 }
+                // One filled action: Process is what the marks are for. The two
+                // detector-assisted routes are alternatives, so they are tonal,
+                // and Clear is outlined in the error colour with an undo behind it.
                 Button(
                     onClick = onProcess,
                     enabled = keyframeCount >= 2,
-                    colors = ButtonDefaults.buttonColors(containerColor = AppColors.Good),
                 ) {
                     Icon(
                         Icons.Default.AutoAwesome,
@@ -1381,10 +1425,9 @@ private fun ActionBar(
                     Spacer(Modifier.width(6.dp))
                     Text("Process")
                 }
-                Button(
+                FilledTonalButton(
                     onClick = onRefine,
                     enabled = keyframeCount >= 3,
-                    colors = ButtonDefaults.buttonColors(containerColor = AppColors.Roulette),
                 ) {
                     Icon(
                         Icons.Default.CenterFocusStrong,
@@ -1394,10 +1437,9 @@ private fun ActionBar(
                     Spacer(Modifier.width(6.dp))
                     Text("Auto-refine")
                 }
-                Button(
+                FilledTonalButton(
                     onClick = onAutoDetect,
                     enabled = !isDetecting,
-                    colors = ButtonDefaults.buttonColors(containerColor = AppColors.Roulette),
                 ) {
                     Icon(
                         Icons.Default.AutoFixHigh,
@@ -1407,10 +1449,10 @@ private fun ActionBar(
                     Spacer(Modifier.width(6.dp))
                     Text("Auto-detect")
                 }
-                Button(
+                OutlinedButton(
                     onClick = onClear,
                     enabled = keyframeCount > 0,
-                    colors = ButtonDefaults.buttonColors(containerColor = AppColors.Bad),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AppColors.Bad),
                 ) {
                     Icon(
                         Icons.Default.Clear,

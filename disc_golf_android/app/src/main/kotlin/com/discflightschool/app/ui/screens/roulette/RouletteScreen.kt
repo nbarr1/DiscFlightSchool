@@ -36,6 +36,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.discflightschool.app.ui.components.rememberReduceMotion
+import com.discflightschool.app.ui.components.readableWidth
+import com.discflightschool.app.ui.Formatting
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Button
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -89,16 +96,22 @@ fun RouletteScreen(
     var isSpinning by remember { mutableStateOf(false) }
     var isPutting by remember { mutableStateOf(false) }
     val rotation = remember { Animatable(0f) }
+    val reduceMotion = rememberReduceMotion()
+    val scrollState = rememberScrollState()
 
     fun spin() {
         if (isSpinning) return
         isSpinning = true
         scope.launch {
-            rotation.snapTo(0f)
-            rotation.animateTo(
-                targetValue = 3f * 360f,
-                animationSpec = tween(durationMillis = 2000, easing = LinearOutSlowInEasing),
-            )
+            // With animations off the result arrives at once rather than
+            // after two seconds of a wheel the user asked not to see turn.
+            if (!reduceMotion) {
+                rotation.snapTo(0f)
+                rotation.animateTo(
+                    targetValue = 3f * 360f,
+                    animationSpec = tween(durationMillis = 2000, easing = LinearOutSlowInEasing),
+                )
+            }
             val discs = if (isPutting) DiscLists.putting else DiscLists.all
             val spun = if (isPutting) {
                 RouletteResult.generatePutt(discs)
@@ -108,15 +121,15 @@ fun RouletteScreen(
             result = spun
             isSpinning = false
             container.rouletteHistoryRepository.addResult(spun)
+            // The challenge lands under the wheel, below the fold on most
+            // phones; bring it into view.
+            scrollState.animateScrollTo(scrollState.maxValue)
         }
     }
 
     Scaffold(
         topBar = {
             AppTopBar(title = "Disc Golf Roulette", onBack = onBack) {
-                IconButton(onClick = onOpenScoredRound) {
-                    Icon(Icons.Default.Scoreboard, contentDescription = "Scored round")
-                }
                 IconButton(onClick = onOpenHistory) {
                     Icon(Icons.Default.History, contentDescription = "Spin history")
                 }
@@ -127,7 +140,8 @@ fun RouletteScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
+                .readableWidth()
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -173,10 +187,30 @@ fun RouletteScreen(
                             "Spin the wheel for a throwing challenge"
                         }
                     }
-                    .clickable(enabled = !isSpinning) { spin() },
+                    .clickable(enabled = !isSpinning, role = Role.Button) { spin() },
                 contentAlignment = Alignment.Center,
             ) {
                 RouletteWheel(modifier = Modifier.rotate(rotation.value))
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // The wheel is tappable, but nothing about a wheel says so; the
+            // button is the visible way in.
+            Button(
+                onClick = { spin() },
+                enabled = !isSpinning,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Default.Casino, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (isSpinning) "Spinning..." else if (result == null) "Spin" else "Spin again")
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = onOpenScoredRound, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Scoreboard, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Play a scored round")
             }
 
             Spacer(Modifier.height(24.dp))
@@ -285,7 +319,7 @@ private fun ResultCard(result: RouletteResult) {
 
             Spacer(Modifier.height(12.dp))
             Text(
-                "Difficulty multiplier ${"%.1f".format(result.difficultyMultiplier)}x",
+                "Difficulty multiplier ${Formatting.decimal(result.difficultyMultiplier)}x",
                 style = MaterialTheme.typography.bodySmall,
                 color = AppColors.Muted,
             )

@@ -41,8 +41,9 @@ class VideoPickers internal constructor(
  * Wires up both launchers.
  *
  * [onVideoReady] receives the path of the imported clip; [onFailed] receives a
- * message to show when nothing came back — a cancelled picker and a denied
- * permission look the same to the caller, so the message says what to check.
+ * message to show when a clip could not be brought in. Closing the picker
+ * without choosing reports nothing; the camera can't tell a cancelled
+ * recording from a failed one, so its message says what to check.
  */
 @Composable
 fun rememberVideoPickers(
@@ -62,10 +63,8 @@ fun rememberVideoPickers(
     val pickLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri: Uri? ->
-        if (uri == null) {
-            onFailed("No video selected.")
-            return@rememberLauncherForActivityResult
-        }
+        // Backing out of the picker is a choice, not a failure: nothing to say.
+        if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             val path = container.videoLibrary.importVideo(uri)
             if (path != null) {

@@ -51,6 +51,14 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import com.discflightschool.app.ui.components.rememberReduceMotion
+import com.discflightschool.app.ui.components.readableWidth
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material.icons.filled.Casino
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -115,6 +123,7 @@ fun PlayRoundScreen(
     var challenge by remember { mutableStateOf<RouletteResult?>(null) }
     var showUndoDialog by remember { mutableStateOf(false) }
     val rotation = remember { Animatable(0f) }
+    val reduceMotion = rememberReduceMotion()
 
     val currentThrows = roundState.currentThrows
     val playerThrows = roundState.playerThrows
@@ -139,11 +148,13 @@ fun PlayRoundScreen(
         isSpinning = true
         challenge = null
         scope.launch {
-            rotation.snapTo(0f)
-            rotation.animateTo(
-                targetValue = 3f * 360f,
-                animationSpec = tween(durationMillis = 2000, easing = LinearOutSlowInEasing),
-            )
+            if (!reduceMotion) {
+                rotation.snapTo(0f)
+                rotation.animateTo(
+                    targetValue = 3f * 360f,
+                    animationSpec = tween(durationMillis = 2000, easing = LinearOutSlowInEasing),
+                )
+            }
             val discs = if (isPutting) DiscLists.putting else DiscLists.scoringRound
             challenge = if (isPutting) {
                 RouletteResult.generatePutt(discs)
@@ -272,6 +283,7 @@ fun PlayRoundScreen(
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .readableWidth()
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -476,7 +488,7 @@ fun PlayRoundScreen(
                 val spun = challenge
                 if (spun == null) {
                     Text(
-                        "Tap the wheel to spin for throw #${currentThrows.size + 1}",
+                        "Spin for throw #${currentThrows.size + 1}",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
@@ -485,41 +497,60 @@ fun PlayRoundScreen(
                     Box(
                         modifier = Modifier
                             .size(250.dp)
-                            .clickable(enabled = !isSpinning) { spin() },
+                            .semantics {
+                                contentDescription =
+                                    "Spin the wheel for throw ${currentThrows.size + 1}"
+                            }
+                            .clickable(enabled = !isSpinning, role = Role.Button) { spin() },
                         contentAlignment = Alignment.Center,
                     ) {
                         RouletteWheel(modifier = Modifier.rotate(rotation.value))
                     }
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = { spin() },
+                        enabled = !isSpinning,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Default.Casino, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (isSpinning) "Spinning..." else "Spin")
+                    }
                 } else {
                     ChallengeCard(spun, currentThrows.size + 1)
                     Spacer(Modifier.height(24.dp))
-                    Row(horizontalArrangement = Arrangement.Center) {
-                        Button(
+                    // Two ways a throw ends: in the basket, or short of it. Holing
+                    // out finishes the hole, so it is the filled action; Re-spin
+                    // discards the challenge and stays quiet.
+                    Button(
+                        onClick = { holedOut() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Default.Flag, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Holed out")
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        OutlinedButton(
                             onClick = { challenge = null },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = AppColors.Warning,
-                            ),
+                            modifier = Modifier.weight(1f),
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("Re-spin")
                         }
-                        Spacer(Modifier.width(12.dp))
-                        Button(onClick = { recordThrow() }) {
+                        FilledTonalButton(
+                            onClick = { recordThrow() },
+                            modifier = Modifier.weight(1f),
+                        ) {
                             Icon(Icons.Default.ArrowForward, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("Next throw")
                         }
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Button(
-                        onClick = { holedOut() },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = AppColors.Good),
-                    ) {
-                        Icon(Icons.Default.Flag, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Holed out")
                     }
                 }
             }

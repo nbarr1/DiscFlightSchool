@@ -249,11 +249,11 @@ private fun SessionCard(session: FormSessionRecord) {
                 Row {
                     Chip(
                         if (session.throwType == ThrowTypes.BACKHAND) "Backhand" else "Forehand",
-                        AppColors.Roulette,
+                        AppColors.FormCoach,
                     )
                     session.proPlayer?.let {
                         Spacer(Modifier.width(6.dp))
-                        Chip("vs $it", AppColors.KnowledgeBase)
+                        Chip("vs $it", AppColors.Accent)
                     }
                 }
                 Spacer(Modifier.height(4.dp))

@@ -78,6 +78,7 @@ class FormattingTest {
         assertEquals("just now", Formatting.timeAgo(now.minusSeconds(20), now))
         assertEquals("5 min ago", Formatting.timeAgo(now.minusSeconds(300), now))
         assertEquals("3 h ago", Formatting.timeAgo(now.minus(3, ChronoUnit.HOURS), now))
+        assertEquals("1 day ago", Formatting.timeAgo(now.minus(1, ChronoUnit.DAYS), now))
         assertEquals("9 days ago", Formatting.timeAgo(now.minus(9, ChronoUnit.DAYS), now))
     }
 
