@@ -1,5 +1,8 @@
 name: Release Build
 
+permissions:
+  contents: read
+
 # Two jobs. `release-build-check` builds the minified release bundle on every
 # PR and push to main, signed with a throwaway key, so an R8 or resource-
 # shrinking break shows up here instead of on a tester's phone: debug builds
