@@ -1,5 +1,8 @@
 name: Roboflow Workflow Smoke Test
 
+permissions:
+  contents: read
+
 # Manual only, and deliberately not on push or pull_request: every run sends a
 # video through the published Roboflow Workflow and spends inference credits.
 # The rest of CI fakes the processor and spends none.
