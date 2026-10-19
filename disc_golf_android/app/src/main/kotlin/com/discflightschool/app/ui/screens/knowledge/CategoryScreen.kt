@@ -24,6 +24,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
+import com.discflightschool.app.ui.components.readableWidth
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -75,6 +78,7 @@ fun CategoryScreen(
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .readableWidth()
                 .padding(16.dp),
         ) {
             Text(
@@ -163,16 +167,18 @@ fun ArticleDetailScreen(articleId: String, onBack: () -> Unit) {
         return
     }
 
-    Scaffold(topBar = { AppTopBar(title = "FAQ detail", onBack = onBack) }) { padding ->
+    Scaffold(topBar = { AppTopBar(title = "Answer", onBack = onBack) }) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .readableWidth()
                 .padding(16.dp),
         ) {
             Text(
                 article.question,
+                modifier = Modifier.semantics { heading() },
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )

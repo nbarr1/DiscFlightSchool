@@ -1,6 +1,7 @@
 package com.discflightschool.app.ui.screens.formcoach
 
 import android.graphics.Bitmap
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
@@ -282,9 +284,27 @@ fun PoseCorrectionScreen(
         onApplied()
     }
 
+    var confirmDiscard by remember { mutableStateOf(false) }
+
+    // Back steps out one level at a time: out of the guided re-placement
+    // first, then off the screen — asking first when that would throw away
+    // corrections the user has not applied.
+    fun leave() {
+        when {
+            sequentialMode -> {
+                sequentialMode = false
+                sequentialReview = false
+                sequentialPlacements.clear()
+            }
+            corrections.isNotEmpty() -> confirmDiscard = true
+            else -> onBack()
+        }
+    }
+    BackHandler(enabled = sequentialMode || corrections.isNotEmpty()) { leave() }
+
     Scaffold(
         topBar = {
-            AppTopBar(title = "Correct pose", onBack = onBack) {
+            AppTopBar(title = "Correct pose", onBack = { leave() }) {
                 if (!sequentialMode) {
                     TextButton(onClick = { applyCorrections() }) {
                         Icon(
@@ -511,6 +531,33 @@ fun PoseCorrectionScreen(
                 )
             }
         }
+    }
+
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            title = { Text("Discard corrections?") },
+            text = {
+                Text(
+                    "You corrected ${correctedFrames.size} " +
+                        (if (correctedFrames.size == 1) "frame" else "frames") +
+                        ". Leaving now keeps the original pose.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDiscard = false
+                        onBack()
+                    },
+                ) {
+                    Text("Discard", color = AppColors.Bad)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") }
+            },
+        )
     }
 }
 

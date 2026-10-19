@@ -17,6 +17,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +35,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -62,6 +67,11 @@ fun VideoTrimScreen(
     videoPath: String,
     title: String = "Trim video",
     confirmLabel: String = "Select phases",
+    confirmIcon: ImageVector = Icons.Default.Flag,
+    /** What comes after the trim, under the slider; given the frame count. */
+    nextStepHint: (frameCount: Int) -> String = {
+        "$it frames · next, mark the four key throw phases"
+    },
     onBack: () -> Unit,
     onConfirm: (startMs: Long, endMs: Long, frameCount: Int) -> Unit,
 ) {
@@ -120,6 +130,9 @@ fun VideoTrimScreen(
         val startMs = range.start.toLong()
         val endMs = range.endInclusive.toLong()
         val frameCount = frameCountFor(startMs, endMs)
+        // A zero-length range is reachable by dragging the thumbs together, and
+        // nothing downstream can analyse or track it.
+        val tooShort = endMs - startMs < MIN_RANGE_MS
 
         Column(
             modifier = Modifier
@@ -154,22 +167,25 @@ fun VideoTrimScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
+                    TextButton(
+                        onClick = { player.seekTo(startMs) },
+                        colors = ButtonDefaults.textButtonColors(contentColor = AppColors.Good),
+                    ) {
+                        Text("Start ${seconds(startMs)}", fontWeight = FontWeight.Bold)
+                    }
                     Text(
-                        "Start: ${seconds(startMs)}",
-                        fontWeight = FontWeight.Bold,
-                        color = AppColors.Good,
-                        modifier = Modifier.clickable { player.seekTo(startMs) },
-                    )
-                    Text(
-                        "Duration: ${seconds(endMs - startMs)}",
+                        seconds(endMs - startMs),
                         color = AppColors.Muted,
+                        modifier = Modifier.semantics {
+                            contentDescription = "Selection length ${seconds(endMs - startMs)}"
+                        },
                     )
-                    Text(
-                        "End: ${seconds(endMs)}",
-                        fontWeight = FontWeight.Bold,
-                        color = AppColors.Bad,
-                        modifier = Modifier.clickable { player.seekTo(endMs) },
-                    )
+                    TextButton(
+                        onClick = { player.seekTo(endMs) },
+                        colors = ButtonDefaults.textButtonColors(contentColor = AppColors.Bad),
+                    ) {
+                        Text("End ${seconds(endMs)}", fontWeight = FontWeight.Bold)
+                    }
                 }
 
                 RangeSlider(
@@ -180,9 +196,13 @@ fun VideoTrimScreen(
                 )
 
                 Text(
-                    "$frameCount frames · next: mark the four key throw phases",
+                    if (tooShort) {
+                        "Drag the handles apart to select at least half a second."
+                    } else {
+                        nextStepHint(frameCount)
+                    },
                     style = MaterialTheme.typography.labelMedium,
-                    color = AppColors.Muted,
+                    color = if (tooShort) AppColors.Warning else AppColors.Muted,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center,
                 )
@@ -205,16 +225,10 @@ fun VideoTrimScreen(
                     Spacer(Modifier.width(12.dp))
                     Button(
                         onClick = { onConfirm(startMs, endMs, frameCount) },
+                        enabled = !tooShort,
                         modifier = Modifier.weight(2f),
                     ) {
-                        Icon(
-                            if (confirmLabel == "Use selection") {
-                                Icons.Default.Check
-                            } else {
-                                Icons.Default.Flag
-                            },
-                            contentDescription = null,
-                        )
+                        Icon(confirmIcon, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text(confirmLabel)
                     }
@@ -233,3 +247,5 @@ internal fun frameCountFor(startMs: Long, endMs: Long): Int =
         .coerceIn(1, 300)
 
 private const val DEFAULT_RANGE_MS = 6000f
+
+private const val MIN_RANGE_MS = 500L

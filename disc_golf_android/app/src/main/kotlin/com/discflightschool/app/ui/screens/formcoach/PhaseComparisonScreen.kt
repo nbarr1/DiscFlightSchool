@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.HorizontalDivider
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.discflightschool.app.LocalAppContainer
 import com.discflightschool.app.ui.Formatting
 import com.discflightschool.app.ui.components.AppTopBar
+import com.discflightschool.app.ui.components.EmptyState
 import com.discflightschool.app.ui.components.LoadingState
 import com.discflightschool.app.ui.components.SectionCard
 import com.discflightschool.app.ui.theme.AppColors
@@ -85,6 +87,22 @@ fun PhaseComparisonScreen(onBack: () -> Unit) {
             val frameIndex = phaseFrames[phase] ?: return@mapNotNull null
             val userFrame = analysis.frames.getOrNull(frameIndex) ?: return@mapNotNull null
             phase to comparePhase(userFrame, angles[phase].orEmpty())
+        }
+
+        // No overlap between the marked phases and the pro's data would
+        // otherwise read as a 0% match across 0 angles — a score, not an absence.
+        if (comparisons.none { it.second.isNotEmpty() }) {
+            EmptyState(
+                icon = Icons.Default.CompareArrows,
+                title = "Nothing to compare yet",
+                message = if (proName == null) {
+                    "Pick a pro on the analysis screen to compare your phases with theirs."
+                } else {
+                    "$proName has no angle data for the phases you marked on this throw type."
+                },
+                modifier = Modifier.padding(padding),
+            )
+            return@Scaffold
         }
 
         LazyColumn(

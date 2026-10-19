@@ -1,9 +1,13 @@
 package com.discflightschool.app.ui.screens.flighttracker
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.core.content.FileProvider
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,11 +21,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Icon
@@ -45,6 +51,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.discflightschool.app.LocalAppContainer
 import com.discflightschool.app.ui.components.AppTopBar
+import com.discflightschool.app.ui.components.NavigationCard
+import com.discflightschool.app.ui.components.readableWidth
 import com.discflightschool.app.ui.components.rememberVideoPickers
 import com.discflightschool.app.ui.theme.AppColors
 import com.discflightschool.app.data.DiscFlightPhase
@@ -56,6 +64,7 @@ import java.io.File
 import kotlinx.coroutines.launch
 
 /** Brings a clip in, then hands it to the trimmer before tracking starts. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FlightTrackerScreen(onBack: () -> Unit, onVideoSelected: () -> Unit) {
     val container = LocalAppContainer.current
@@ -74,22 +83,22 @@ fun FlightTrackerScreen(onBack: () -> Unit, onVideoSelected: () -> Unit) {
         onFailed = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
     )
 
+    // The app-bar arrow and the system Back gesture leave the same way: a
+    // cloud trace still running is cancelled rather than left uploading.
+    fun leave() {
+        if (processing.active) {
+            scope.launch {
+                container.discFlightClient.cancel()
+                onBack()
+            }
+        } else {
+            onBack()
+        }
+    }
+    BackHandler(enabled = processing.active) { leave() }
+
     Scaffold(
-        topBar = {
-            AppTopBar(
-                title = "Flight Tracker",
-                onBack = {
-                    if (processing.active) {
-                        scope.launch {
-                            container.discFlightClient.cancel()
-                            onBack()
-                        }
-                    } else {
-                        onBack()
-                    }
-                },
-            )
-        },
+        topBar = { AppTopBar(title = "Flight Tracker", onBack = { leave() }) },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(
@@ -97,6 +106,7 @@ fun FlightTrackerScreen(onBack: () -> Unit, onVideoSelected: () -> Unit) {
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .readableWidth()
                 .padding(16.dp),
         ) {
             Text(
@@ -142,12 +152,24 @@ fun FlightTrackerScreen(onBack: () -> Unit, onVideoSelected: () -> Unit) {
                 }
                 processing.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                // Trimming and tracking on the phone is the main path; the
+                // cloud trace is the alternative, so it takes the quieter style.
+                Button(
+                    enabled = !processing.active,
+                    onClick = onVideoSelected,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.ContentCut, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Trim and track")
+                }
+                Spacer(Modifier.height(8.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (!processing.active && processing.phase != DiscFlightPhase.COMPLETE) {
-                        Button(onClick = { scope.launch { container.discFlightClient.process(path) } }) {
+                        FilledTonalButton(onClick = { scope.launch { container.discFlightClient.process(path) } }) {
                             Icon(Icons.Default.CloudUpload, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text(if (processing.phase == DiscFlightPhase.FAILED) "Retry" else "Trace in cloud")
+                            Text(if (processing.phase == DiscFlightPhase.FAILED) "Retry cloud trace" else "Trace in cloud")
                         }
                     }
                     if (processing.active) {
@@ -180,15 +202,16 @@ fun FlightTrackerScreen(onBack: () -> Unit, onVideoSelected: () -> Unit) {
                         }
                     }
                 }
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    enabled = !processing.active,
-                    onClick = onVideoSelected,
-                ) { Text("Trim and track") }
                 Spacer(Modifier.height(24.dp))
+                Text(
+                    "Use a different clip",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = AppColors.Muted,
+                )
+                Spacer(Modifier.height(12.dp))
             }
 
-            ActionCard(
+            NavigationCard(
                 title = "Record video",
                 description = "Use the camera to record a throw",
                 icon = Icons.Default.Videocam,
@@ -197,68 +220,13 @@ fun FlightTrackerScreen(onBack: () -> Unit, onVideoSelected: () -> Unit) {
                 onClick = { pickers.recordVideo() },
             )
             Spacer(Modifier.height(16.dp))
-            ActionCard(
+            NavigationCard(
                 title = "Upload video",
                 description = "Select a video from your device",
                 icon = Icons.Default.UploadFile,
                 accent = AppColors.FlightTracker,
                 enabled = !processing.active,
                 onClick = { pickers.pickFromLibrary() },
-            )
-        }
-    }
-}
-
-@Composable
-private fun ActionCard(
-    title: String,
-    description: String,
-    icon: ImageVector,
-    accent: Color,
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = AppColors.Surface,
-        tonalElevation = 4.dp,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier = Modifier
-                .clickable(enabled = enabled, onClick = onClick)
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Surface(shape = RoundedCornerShape(12.dp), color = accent.copy(alpha = 0.2f)) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = accent,
-                    modifier = Modifier
-                        .padding(12.dp)
-                        .size(32.dp),
-                )
-            }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = AppColors.Muted,
-                )
-            }
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowForwardIos,
-                contentDescription = null,
-                tint = AppColors.Muted,
-                modifier = Modifier.size(16.dp),
             )
         }
     }

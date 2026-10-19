@@ -33,6 +33,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -118,6 +120,9 @@ private fun EmptySearchState(onSuggestion: (String) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // Scrolls so the suggestions stay reachable when the keyboard is
+            // up or the font size is large.
+            .verticalScroll(rememberScrollState())
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -233,11 +238,11 @@ private fun InputBar(
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(8.dp))
-        IconButton(onClick = onSend) {
+        IconButton(onClick = onSend, enabled = value.isNotBlank()) {
             Icon(
                 Icons.AutoMirrored.Filled.Send,
                 contentDescription = "Send",
-                tint = AppColors.KnowledgeBase,
+                tint = if (value.isNotBlank()) AppColors.KnowledgeBase else AppColors.Muted,
             )
         }
     }

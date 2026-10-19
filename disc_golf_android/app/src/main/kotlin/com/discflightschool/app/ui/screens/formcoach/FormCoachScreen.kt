@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.discflightschool.app.LocalAppContainer
 import com.discflightschool.app.ui.components.AppTopBar
 import com.discflightschool.app.ui.components.SectionCard
+import com.discflightschool.app.ui.components.readableWidth
 import com.discflightschool.app.ui.components.rememberVideoPickers
 import com.discflightschool.app.ui.theme.AppColors
 import com.discflightschool.core.model.ThrowTypes
@@ -139,6 +141,7 @@ fun FormCoachScreen(
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .readableWidth()
                 .padding(16.dp),
         ) {
             SectionCard(title = "Compare with a pro", accent = AppColors.FormCoach) {
@@ -189,7 +192,7 @@ fun FormCoachScreen(
                             onExpandedChange = { proMenuExpanded = it },
                         ) {
                             OutlinedTextField(
-                                value = selectedPro ?: "— None —",
+                                value = selectedPro ?: "No comparison",
                                 onValueChange = {},
                                 readOnly = true,
                                 label = { Text("Pro player (optional)") },
@@ -205,7 +208,7 @@ fun FormCoachScreen(
                                 onDismissRequest = { proMenuExpanded = false },
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("— None —") },
+                                    text = { Text("No comparison") },
                                     onClick = {
                                         selectedPro = null
                                         proMenuExpanded = false
@@ -260,7 +263,7 @@ fun FormCoachScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            Button(
+            FilledTonalButton(
                 onClick = { pickers.recordVideo() },
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -282,7 +285,11 @@ fun FormCoachScreen(
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         } else {
-                            Text("Frames: ${lastAnalysis.frames.size}")
+                            Text(
+                                "${lastAnalysis.frames.size} frames analyzed" +
+                                    (workbench.proPlayer?.let { " · compared with $it" } ?: ""),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
                         }
                         Spacer(Modifier.height(12.dp))
                         Button(onClick = onOpenAnalysis) { Text("View analysis") }
