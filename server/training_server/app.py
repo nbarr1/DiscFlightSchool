@@ -306,10 +306,15 @@ def create_app(
                 source_key = f"{source_key}:{clip[0]}:{clip[1]}"
             try:
                 job, token = flight_jobs.create(temporary, suffix, source_key, clip=clip)
-            except ValueError as exc:
-                return JSONResponse({"error": str(exc)}, status_code=409)
-            except JobCapacityError as exc:
-                return _too_many_requests(str(exc), 30)
+            except ValueError:
+                return JSONResponse(
+                    {"error": "This video could not be queued because it is already processing"},
+                    status_code=409,
+                )
+            except JobCapacityError:
+                return _too_many_requests(
+                    "The server is busy processing other videos. Try again shortly.", 30
+                )
             return {"jobId": job.id, "status": "queued", "jobToken": token}
         finally:
             temporary.unlink(missing_ok=True)
@@ -398,8 +403,10 @@ def create_app(
                     settings.max_upload_bytes,
                     temporary,
                 )
-            except ValueError as exc:
-                return JSONResponse({"error": str(exc)}, status_code=400)
+            except ValueError:
+                return JSONResponse(
+                    {"error": "The uploaded image could not be processed"}, status_code=400
+                )
             try:
                 result = detect_discs(temporary, api_key=settings.roboflow_api_key)
             except DiscDetectionError as exc:
@@ -461,8 +468,10 @@ def create_app(
                 full_image=full_image,
                 crop_image=crop_image,
             )
-        except ValueError as exc:
-            return JSONResponse({"error": str(exc)}, status_code=400)
+        except ValueError:
+            return JSONResponse(
+                {"error": "The training sample could not be stored"}, status_code=400
+            )
 
         return JSONResponse({"status": "ok", "sample_id": sample_id, "message": "Sample received"})
 
