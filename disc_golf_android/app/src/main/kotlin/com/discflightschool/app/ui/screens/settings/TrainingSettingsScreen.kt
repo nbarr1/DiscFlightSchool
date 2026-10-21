@@ -56,6 +56,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import com.discflightschool.app.ui.components.readableWidth
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -191,6 +194,7 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .readableWidth()
                 .padding(16.dp),
         ) {
             SectionCard(title = "Disc detection sensitivity") {
@@ -211,7 +215,9 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                             },
                             valueRange = 0.01f..0.5f,
                             steps = 48,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .semantics { contentDescription = "Detection sensitivity" },
                         )
                         Text("High", style = MaterialTheme.typography.labelSmall, color = AppColors.Muted)
                     }
@@ -282,9 +288,21 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                 onClick = {
                     scope.launch {
                         busyMessage = "Uploading..."
+                        val attempted = pendingCount
                         val uploaded = collector.uploadPending()
                         busyMessage = null
-                        snackbarHostState.showSnackbar("Uploaded $uploaded samples")
+                        // Zero of N is a failure, and saying "Uploaded 0
+                        // samples" reads like a success with nothing to send.
+                        snackbarHostState.showSnackbar(
+                            when {
+                                uploaded == 0 ->
+                                    "Upload failed. Check the server connection and try again."
+                                uploaded < attempted ->
+                                    "Uploaded $uploaded of $attempted samples. Try again for the rest."
+                                uploaded == 1 -> "Uploaded 1 sample"
+                                else -> "Uploaded $uploaded samples"
+                            },
+                        )
                     }
                 },
                 enabled = pendingCount > 0 && serverUrl.isNotBlank() && hasTrainingKey,
@@ -295,7 +313,9 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                 Text(
                     when {
                         pendingCount == 0 -> "No samples to upload"
+                        serverUrl.isBlank() -> "Set a server under Advanced to upload"
                         !hasTrainingKey -> "Add a training API key to upload"
+                        pendingCount == 1 -> "Upload 1 sample"
                         else -> "Upload $pendingCount samples"
                     },
                 )
@@ -303,7 +323,7 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
 
             Spacer(Modifier.height(12.dp))
 
-            Button(
+            OutlinedButton(
                 onClick = {
                     scope.launch {
                         busyMessage = "Exporting..."
@@ -330,7 +350,7 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
             ) {
                 Icon(Icons.Default.FolderZip, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Export ${samples.size} samples")
+                Text(if (samples.size == 1) "Export 1 sample" else "Export ${samples.size} samples")
             }
 
             Spacer(Modifier.height(12.dp))

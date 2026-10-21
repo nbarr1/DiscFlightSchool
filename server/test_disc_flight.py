@@ -19,6 +19,7 @@ from training_server.disc_flight import (
     Cancelled,
     DiscFlightJobManager,
     EmptyClip,
+    JobCapacityError,
     NoAnnotatedFrames,
     RoboflowVideoProcessor,
     UnreadableVideo,
@@ -113,6 +114,30 @@ def wait_for_terminal(client, job_id, token):
 def test_missing_video(tmp_path):
     client, _ = make_client(tmp_path)
     assert client.post("/api/disc-flight/jobs", headers=AUTH).status_code == 400
+
+
+def test_job_creation_errors_do_not_expose_exception_messages(tmp_path, monkeypatch):
+    client, manager = make_client(tmp_path)
+
+    def fail_with_details(*args, **kwargs):
+        raise ValueError("private filesystem detail")
+
+    monkeypatch.setattr(manager, "create", fail_with_details)
+    duplicate = start(client)
+    assert duplicate.status_code == 409
+    assert duplicate.json() == {
+        "error": "This video could not be queued because it is already processing"
+    }
+
+    def fail_at_capacity(*args, **kwargs):
+        raise JobCapacityError("private capacity detail")
+
+    monkeypatch.setattr(manager, "create", fail_at_capacity)
+    capacity = start(client)
+    assert capacity.status_code == 429
+    assert capacity.json() == {
+        "error": "The server is busy processing other videos. Try again shortly."
+    }
 
 
 def test_unsupported_format(tmp_path):

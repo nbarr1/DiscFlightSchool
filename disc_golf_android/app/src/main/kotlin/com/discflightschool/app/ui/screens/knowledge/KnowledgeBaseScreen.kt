@@ -34,6 +34,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.discflightschool.app.ui.components.readableWidth
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -92,6 +95,7 @@ fun KnowledgeBaseScreen(
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .readableWidth()
                 .padding(16.dp),
         ) {
             SearchEntry(onClick = onOpenSearch)
@@ -136,13 +140,14 @@ private fun SearchEntry(onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White.copy(alpha = 0.06f))
             .border(
                 1.dp,
                 AppColors.KnowledgeBase.copy(alpha = 0.32f),
                 RoundedCornerShape(12.dp),
             )
-            .clickable(onClick = onClick)
+            .clickable(onClickLabel = "Search the research", role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -201,10 +206,13 @@ private fun CategoryCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1.15f)
-            .background(color.copy(alpha = 0.14f), RoundedCornerShape(12.dp))
+            // A minimum, not a fixed ratio: at a large font size the name and
+            // counts need more room than a square-ish tile allows.
+            .heightIn(min = 150.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(color.copy(alpha = 0.14f))
             .border(1.dp, color.copy(alpha = 0.32f), RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(16.dp),
     ) {
         Box(
@@ -219,6 +227,7 @@ private fun CategoryCard(
                 modifier = Modifier.size(28.dp),
             )
         }
+        Spacer(Modifier.height(16.dp))
         Spacer(Modifier.weight(1f))
         Text(
             category.name,
@@ -229,7 +238,8 @@ private fun CategoryCard(
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            "$studyCount ${if (studyCount == 1) "study" else "studies"} · $articleCount tips",
+            "$studyCount ${if (studyCount == 1) "study" else "studies"} · " +
+                "$articleCount ${if (articleCount == 1) "tip" else "tips"}",
             style = MaterialTheme.typography.labelSmall,
             color = AppColors.Muted,
         )

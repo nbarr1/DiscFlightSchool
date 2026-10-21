@@ -1,5 +1,7 @@
 package com.discflightschool.app.ui
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavType
@@ -86,6 +88,8 @@ fun AppNavHost(startOnHome: Boolean) {
                     videoPath = path,
                     title = "Trim throw",
                     confirmLabel = "Track flight",
+                    confirmIcon = Icons.Default.TrackChanges,
+                    nextStepHint = { "Next, choose how to find the disc" },
                     onBack = { navController.popBackStack() },
                     onConfirm = { startMs, endMs, _ ->
                         workbench.flightTrimStartMs = startMs

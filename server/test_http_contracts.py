@@ -303,6 +303,32 @@ class TrainingServerContractTests(unittest.TestCase):
         self.assertFalse(any(app.state.settings.images_dir.glob("sample-1*")))
         self.assertFalse(any(app.state.settings.labels_dir.glob("sample-1*")))
 
+    def test_upload_hides_storage_exception_details(self):
+        app = self.build_app()
+
+        def broken(**kwargs):
+            raise ValueError("private storage detail")
+
+        app.state.storage.store_training_sample = broken
+        body, content_type = multipart_body(
+            {"sample_id": "sample-1", "label": "0 0.5 0.5 0.1 0.1", "image_width": "100", "image_height": "100"},
+            {
+                "full_image": ("full.jpg", JPEG_1X1, "image/jpeg"),
+                "crop_image": ("crop.jpg", JPEG_1X1, "image/jpeg"),
+            },
+        )
+
+        response = self.request(
+            app,
+            "POST",
+            "/api/training/upload",
+            headers={"content-type": content_type, "x-app-key": "test-key"},
+            body=body,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"error": "The training sample could not be stored"})
+
     def test_upload_accepts_valid_sample_and_updates_stats(self):
         app = self.build_app()
         body, content_type = multipart_body(

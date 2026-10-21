@@ -32,6 +32,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.produceState
+import android.graphics.Bitmap
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +71,11 @@ fun VideoGalleryScreen(onBack: () -> Unit) {
     var pendingDelete by remember { mutableStateOf<SavedFlightVideo?>(null) }
 
     LaunchedEffect(Unit) { repository.refresh() }
+
+    // Playback is drawn in place of the list rather than as its own route, so
+    // the system Back gesture has to be told it closes the player first;
+    // otherwise it leaves the gallery altogether.
+    BackHandler(enabled = playing != null) { playing = null }
 
     val nowPlaying = playing
     if (nowPlaying != null) {
@@ -137,10 +147,14 @@ private fun VideoCard(
     onPlay: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val thumbnail = remember(video.thumbnailPath) {
-        video.thumbnailPath
-            ?.takeIf { File(it).exists() }
-            ?.let { runCatching { BitmapFactory.decodeFile(it) }.getOrNull() }
+    // Decoded off the main thread and downsampled to the card: a full-size
+    // frame per card stalls scrolling and holds megabytes per thumbnail.
+    val thumbnail by produceState<Bitmap?>(initialValue = null, video.thumbnailPath) {
+        value = withContext(Dispatchers.IO) {
+            video.thumbnailPath
+                ?.takeIf { File(it).exists() }
+                ?.let { path -> runCatching { decodeThumbnail(path) }.getOrNull() }
+        }
     }
     val sizeLabel = remember(video.path) {
         val bytes = runCatching { File(video.path).length() }.getOrDefault(0L)
@@ -164,9 +178,10 @@ private fun VideoCard(
                     .background(AppColors.Background),
                 contentAlignment = Alignment.Center,
             ) {
-                if (thumbnail != null) {
+                val image = thumbnail
+                if (image != null) {
                     Image(
-                        bitmap = thumbnail.asImageBitmap(),
+                        bitmap = image.asImageBitmap(),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
@@ -219,3 +234,14 @@ private fun VideoCard(
         }
     }
 }
+
+/** Decodes a thumbnail at roughly the card's size rather than the frame's. */
+private fun decodeThumbnail(path: String, targetWidth: Int = THUMBNAIL_WIDTH_PX): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, bounds)
+    var sample = 1
+    while (bounds.outWidth / (sample * 2) >= targetWidth) sample *= 2
+    return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
+}
+
+private const val THUMBNAIL_WIDTH_PX = 720

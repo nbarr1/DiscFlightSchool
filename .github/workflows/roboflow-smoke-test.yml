@@ -1,5 +1,8 @@
 name: Roboflow Workflow Smoke Test
 
+permissions:
+  contents: read
+
 # Manual only, and deliberately not on push or pull_request: every run sends a
 # video through the published Roboflow Workflow and spends inference credits.
 # The rest of CI fakes the processor and spends none.
@@ -31,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Confirm the Roboflow key is configured
         env:
@@ -46,7 +49,7 @@ jobs:
           echo "ROBOFLOW_API_KEY is present (${#ROBOFLOW_API_KEY} characters)."
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -102,7 +105,7 @@ jobs:
 
       - name: Upload the annotated video and track
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: disc-flight-annotated
           path: |

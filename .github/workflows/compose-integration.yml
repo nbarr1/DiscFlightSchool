@@ -1,5 +1,8 @@
 name: Compose Integration
 
+permissions:
+  contents: read
+
 # The image built here bundles ultralytics/torch (~2GB), and this boots the
 # full 6-container stack, so it's push-to-main + manual only, not every PR —
 # same reasoning as build.yml's APK build. PRs stay covered by the
@@ -16,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # minio/minio and minio/mc are no longer served to anonymous pulls, so
       # the image pull below fails with "pull access denied" without

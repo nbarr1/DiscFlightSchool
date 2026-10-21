@@ -1,5 +1,8 @@
 name: Release Build
 
+permissions:
+  contents: read
+
 # Two jobs. `release-build-check` builds the minified release bundle on every
 # PR and push to main, signed with a throwaway key, so an R8 or resource-
 # shrinking break shows up here instead of on a tester's phone: debug builds
@@ -16,16 +19,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       # The release build refuses to run without a signing config. This key
       # exists only for this job and signs nothing anyone installs.
@@ -53,16 +56,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       # RELEASE_KEYSTORE_BASE64 is the upload keystore, base64-encoded
       # (`base64 -w0 upload.jks`). Keep the keystore itself out of the repo.
@@ -95,7 +98,7 @@ jobs:
         run: ./gradlew --no-daemon :app:bundleRelease
 
       - name: Upload bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: disc-flight-school-release-${{ github.run_number }}
           path: disc_golf_android/app/build/outputs/bundle/release/app-release.aab

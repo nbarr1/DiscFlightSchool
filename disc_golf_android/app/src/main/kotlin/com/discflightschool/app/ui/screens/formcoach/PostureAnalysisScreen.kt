@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CompareArrows
@@ -54,6 +55,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -131,6 +133,7 @@ fun PostureAnalysisScreen(
     var players by remember { mutableStateOf<List<String>>(emptyList()) }
     var deviationScore by remember { mutableStateOf<Double?>(null) }
     var suggestions by remember { mutableStateOf<List<FormSuggestion>>(emptyList()) }
+    var suggestionsReady by remember { mutableStateOf(false) }
     var verificationIndex by remember { mutableIntStateOf(-1) }
 
     val player = rememberVideoPlayer(videoPath)
@@ -172,6 +175,7 @@ fun PostureAnalysisScreen(
             phaseFrameIndices = workbench.phaseFrameIndices.ifEmpty { null },
             proName = workbench.proPlayer,
         )
+        suggestionsReady = true
     }
 
     LaunchedEffect(Unit) {
@@ -489,6 +493,7 @@ fun PostureAnalysisScreen(
 
             Suggestions(
                 suggestions = suggestions,
+                ready = suggestionsReady,
                 onOpenArticle = onOpenArticle,
                 knownArticleIds = container.knowledgeBaseRepository.articles.map { it.id }.toSet(),
             )
@@ -741,7 +746,7 @@ private fun ScoreCard(score: Double?, proName: String?, throwType: String) {
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "vs ${proName ?: "pro"} · $throwType",
+                    "vs ${proName ?: "pro"} · ${Formatting.phaseLabel(throwType)}",
                     style = MaterialTheme.typography.labelMedium,
                     color = AppColors.Muted,
                 )
@@ -819,6 +824,7 @@ private fun AngleCharts(
 @Composable
 private fun Suggestions(
     suggestions: List<FormSuggestion>,
+    ready: Boolean,
     knownArticleIds: Set<String>,
     onOpenArticle: (String) -> Unit,
 ) {
@@ -829,8 +835,14 @@ private fun Suggestions(
     ) {
         Column {
             if (suggestions.isEmpty()) {
+                // "Analyzing" only while the cues are being worked out; an
+                // empty list afterwards is an answer, not a pending state.
                 Text(
-                    "Analyzing...",
+                    if (ready) {
+                        "No specific cues for this throw. Pick a pro above for a phase-by-phase comparison."
+                    } else {
+                        "Working out your cues..."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = AppColors.Muted,
                 )
@@ -852,14 +864,18 @@ private fun Suggestions(
                 }
                 val articleId = suggestion.kbArticleId
                 if (articleId != null && articleId in knownArticleIds) {
-                    Text(
-                        "Learn more →",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = AppColors.Accent,
-                        modifier = Modifier
-                            .padding(start = 24.dp, bottom = 10.dp)
-                            .clickable { onOpenArticle(articleId) },
-                    )
+                    TextButton(
+                        onClick = { onOpenArticle(articleId) },
+                        modifier = Modifier.padding(start = 12.dp),
+                    ) {
+                        Text("Learn more", style = MaterialTheme.typography.labelLarge)
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
                 } else {
                     Spacer(Modifier.height(6.dp))
                 }

@@ -37,6 +37,7 @@ object Formatting {
             elapsed.toMinutes() < 1 -> "just now"
             elapsed.toHours() < 1 -> "${elapsed.toMinutes()} min ago"
             elapsed.toDays() < 1 -> "${elapsed.toHours()} h ago"
+            elapsed.toDays() == 1L -> "1 day ago"
             elapsed.toDays() < 30 -> "${elapsed.toDays()} days ago"
             else -> relativeDate(instant)
         }

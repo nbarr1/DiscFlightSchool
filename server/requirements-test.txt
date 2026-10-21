@@ -7,11 +7,11 @@
 fastapi>=0.104.0,<1.0.0
 # Floor raised past PYSEC-2026-1851/1852/3036-3041: >=0.0.6 permitted 0.0.9,
 # which carries several high-severity multipart parsing CVEs.
-python-multipart>=0.0.31,<1.0.0
+python-multipart>=0.0.32,<1.0.0
 Pillow>=12.3.0
 psycopg[binary,pool]>=3.1,<4.0
 redis>=5.0,<6.0
-minio>=7.2,<8.0
+minio>=7.2.20,<8.0
 
 # Test-only tooling (not part of the production runtime).
 pytest>=8.0.0
@@ -19,4 +19,4 @@ pytest>=8.0.0
 # import TestClient` raises at import time without this. The server itself
 # never imports it, which is why it belongs here rather than in
 # requirements.txt.
-httpx2>=2.13.0,<3.0.0
+httpx2>=2.13.1,<3.0.0

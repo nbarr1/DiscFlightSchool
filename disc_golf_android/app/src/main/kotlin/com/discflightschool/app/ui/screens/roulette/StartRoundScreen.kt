@@ -36,6 +36,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import com.discflightschool.app.ui.components.readableWidth
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -80,6 +83,7 @@ fun StartRoundScreen(onBack: () -> Unit, onRoundStarted: () -> Unit) {
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .readableWidth()
                 .padding(16.dp),
         ) {
             SectionCard {
@@ -94,7 +98,8 @@ fun StartRoundScreen(onBack: () -> Unit, onRoundStarted: () -> Unit) {
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
-                        Button(onClick = { playerNames.add("") }) {
+                        // Secondary to Start round, so it doesn't compete with it.
+                        OutlinedButton(onClick = { playerNames.add("") }) {
                             Icon(Icons.Default.Add, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("Add player")
@@ -119,6 +124,11 @@ fun StartRoundScreen(onBack: () -> Unit, onRoundStarted: () -> Unit) {
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(
                                     capitalization = KeyboardCapitalization.Words,
+                                    imeAction = if (index < playerNames.lastIndex) {
+                                        ImeAction.Next
+                                    } else {
+                                        ImeAction.Done
+                                    },
                                 ),
                                 modifier = Modifier.weight(1f),
                             )

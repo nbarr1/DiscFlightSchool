@@ -3,6 +3,9 @@ package com.discflightschool.app.ui.screens.formcoach
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,7 +36,9 @@ import androidx.compose.material.icons.filled.SportsHandball
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -108,25 +113,39 @@ fun PhaseFrameSelectorScreen(onBack: () -> Unit, onAnalyze: () -> Unit) {
 
     val allMarked = phases.all { it in marks }
 
+    fun analyze() {
+        // A phase marked on the last frame converts to an index one past the
+        // end, because extraction treats the trim end as exclusive. Out of
+        // range, it would be dropped by phase comparison, so clamp into the
+        // frames that actually exist.
+        val lastFrame = (workbench.analysisFrameCount - 1).coerceAtLeast(0)
+        workbench.phaseFrameIndices = marks.mapValues { (_, timestampMs) ->
+            frameIndexFor(timestampMs, startMs).coerceIn(0, lastFrame)
+        }
+        onAnalyze()
+    }
+
     Scaffold(
-        topBar = {
-            AppTopBar(title = "Select phase frames", onBack = onBack) {
-                TextButton(
-                    onClick = {
-                        // A phase marked on the last frame converts to an
-                        // index one past the end, because extraction treats the
-                        // trim end as exclusive. Out of range, it would be
-                        // dropped by phase comparison, so clamp into the frames
-                        // that actually exist.
-                        val lastFrame = (workbench.analysisFrameCount - 1).coerceAtLeast(0)
-                        workbench.phaseFrameIndices = marks.mapValues { (_, timestampMs) ->
-                            frameIndexFor(timestampMs, startMs).coerceIn(0, lastFrame)
-                        }
-                        onAnalyze()
-                    },
+        topBar = { AppTopBar(title = "Select phase frames", onBack = onBack) },
+        // The screen's one forward action sits under the thumb, and says how
+        // far there is to go, instead of a disabled word in the app bar.
+        bottomBar = {
+            Surface(color = AppColors.Background) {
+                Button(
+                    onClick = { analyze() },
                     enabled = allMarked,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
-                    Text("Analyze")
+                    val remaining = phases.count { it !in marks }
+                    Text(
+                        when (remaining) {
+                            0 -> "Analyze form"
+                            1 -> "Mark 1 more phase"
+                            else -> "Mark $remaining more phases"
+                        },
+                    )
                 }
             }
         },
@@ -255,16 +274,21 @@ private fun PhaseCard(phase: String, markedAtMs: Long?, onMark: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clip(RoundedCornerShape(8.dp))
             .background(
                 if (isSet) AppColors.Good.copy(alpha = 0.16f) else AppColors.Surface,
-                RoundedCornerShape(8.dp),
             )
             .border(
                 width = if (isSet) 1.5.dp else 1.dp,
                 color = accent,
                 shape = RoundedCornerShape(8.dp),
             )
-            .clickable(onClick = onMark)
+            .clickable(
+                onClickLabel = if (isSet) "Mark again at this frame" else "Mark at this frame",
+                role = Role.Button,
+                onClick = onMark,
+            )
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -283,7 +307,7 @@ private fun PhaseCard(phase: String, markedAtMs: Long?, onMark: () -> Unit) {
                 color = if (isSet) AppColors.OnSurface else AppColors.Muted,
             )
             Text(
-                if (markedAtMs != null) seconds(markedAtMs) else "Tap to mark",
+                if (markedAtMs != null) "Marked at ${seconds(markedAtMs)}" else "Tap to mark this frame",
                 style = MaterialTheme.typography.labelSmall,
                 color = accent,
             )
