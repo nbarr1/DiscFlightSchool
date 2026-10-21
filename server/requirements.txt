@@ -14,4 +14,4 @@ minio>=7.2.20,<8.0
 # both arrive in 1.x, and 0.x resolves to 0.64.8, where neither exists.
 inference-sdk[webrtc]>=1.6.0,<2.0.0
 opencv-python-headless>=4.10,<5.0
-numpy>=1.26,<3.0
+numpy>=2.5.4,<3.0
