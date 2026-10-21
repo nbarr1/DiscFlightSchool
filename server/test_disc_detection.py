@@ -325,6 +325,7 @@ def test_endpoint_rejects_invalid_images_before_calling_roboflow(use_client, end
     client, upload = endpoint()
     response = post_image(client, data=data, filename=filename)
     assert response.status_code == 400
+    assert response.json() == {"error": "The uploaded image could not be processed"}
     assert fake.calls == []
     assert not upload.exists()
 

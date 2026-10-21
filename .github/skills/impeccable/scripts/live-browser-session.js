@@ -11,7 +11,9 @@
   function createLiveBrowserSessionState({ prefix, storage, idFactory }) {
     if (!prefix) throw new Error('prefix required');
     const store = storage || root.localStorage;
-    const makeId = idFactory || function () { return Math.random().toString(16).slice(2, 10); };
+    const makeId = idFactory || function () {
+      return root.crypto.getRandomValues(new Uint32Array(1))[0].toString(16).padStart(8, '0');
+    };
     const sessionKey = prefix + '-session';
     const handledKey = sessionKey + '-handled';
     const scrollKey = sessionKey + '-scroll';

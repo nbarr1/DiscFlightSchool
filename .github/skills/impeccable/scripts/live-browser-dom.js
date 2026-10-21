@@ -85,8 +85,8 @@
     }
 
     function id8() {
-      if (crypto?.randomUUID) return crypto.randomUUID().replace(/-/g, '').slice(0, 8);
-      return (Math.random().toString(16).slice(2) + Date.now().toString(16)).slice(0, 8);
+      const value = crypto.getRandomValues(new Uint32Array(1))[0];
+      return value.toString(16).padStart(8, '0');
     }
 
     function cssId(id) {
