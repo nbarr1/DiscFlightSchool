@@ -28,7 +28,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       # The release build refuses to run without a signing config. This key
       # exists only for this job and signs nothing anyone installs.
@@ -65,7 +65,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       # RELEASE_KEYSTORE_BASE64 is the upload keystore, base64-encoded
       # (`base64 -w0 upload.jks`). Keep the keystore itself out of the repo.
