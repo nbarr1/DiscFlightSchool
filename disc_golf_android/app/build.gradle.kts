@@ -49,12 +49,12 @@ gradle.taskGraph.whenReady {
 
 android {
     namespace = "com.discflightschool.app"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.discflightschool.app"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 37
         // Increment versionCode on every release submitted to Google Play: the
         // console rejects a re-upload whose build number does not increase.
         versionCode = 1
