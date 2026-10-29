@@ -14,7 +14,7 @@ Pose detection (Form Coach) and marking the disc by hand in the Flight Tracker r
 
 ## Optional: cloud disc detection
 
-When you tap "Auto-detect" in the flight tracker, or "Trace in cloud," the selected video is sent to the Disc Flight School server, which securely submits it to Roboflow to detect the disc. For Auto-detect, only the trimmed part of the video is processed, and your device receives the disc's position in each frame. The source upload is removed after processing or cancellation. The results, including an annotated copy of the video, remain on the server so your device can download them, and the server deletes them 24 hours after processing finishes. If you do not want the video processed by these services, mark the disc by hand instead.
+When you tap "Auto-detect" in the flight tracker, or "Trace in cloud," the selected video is sent to the Disc Flight School server, which securely submits it to Roboflow to detect the disc. For Auto-detect, only the trimmed part of the video is processed, and your device receives the disc's position in each frame. The source upload is removed after processing or cancellation. The results, including an annotated copy of the video, remain on the server so your device can download them, and the server deletes them 24 hours after processing finishes. Roboflow handles the video under its own privacy policy and data retention terms. If you do not want the video processed by these services, mark the disc by hand instead.
 
 ## Optional: training data collection
 
@@ -30,4 +30,4 @@ Locally stored recordings, analysis results, and training samples remain on your
 
 ## Contact
 
-Disc Flight School is developed in the open. Questions or requests about this policy — including requests about previously uploaded training data — can be raised as an issue on the project's GitHub repository.
+Questions or requests about this policy, including requests to delete previously uploaded training data, can be sent by email to comfreak455@gmail.com.

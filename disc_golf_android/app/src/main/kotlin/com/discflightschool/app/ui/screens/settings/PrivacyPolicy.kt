@@ -64,8 +64,9 @@ object PrivacyPolicy {
                 "disc's position in each frame. The source upload is removed after " +
                 "processing or cancellation. The results, including an annotated copy of " +
                 "the video, remain on the server so your device can download them, and the " +
-                "server deletes them 24 hours after processing finishes. If you do not want " +
-                "the video processed by these services, mark the disc by hand instead.",
+                "server deletes them 24 hours after processing finishes. Roboflow handles " +
+                "the video under its own privacy policy and data retention terms. If you do " +
+                "not want the video processed by these services, mark the disc by hand instead.",
         ),
         Section(
             title = "Optional: training data collection",
@@ -96,9 +97,9 @@ object PrivacyPolicy {
         ),
         Section(
             title = "Contact",
-            body = "Disc Flight School is developed in the open. Questions or requests about " +
-                "this policy — including requests about previously uploaded training data — " +
-                "can be raised as an issue on the project's GitHub repository.",
+            body = "Questions or requests about this policy, including requests to delete " +
+                "previously uploaded training data, can be sent by email to " +
+                "comfreak455@gmail.com.",
         ),
     )
 }
