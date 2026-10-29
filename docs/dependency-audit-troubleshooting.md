@@ -4,7 +4,11 @@
 
 | Check | Tool | Covers |
 |---|---|---|
-| **Python dependency audit** | `pip-audit` | `server/requirements.txt`, `server/requirements-test.txt` |
+| **Python dependency audit** | `pip-audit` | `server/requirements.txt`, `server/requirements-test.txt`, and (reported but not failing) `server/requirements.txt` plus `server/requirements-roboflow.txt` |
+
+The Roboflow set reports without failing because inference-sdk 1.x requires
+`pillow<13`, which holds that install on Pillow 12.x and its open advisories.
+Make that step blocking again once inference-sdk allows Pillow 13.
 
 The workflow also used to run an OSV-Scanner job over `disc_golf_app/pubspec.lock`.
 That lockfile left the repository with the Flutter client, and the Android

@@ -15,6 +15,7 @@ from pathlib import Path
 SERVER_DIR = Path(__file__).resolve().parent
 RUNTIME_REQUIREMENTS = SERVER_DIR / "requirements.txt"
 TEST_REQUIREMENTS = SERVER_DIR / "requirements-test.txt"
+ROBOFLOW_REQUIREMENTS = SERVER_DIR / "requirements-roboflow.txt"
 
 # Packages allowed to appear in only one of the two files.
 TEST_ONLY_PACKAGES = {"pytest", "httpx2"}
@@ -22,12 +23,6 @@ RUNTIME_ONLY_PACKAGES = {
     "ultralytics",
     "uvicorn",
     "gunicorn",
-    # Roboflow is lazy-imported and replaced by a fake processor in unit tests.
-    # Keeping this video stack out of the fast test image avoids installing
-    # WebRTC/OpenCV while guaranteeing CI never contacts paid inference.
-    "inference-sdk[webrtc]",
-    "opencv-python-headless",
-    "numpy",
 }
 
 _SPECIFIER_CHARS = "<>=!~ "
@@ -104,6 +99,16 @@ class RequirementsConsistencyTests(unittest.TestCase):
             "Pillow must stay on 12.x or newer; earlier majors were removed "
             "by the dependency audit",
         )
+
+    def test_roboflow_packages_stay_in_their_own_file(self):
+        # inference-sdk caps Pillow below 13, so listing it in requirements.txt
+        # would hold every server install on Pillow 12. Unit tests replace the
+        # Roboflow stack with fakes, so requirements-test.txt leaves it out too.
+        roboflow = parse_requirements(ROBOFLOW_REQUIREMENTS)
+        self.assertIn("inference-sdk[webrtc]", roboflow)
+        for package in sorted(roboflow):
+            self.assertNotIn(package, self.runtime, f"{package} belongs only in requirements-roboflow.txt")
+            self.assertNotIn(package, self.test, f"{package} belongs only in requirements-roboflow.txt")
 
     def test_no_flask_dependencies_in_fastapi_server(self):
         # The server is FastAPI-only; a Flask package here is always a
