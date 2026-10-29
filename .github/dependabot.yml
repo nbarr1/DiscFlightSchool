@@ -16,6 +16,11 @@ updates:
     directory: /server
     schedule:
       interval: weekly
+    ignore:
+      # numpy 2.5 needs Python 3.12 and inference-sdk caps it below 2.4
+      # (see server/requirements.txt), so a raised floor only breaks installs.
+      - dependency-name: numpy
+        versions: [">=2.5"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
