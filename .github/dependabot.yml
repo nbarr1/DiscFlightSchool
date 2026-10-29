@@ -17,6 +17,10 @@ updates:
     schedule:
       interval: weekly
     ignore:
+      # inference-sdk 1.6.x requires numpy<2.4, so a numpy 2.4 or later floor
+      # can't resolve. Drop this once inference-sdk allows newer numpy.
+      - dependency-name: numpy
+        versions: [">=2.4"]
       # numpy 2.5 needs Python 3.12 and inference-sdk caps it below 2.4
       # (see server/requirements.txt), so a raised floor only breaks installs.
       - dependency-name: numpy
