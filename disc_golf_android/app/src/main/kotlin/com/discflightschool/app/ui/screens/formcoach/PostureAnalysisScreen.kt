@@ -275,7 +275,7 @@ fun PostureAnalysisScreen(
                             } else {
                                 "Show pro markers"
                             },
-                            tint = if (showThresholds) AppColors.Accent else AppColors.Muted,
+                            tint = if (showThresholds) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -298,7 +298,7 @@ fun PostureAnalysisScreen(
                 Text(
                     "Detecting pose and calculating joint angles",
                     style = MaterialTheme.typography.bodySmall,
-                    color = AppColors.Muted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             return@Scaffold
@@ -626,7 +626,7 @@ private fun PhaseVerificationCard(
             Text(
                 "Is the pose overlay correct for this frame?",
                 style = MaterialTheme.typography.bodySmall,
-                color = AppColors.Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(10.dp))
             Row {
@@ -703,7 +703,7 @@ private fun PlaybackControls(
                 color = Color.White,
             )
         }
-        Text(frameLabel, style = MaterialTheme.typography.labelSmall, color = AppColors.Muted)
+        Text(frameLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -727,7 +727,7 @@ private fun ScoreCard(score: Double?, proName: String?, throwType: String) {
                         progress = { (score / 100).toFloat() },
                         strokeWidth = 10.dp,
                         color = Formatting.scoreColor(score),
-                        trackColor = AppColors.Surface,
+                        trackColor = MaterialTheme.colorScheme.surface,
                         modifier = Modifier.size(120.dp),
                     )
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -748,20 +748,20 @@ private fun ScoreCard(score: Double?, proName: String?, throwType: String) {
                 Text(
                     "vs ${proName ?: "pro"} · ${Formatting.phaseLabel(throwType)}",
                     style = MaterialTheme.typography.labelMedium,
-                    color = AppColors.Muted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
                 Icon(
                     Icons.Default.PersonSearch,
                     contentDescription = null,
-                    tint = AppColors.Muted,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(48.dp),
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
                     "Select a pro to score your form",
                     style = MaterialTheme.typography.bodySmall,
-                    color = AppColors.Muted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )
             }
@@ -784,7 +784,7 @@ private fun AngleCharts(
                 .fillMaxWidth()
                 .padding(16.dp),
             textAlign = TextAlign.Center,
-            color = AppColors.Muted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         return
     }
@@ -802,6 +802,7 @@ private fun AngleCharts(
                 AngleWaveform(
                     angleData = data,
                     currentFrame = currentFrame,
+                    label = Formatting.angleLabel(angleKey),
                     phaseMarkers = phaseMarkers[angleKey].orEmpty(),
                     onSeekToFraction = { fraction ->
                         onSeekToFrame(frameForFraction(fraction, data.size))
@@ -814,7 +815,7 @@ private fun AngleCharts(
                 Text(
                     "Current: ${Formatting.degrees(data[currentFrame.coerceIn(0, data.size - 1)])}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = AppColors.Muted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -844,7 +845,7 @@ private fun Suggestions(
                         "Working out your cues..."
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = AppColors.Muted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 return@Column
             }

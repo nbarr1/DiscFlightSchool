@@ -156,7 +156,7 @@ fun RouletteScreen(
                     Text(
                         "Add excitement to your round with random shot challenges.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = AppColors.Muted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
                 }
@@ -247,7 +247,7 @@ private fun ModeToggleRow(isPutting: Boolean, enabled: Boolean, onToggle: (Boole
                     "Challenges: shot type, disc, power, hindrance"
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = AppColors.Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Switch(checked = isPutting, onCheckedChange = onToggle, enabled = enabled)
@@ -321,7 +321,7 @@ private fun ResultCard(result: RouletteResult) {
             Text(
                 "Difficulty multiplier ${Formatting.decimal(result.difficultyMultiplier)}x",
                 style = MaterialTheme.typography.bodySmall,
-                color = AppColors.Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

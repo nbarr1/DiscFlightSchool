@@ -130,7 +130,7 @@ fun PhaseFrameSelectorScreen(onBack: () -> Unit, onAnalyze: () -> Unit) {
         // The screen's one forward action sits under the thumb, and says how
         // far there is to go, instead of a disabled word in the app bar.
         bottomBar = {
-            Surface(color = AppColors.Background) {
+            Surface(color = MaterialTheme.colorScheme.background) {
                 Button(
                     onClick = { analyze() },
                     enabled = allMarked,
@@ -179,7 +179,7 @@ fun PhaseFrameSelectorScreen(onBack: () -> Unit, onAnalyze: () -> Unit) {
                         Icon(
                             Icons.Default.FastRewind,
                             contentDescription = "Back half a second",
-                            tint = AppColors.Muted,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     IconButton(onClick = { step(-FRAME_STEP_MS) }) {
@@ -214,7 +214,7 @@ fun PhaseFrameSelectorScreen(onBack: () -> Unit, onAnalyze: () -> Unit) {
                         Icon(
                             Icons.Default.FastForward,
                             contentDescription = "Forward half a second",
-                            tint = AppColors.Muted,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Spacer(Modifier.width(8.dp))
@@ -240,7 +240,7 @@ fun PhaseFrameSelectorScreen(onBack: () -> Unit, onAnalyze: () -> Unit) {
                     .background(AppColors.Surface)
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 style = MaterialTheme.typography.labelMedium,
-                color = AppColors.Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
 
@@ -251,7 +251,7 @@ fun PhaseFrameSelectorScreen(onBack: () -> Unit, onAnalyze: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(phases.size) { index ->
+                items(phases.size, key = { phases[it] }) { index ->
                     val phase = phases[index]
                     PhaseCard(
                         phase = phase,
@@ -304,7 +304,7 @@ private fun PhaseCard(phase: String, markedAtMs: Long?, onMark: () -> Unit) {
                 Formatting.phaseLabel(phase),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (isSet) AppColors.OnSurface else AppColors.Muted,
+                color = if (isSet) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 if (markedAtMs != null) "Marked at ${seconds(markedAtMs)}" else "Tap to mark this frame",

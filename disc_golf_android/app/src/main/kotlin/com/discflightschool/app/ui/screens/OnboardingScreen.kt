@@ -135,7 +135,7 @@ fun OnboardingScreen(onFinished: () -> Unit) {
             Box(Modifier.width(72.dp)) {
                 if (!isLast) {
                     TextButton(onClick = { finish() }) {
-                        Text("Skip", color = AppColors.Muted)
+                        Text("Skip", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -178,9 +178,9 @@ fun OnboardingScreen(onFinished: () -> Unit) {
                     }
                 },
                 shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AppColors.Accent),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
             ) {
-                Text(if (isLast) "Get started" else "Next", color = AppColors.Background)
+                Text(if (isLast) "Get started" else "Next", color = MaterialTheme.colorScheme.background)
             }
         }
     }
@@ -217,7 +217,7 @@ private fun OnboardingPageContent(page: OnboardingPage) {
                     Icon(
                         page.icon,
                         contentDescription = null,
-                        tint = AppColors.Accent,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(64.dp),
                     )
                 } else {
@@ -240,7 +240,7 @@ private fun OnboardingPageContent(page: OnboardingPage) {
             Text(
                 page.body,
                 style = MaterialTheme.typography.bodyLarge,
-                color = AppColors.Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
         }

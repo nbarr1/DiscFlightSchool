@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import com.discflightschool.app.LocalAppContainer
 import com.discflightschool.app.ui.Formatting
 import com.discflightschool.app.ui.components.AppTopBar
+import com.discflightschool.app.ui.components.VideoWithControls
 import com.discflightschool.app.ui.components.LoadingState
 import com.discflightschool.app.ui.theme.AppColors
 import com.discflightschool.app.video.FrameExtractor
@@ -134,107 +135,101 @@ fun VideoTrimScreen(
         // nothing downstream can analyse or track it.
         val tooShort = endMs - startMs < MIN_RANGE_MS
 
-        Column(
+        VideoWithControls(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize(),
-        ) {
-            Box(
-                modifier = Modifier
-                    .weight(3f)
-                    .fillMaxWidth()
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center,
-            ) {
-                VideoSurface(player, Modifier.fillMaxSize())
-            }
-
-            Column(
-                modifier = Modifier
-                    .weight(2f)
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            ) {
-                Text(
-                    "Select the analysis range",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+            video = { videoModifier ->
+                Box(
+                    modifier = videoModifier.background(Color.Black),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    TextButton(
-                        onClick = { player.seekTo(startMs) },
-                        colors = ButtonDefaults.textButtonColors(contentColor = AppColors.Good),
-                    ) {
-                        Text("Start ${seconds(startMs)}", fontWeight = FontWeight.Bold)
-                    }
+                    VideoSurface(player, Modifier.fillMaxSize())
+                }
+            },
+            controls = {
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
                     Text(
-                        seconds(endMs - startMs),
-                        color = AppColors.Muted,
-                        modifier = Modifier.semantics {
-                            contentDescription = "Selection length ${seconds(endMs - startMs)}"
-                        },
+                        "Select the analysis range",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
                     )
-                    TextButton(
-                        onClick = { player.seekTo(endMs) },
-                        colors = ButtonDefaults.textButtonColors(contentColor = AppColors.Bad),
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text("End ${seconds(endMs)}", fontWeight = FontWeight.Bold)
+                        TextButton(
+                            onClick = { player.seekTo(startMs) },
+                            colors = ButtonDefaults.textButtonColors(contentColor = AppColors.Good),
+                        ) {
+                            Text("Start ${seconds(startMs)}", fontWeight = FontWeight.Bold)
+                        }
+                        Text(
+                            seconds(endMs - startMs),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.semantics {
+                                contentDescription = "Selection length ${seconds(endMs - startMs)}"
+                            },
+                        )
+                        TextButton(
+                            onClick = { player.seekTo(endMs) },
+                            colors = ButtonDefaults.textButtonColors(contentColor = AppColors.Bad),
+                        ) {
+                            Text("End ${seconds(endMs)}", fontWeight = FontWeight.Bold)
+                        }
                     }
-                }
 
-                RangeSlider(
-                    value = range,
-                    onValueChange = { range = it },
-                    onValueChangeFinished = { player.seekTo(range.start.toLong()) },
-                    valueRange = 0f..durationMs,
-                )
+                    RangeSlider(
+                        value = range,
+                        onValueChange = { range = it },
+                        onValueChangeFinished = { player.seekTo(range.start.toLong()) },
+                        valueRange = 0f..durationMs,
+                    )
 
-                Text(
-                    if (tooShort) {
-                        "Drag the handles apart to select at least half a second."
-                    } else {
-                        nextStepHint(frameCount)
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (tooShort) AppColors.Warning else AppColors.Muted,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                )
-
-                Spacer(Modifier.weight(1f))
-
-                Row(Modifier.fillMaxWidth()) {
-                    OutlinedButton(
-                        onClick = {
-                            player.seekTo(startMs)
-                            previewEndMs = endMs
-                            player.play()
+                    Text(
+                        if (tooShort) {
+                            "Drag the handles apart to select at least half a second."
+                        } else {
+                            nextStepHint(frameCount)
                         },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Preview")
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Button(
-                        onClick = { onConfirm(startMs, endMs, frameCount) },
-                        enabled = !tooShort,
-                        modifier = Modifier.weight(2f),
-                    ) {
-                        Icon(confirmIcon, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(confirmLabel)
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (tooShort) AppColors.Warning else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Row(Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = {
+                                player.seekTo(startMs)
+                                previewEndMs = endMs
+                                player.play()
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Preview")
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Button(
+                            onClick = { onConfirm(startMs, endMs, frameCount) },
+                            enabled = !tooShort,
+                            modifier = Modifier.weight(2f),
+                        ) {
+                            Icon(confirmIcon, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(confirmLabel)
+                        }
                     }
                 }
-            }
-        }
+            },
+        )
     }
 }
 

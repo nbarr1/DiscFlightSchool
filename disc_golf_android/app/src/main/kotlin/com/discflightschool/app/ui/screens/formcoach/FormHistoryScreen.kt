@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -42,7 +41,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.discflightschool.app.LocalAppContainer
@@ -136,7 +139,7 @@ private fun TrendSection(
         Text(
             "$label trend",
             fontWeight = FontWeight.Bold,
-            color = AppColors.Muted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelLarge,
         )
         Spacer(Modifier.height(6.dp))
@@ -153,7 +156,7 @@ private fun TrendSection(
             Text(
                 "${trend.size} sessions",
                 style = MaterialTheme.typography.labelSmall,
-                color = AppColors.Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 "Latest: ${Formatting.decimal(trend.last().score)}",
@@ -166,10 +169,28 @@ private fun TrendSection(
     }
 }
 
+/**
+ * A square of at least [min] that grows to fit its content, so the score ring
+ * stays round when large font sizes make the number and caption taller.
+ */
+private fun Modifier.squareAtLeast(min: Dp): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+    val side = maxOf(min.roundToPx(), placeable.width, placeable.height)
+    layout(side, side) {
+        placeable.place((side - placeable.width) / 2, (side - placeable.height) / 2)
+    }
+}
+
 /** Scores over time, plotted against the full 0-100 range. */
 @Composable
 private fun TrendChart(scores: List<Double>, modifier: Modifier = Modifier) {
-    Canvas(modifier) {
+    val description = if (scores.isEmpty()) {
+        "No scores yet"
+    } else {
+        "Score trend over ${scores.size} sessions, from ${Formatting.decimal(scores.first())} " +
+            "to ${Formatting.decimal(scores.last())}"
+    }
+    Canvas(modifier.semantics { contentDescription = description }) {
         if (scores.size < 2) return@Canvas
         val stepX = size.width / (scores.size - 1)
 
@@ -211,7 +232,7 @@ private fun SessionCard(session: FormSessionRecord) {
 
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = AppColors.Surface,
+        color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
@@ -220,7 +241,7 @@ private fun SessionCard(session: FormSessionRecord) {
         ) {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
+                    .squareAtLeast(56.dp)
                     .border(2.5.dp, color, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
@@ -260,7 +281,7 @@ private fun SessionCard(session: FormSessionRecord) {
                 Text(
                     "${session.frameCount} frames analyzed",
                     style = MaterialTheme.typography.labelSmall,
-                    color = AppColors.Muted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

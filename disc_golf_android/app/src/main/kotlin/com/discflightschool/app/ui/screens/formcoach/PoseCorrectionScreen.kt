@@ -10,10 +10,10 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -61,6 +61,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -70,6 +72,7 @@ import com.discflightschool.app.LocalAppContainer
 import com.discflightschool.app.ui.components.AppTopBar
 import com.discflightschool.app.ui.components.LoadingState
 import com.discflightschool.app.ui.components.SkeletonOverlay
+import com.discflightschool.app.ui.components.VideoWithControls
 import com.discflightschool.app.ui.theme.AppColors
 import com.discflightschool.app.video.FrameExtractor
 import com.discflightschool.app.video.VideoStage
@@ -331,205 +334,215 @@ fun PoseCorrectionScreen(
                 .padding(padding)
                 .fillMaxSize(),
         ) {
-            // Inside the stage, so a tap lands on the pixel the user aimed at
-            // even when the clip does not fill the pane.
-            VideoStage(
-                player = player,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .onSizeChanged {
-                            videoSize = Size(it.width.toFloat(), it.height.toFloat())
-                        }
-                        .pointerInput(sequentialMode, sequentialReview, currentFrame) {
-                            detectTapGestures(
-                                onTap = { position ->
-                                    val frame = analysis.frames[currentFrame]
-                                    if (sequentialMode && !sequentialReview) {
-                                        onSequentialTap(position)
-                                    } else {
-                                        selectedLandmark = SkeletonOverlay.nearestLandmark(
-                                            position,
-                                            videoSize,
-                                            frame,
-                                        )
+            VideoWithControls(
+                modifier = Modifier.weight(1f),
+                video = { videoModifier ->
+                    // Inside the stage, so a tap lands on the pixel the user aimed at
+                    // even when the clip does not fill the pane.
+                    VideoStage(
+                        player = player,
+                        modifier = videoModifier,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .onSizeChanged {
+                                    videoSize = Size(it.width.toFloat(), it.height.toFloat())
+                                }
+                                // Correcting joints is by touch; this tells TalkBack
+                                // users what the area is.
+                                .semantics {
+                                    contentDescription = "Video frame with the detected pose. " +
+                                        "Tap a joint, then drag it to correct it."
+                                }
+                                .pointerInput(sequentialMode, sequentialReview, currentFrame) {
+                                    detectTapGestures(
+                                        onTap = { position ->
+                                            val frame = analysis.frames[currentFrame]
+                                            if (sequentialMode && !sequentialReview) {
+                                                onSequentialTap(position)
+                                            } else {
+                                                selectedLandmark = SkeletonOverlay.nearestLandmark(
+                                                    position,
+                                                    videoSize,
+                                                    frame,
+                                                )
+                                            }
+                                        },
+                                        onLongPress = { position ->
+                                            if (sequentialMode) return@detectTapGestures
+                                            player.pause()
+                                            selectedLandmark = SkeletonOverlay.nearestLandmark(
+                                                position,
+                                                videoSize,
+                                                analysis.frames[currentFrame],
+                                            )
+                                            magnifierAt = position
+                                        },
+                                    )
+                                }
+                                .pointerInput(moveAllMode, sequentialMode, currentFrame) {
+                                    detectDragGestures(
+                                        onDragEnd = { magnifierAt = null },
+                                        onDragCancel = { magnifierAt = null },
+                                    ) { change, dragAmount ->
+                                        change.consume()
+                                        if (sequentialMode) return@detectDragGestures
+                                        if (moveAllMode) {
+                                            moveAllBy(dragAmount)
+                                        } else {
+                                            if (magnifierAt != null) magnifierAt = change.position
+                                            moveSelectedTo(change.position)
+                                        }
                                     }
                                 },
-                                onLongPress = { position ->
-                                    if (sequentialMode) return@detectTapGestures
-                                    player.pause()
-                                    selectedLandmark = SkeletonOverlay.nearestLandmark(
-                                        position,
-                                        videoSize,
-                                        analysis.frames[currentFrame],
-                                    )
-                                    magnifierAt = position
-                                },
-                            )
-                        }
-                        .pointerInput(moveAllMode, sequentialMode, currentFrame) {
-                            detectDragGestures(
-                                onDragEnd = { magnifierAt = null },
-                                onDragCancel = { magnifierAt = null },
-                            ) { change, dragAmount ->
-                                change.consume()
-                                if (sequentialMode) return@detectDragGestures
-                                if (moveAllMode) {
-                                    moveAllBy(dragAmount)
-                                } else {
-                                    if (magnifierAt != null) magnifierAt = change.position
-                                    moveSelectedTo(change.position)
+                        ) {
+                            // Landmarks are edited in place, so `revision` is what tells
+                            // the composition that this frame's contents changed.
+                            val frame = remember(currentFrame, revision) { analysis.frames[currentFrame] }
+                            Canvas(Modifier.fillMaxSize()) {
+                                with(SkeletonOverlay) {
+                                    if (!sequentialMode || sequentialReview) {
+                                        drawSkeleton(
+                                            frame = frame,
+                                            interactive = true,
+                                            selectedLandmark = selectedLandmark,
+                                        )
+                                    }
+                                }
+
+                                if (sequentialMode) {
+                                    for ((key, position) in sequentialPlacements) {
+                                        val center = SkeletonOverlay.scalePoint(position, size, frame)
+                                        drawCircle(AppColors.Good, radius = 7.dp.toPx(), center = center)
+                                        drawCircle(
+                                            Color.White,
+                                            radius = 7.dp.toPx(),
+                                            center = center,
+                                            style = Stroke(width = 2.dp.toPx()),
+                                        )
+                                    }
                                 }
                             }
-                        },
-                ) {
-                    // Landmarks are edited in place, so `revision` is what tells
-                    // the composition that this frame's contents changed.
-                    val frame = remember(currentFrame, revision) { analysis.frames[currentFrame] }
-                    Canvas(Modifier.fillMaxSize()) {
-                        with(SkeletonOverlay) {
-                            if (!sequentialMode || sequentialReview) {
-                                drawSkeleton(
-                                    frame = frame,
-                                    interactive = true,
-                                    selectedLandmark = selectedLandmark,
-                                )
-                            }
-                        }
 
-                        if (sequentialMode) {
-                            for ((key, position) in sequentialPlacements) {
-                                val center = SkeletonOverlay.scalePoint(position, size, frame)
-                                drawCircle(AppColors.Good, radius = 7.dp.toPx(), center = center)
-                                drawCircle(
-                                    Color.White,
-                                    radius = 7.dp.toPx(),
-                                    center = center,
-                                    style = Stroke(width = 2.dp.toPx()),
+                            val magnifier = magnifierAt
+                            val bitmap = frameBitmap
+                            if (magnifier != null && bitmap != null) {
+                                Magnifier(
+                                    bitmap = bitmap,
+                                    focus = magnifier,
+                                    canvasSize = videoSize,
+                                    offsetPx = with(density) {
+                                        IntOffset(
+                                            (magnifier.x - 70.dp.toPx()).roundToInt(),
+                                            (magnifier.y - 180.dp.toPx()).roundToInt(),
+                                        )
+                                    },
                                 )
                             }
                         }
                     }
-
-                    val magnifier = magnifierAt
-                    val bitmap = frameBitmap
-                    if (magnifier != null && bitmap != null) {
-                        Magnifier(
-                            bitmap = bitmap,
-                            focus = magnifier,
-                            canvasSize = videoSize,
-                            offsetPx = with(density) {
-                                IntOffset(
-                                    (magnifier.x - 70.dp.toPx()).roundToInt(),
-                                    (magnifier.y - 180.dp.toPx()).roundToInt(),
-                                )
+                },
+                controls = {
+                    if (sequentialMode) {
+                        SequentialBanner(
+                            step = sequentialStep,
+                            isReview = sequentialReview,
+                            placements = sequentialPlacements.keys,
+                            onRedoStep = { index ->
+                                sequentialStep = index
+                                sequentialReview = false
+                                for (i in index until PLACEMENT_SEQUENCE.size) {
+                                    sequentialPlacements.remove(PLACEMENT_SEQUENCE[i].key)
+                                }
+                            },
+                            onCommit = {
+                                applySequentialToFrame()
+                                sequentialMode = false
+                                sequentialReview = false
+                                sequentialPlacements.clear()
+                            },
+                            onCancel = {
+                                sequentialMode = false
+                                sequentialReview = false
+                                sequentialPlacements.clear()
                             },
                         )
-                    }
-                }
-            }
-
-            if (sequentialMode) {
-                SequentialBanner(
-                    step = sequentialStep,
-                    isReview = sequentialReview,
-                    placements = sequentialPlacements.keys,
-                    onRedoStep = { index ->
-                        sequentialStep = index
-                        sequentialReview = false
-                        for (i in index until PLACEMENT_SEQUENCE.size) {
-                            sequentialPlacements.remove(PLACEMENT_SEQUENCE[i].key)
-                        }
-                    },
-                    onCommit = {
-                        applySequentialToFrame()
-                        sequentialMode = false
-                        sequentialReview = false
-                        sequentialPlacements.clear()
-                    },
-                    onCancel = {
-                        sequentialMode = false
-                        sequentialReview = false
-                        sequentialPlacements.clear()
-                    },
-                )
-            } else {
-                FrameScrubber(
-                    currentFrame = currentFrame,
-                    frameCount = analysis.frames.size,
-                    correctedFrames = correctedFrames,
-                    onSeek = { seekToFrame(it) },
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = { seekToFrame(currentFrame - 1) }) {
-                        Icon(Icons.Default.SkipPrevious, contentDescription = "Previous frame")
-                    }
-                    IconButton(onClick = { seekToFrame(currentFrame + 1) }) {
-                        Icon(Icons.Default.SkipNext, contentDescription = "Next frame")
-                    }
-                    FilterChip(
-                        selected = moveAllMode,
-                        onClick = { moveAllMode = !moveAllMode },
-                        label = { Text("Move all") },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.OpenWith,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                            )
-                        },
-                    )
-                    OutlinedButton(
-                        onClick = {
-                            player.pause()
-                            sequentialMode = true
-                            sequentialStep = 0
-                            sequentialReview = false
-                            sequentialPlacements.clear()
-                            moveAllMode = false
-                            selectedLandmark = null
-                        },
-                    ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
+                    } else {
+                        FrameScrubber(
+                            currentFrame = currentFrame,
+                            frameCount = analysis.frames.size,
+                            correctedFrames = correctedFrames,
+                            onSeek = { seekToFrame(it) },
                         )
-                        Spacer(Modifier.width(6.dp))
-                        Text("Re-place all")
-                    }
-                }
 
-                Text(
-                    text = when {
-                        moveAllMode ->
-                            "Drag anywhere to move the whole skeleton onto the thrower."
-                        selectedLandmark != null ->
-                            "Dragging ${landmarkLabel(selectedLandmark!!)}. " +
-                                "Long-press for a magnified view."
-                        else ->
-                            "Tap a joint to select it, then drag to correct it. " +
-                                "Long-press to zoom."
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = AppColors.Muted,
-                    textAlign = TextAlign.Center,
-                )
-            }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            IconButton(onClick = { seekToFrame(currentFrame - 1) }) {
+                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous frame")
+                            }
+                            IconButton(onClick = { seekToFrame(currentFrame + 1) }) {
+                                Icon(Icons.Default.SkipNext, contentDescription = "Next frame")
+                            }
+                            FilterChip(
+                                selected = moveAllMode,
+                                onClick = { moveAllMode = !moveAllMode },
+                                label = { Text("Move all") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.OpenWith,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                },
+                            )
+                            OutlinedButton(
+                                onClick = {
+                                    player.pause()
+                                    sequentialMode = true
+                                    sequentialStep = 0
+                                    sequentialReview = false
+                                    sequentialPlacements.clear()
+                                    moveAllMode = false
+                                    selectedLandmark = null
+                                },
+                            ) {
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text("Re-place all")
+                            }
+                        }
+
+                        Text(
+                            text = when {
+                                moveAllMode ->
+                                    "Drag anywhere to move the whole skeleton onto the thrower."
+                                selectedLandmark != null ->
+                                    "Dragging ${landmarkLabel(selectedLandmark!!)}. " +
+                                        "Long-press for a magnified view."
+                                else ->
+                                    "Tap a joint to select it, then drag to correct it. " +
+                                        "Long-press to zoom."
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                },
+            )
         }
     }
 
@@ -643,7 +656,7 @@ private fun SequentialBanner(
                 Icon(
                     Icons.Default.TouchApp,
                     contentDescription = null,
-                    tint = AppColors.Accent,
+                    tint = MaterialTheme.colorScheme.primary,
                 )
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
@@ -656,7 +669,7 @@ private fun SequentialBanner(
                         "Step ${step + 1} of ${PLACEMENT_SEQUENCE.size} · " +
                             "${current.side} side, as you see it on screen",
                         style = MaterialTheme.typography.labelMedium,
-                        color = AppColors.Muted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 TextButton(onClick = onCancel) { Text("Cancel") }
@@ -671,7 +684,7 @@ private fun SequentialBanner(
             Text(
                 "Tap a joint below to place it again, or keep these positions.",
                 style = MaterialTheme.typography.labelMedium,
-                color = AppColors.Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(8.dp))
             FlowRow(
@@ -745,7 +758,7 @@ private fun FrameScrubber(
         Text(
             "Frame ${currentFrame + 1} / $frameCount · ${correctedFrames.size} corrected",
             style = MaterialTheme.typography.labelSmall,
-            color = AppColors.Muted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
         )

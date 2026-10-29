@@ -119,7 +119,7 @@ fun KnowledgeBaseScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(categories.size) { index ->
+                items(categories.size, key = { categories[it].id }) { index ->
                     val category = categories[index]
                     CategoryCard(
                         category = category,
@@ -153,7 +153,7 @@ private fun SearchEntry(onClick: () -> Unit) {
     ) {
         Icon(Icons.Default.Search, contentDescription = null, tint = AppColors.KnowledgeBase)
         Spacer(Modifier.width(12.dp))
-        Text("Ask a question...", color = AppColors.Muted)
+        Text("Ask a question...", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -241,7 +241,7 @@ private fun CategoryCard(
             "$studyCount ${if (studyCount == 1) "study" else "studies"} · " +
                 "$articleCount ${if (articleCount == 1) "tip" else "tips"}",
             style = MaterialTheme.typography.labelSmall,
-            color = AppColors.Muted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

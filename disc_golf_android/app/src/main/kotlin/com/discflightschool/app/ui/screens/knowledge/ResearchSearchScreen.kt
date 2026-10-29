@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -89,8 +88,7 @@ fun ResearchSearchScreen(onBack: () -> Unit) {
         Column(
             modifier = Modifier
                 .padding(padding)
-                .fillMaxSize()
-                .imePadding(),
+                .fillMaxSize(),
         ) {
             Box(Modifier.weight(1f)) {
                 if (history.isEmpty()) {
@@ -143,7 +141,7 @@ private fun EmptySearchState(onSuggestion: (String) -> Unit) {
         Text(
             "Get answers backed by the peer-reviewed disc golf studies bundled with the app.",
             style = MaterialTheme.typography.bodyMedium,
-            color = AppColors.Muted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(24.dp))
@@ -242,7 +240,7 @@ private fun InputBar(
             Icon(
                 Icons.AutoMirrored.Filled.Send,
                 contentDescription = "Send",
-                tint = if (value.isNotBlank()) AppColors.KnowledgeBase else AppColors.Muted,
+                tint = if (value.isNotBlank()) AppColors.KnowledgeBase else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
