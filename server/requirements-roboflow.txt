@@ -14,7 +14,7 @@
 # `InferenceConfiguration.api_key_transport` and `WebRTCSession.on_error`
 # both arrive in 1.x, and 0.x resolves to 0.64.8, where neither exists.
 inference-sdk[webrtc]>=1.6.0,<2.0.0
-opencv-python-headless>=4.10,<5.0
+opencv-python-headless>=5.0.0.93,<6.0
 # A 2.5 floor is uninstallable here twice over: numpy 2.5 needs Python 3.12
 # (the server image and the audit job run 3.11), and inference-sdk 1.x caps
 # numpy below 2.4. pip resolves the newest version both allow.
