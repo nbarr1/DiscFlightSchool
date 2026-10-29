@@ -14,7 +14,6 @@ minio>=7.2.20,<8.0
 # both arrive in 1.x, and 0.x resolves to 0.64.8, where neither exists.
 inference-sdk[webrtc]>=1.6.0,<2.0.0
 opencv-python-headless>=4.10,<5.0
-# numpy 2.5 dropped Python 3.11, which the Docker image, the dependency audit
-# and one server-test job run on, so a 2.5 floor can't install there. This
-# floor still lets Python 3.12 and later resolve to 2.5.x.
-numpy>=2.4.6,<3.0
+# inference-sdk 1.6.x requires numpy<2.4, so the cap here matches it. A higher
+# floor (Dependabot raised it to 2.5.4) can't resolve on any Python version.
+numpy>=2.0,<2.4

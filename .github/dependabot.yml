@@ -17,10 +17,10 @@ updates:
     schedule:
       interval: weekly
     ignore:
-      # Raising the numpy floor to 2.5 breaks installs on Python 3.11, which
-      # the server image still uses. Drop this once the image moves to 3.12.
+      # inference-sdk 1.6.x requires numpy<2.4, so a numpy 2.4 or later floor
+      # can't resolve. Drop this once inference-sdk allows newer numpy.
       - dependency-name: numpy
-        versions: [">=2.5"]
+        versions: [">=2.4"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
