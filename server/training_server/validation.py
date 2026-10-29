@@ -91,7 +91,9 @@ def validate_decodable_image(path: Path, ext: str) -> None:
     """
     expected_format = "PNG" if ext == ".png" else "JPEG"
     try:
-        with Image.open(path) as image:
+        # Only the expected decoder may run, so a crafted file can't reach
+        # Pillow's other format plugins (TIFF, EPS, PDF and the rest).
+        with Image.open(path, formats=[expected_format]) as image:
             # Read dimensions and format before verify(): verify() closes
             # the underlying file, and touching attributes afterwards is
             # undefined per Pillow's docs.
