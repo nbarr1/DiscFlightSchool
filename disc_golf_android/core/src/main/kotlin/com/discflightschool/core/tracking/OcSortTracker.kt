@@ -70,7 +70,7 @@ class OcSortTracker(
         val predicted = tracks.map { it.stateBox() }
         val iou = iouMatrix(predicted, boxes)
         val direction = directionConsistency(boxes, confidences)
-        val (matched, unmatchedTracks, unmatchedDetections) = associate(iou, direction)
+        val (matched, unmatchedTracks, unmatchedDetections) = associate(iou, direction, boxes.size)
 
         for ((row, col) in matched) {
             tracks[row].update(boxes[col])
@@ -82,7 +82,7 @@ class OcSortTracker(
             // Second chance (OCR): match what is left against each track's last real observation.
             val ocrIou = iouMatrix(unmatchedTracks.map { tracks[it].lastObservation }, unmatchedDetections.map { boxes[it] })
             val zeros = Array(ocrIou.size) { DoubleArray(unmatchedDetections.size) }
-            val (ocrMatched, _, ocrUnmatchedDetections) = associate(ocrIou, zeros)
+            val (ocrMatched, _, ocrUnmatchedDetections) = associate(ocrIou, zeros, unmatchedDetections.size)
             for ((ocrRow, ocrCol) in ocrMatched) {
                 val track = tracks[unmatchedTracks[ocrRow]]
                 val detection = unmatchedDetections[ocrCol]
@@ -115,9 +115,9 @@ class OcSortTracker(
         val unmatchedDetections: List<Int>,
     )
 
-    private fun associate(iou: Array<DoubleArray>, direction: Array<DoubleArray>): Association {
+    /** [cols] is the detection count, which an empty [iou] (no tracks yet) cannot carry. */
+    private fun associate(iou: Array<DoubleArray>, direction: Array<DoubleArray>, cols: Int): Association {
         val rows = iou.size
-        val cols = if (rows == 0) 0 else iou[0].size
         val matched = mutableListOf<Pair<Int, Int>>()
         val unmatchedTracks = (0 until rows).toMutableSet()
         val unmatchedDetections = (0 until cols).toMutableSet()

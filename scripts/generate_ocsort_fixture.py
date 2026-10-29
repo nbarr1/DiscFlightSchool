@@ -54,6 +54,9 @@ def scenario(seed: int, fps: float) -> dict:
     if seed % 2:
         discs.append(flight(rng, frames, (1100, 450), (rng.uniform(-14, -6), rng.uniform(-8, -3)), 20))
     tracker = OCSORTTracker(frame_rate=fps, **SETTINGS)
+    # Ids come from a counter shared by every tracker in the process; reset()
+    # restarts it, so each scenario numbers its tracks from 0 as a fresh run does.
+    tracker.reset()
     out = []
     for frame in range(frames):
         detections = []
