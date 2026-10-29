@@ -67,10 +67,15 @@ def main() -> int:
     video = Path(sys.argv[1])
 
     started = time.monotonic()
+    status, body = request("GET", f"{base}/", headers={})
+    print(f"GET / -> {status} ({time.monotonic() - started:.1f}s, includes any cold start)")
+    # The endpoint list says which release is deployed: one without
+    # /ready or .../track predates this repository's main branch.
+    endpoints = body.get("endpoints") if isinstance(body, dict) else None
+    for endpoint in endpoints or [body]:
+        print(f"  {endpoint}")
     status, body = request("GET", f"{base}/ready", headers={})
-    print(f"GET /ready -> {status} {body} ({time.monotonic() - started:.1f}s, includes any cold start)")
-    if status != 200:
-        return 1
+    print(f"GET /ready -> {status} {body}")
 
     payload, boundary = multipart(video)
     status, body = request(
