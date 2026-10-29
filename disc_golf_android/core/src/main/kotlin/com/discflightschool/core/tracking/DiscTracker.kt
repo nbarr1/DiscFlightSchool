@@ -3,7 +3,6 @@ package com.discflightschool.core.tracking
 import com.discflightschool.core.detection.DiscDetection
 import com.discflightschool.core.detection.FlightTrackingResult
 import com.discflightschool.core.math.AngleCalculator
-import kotlin.math.ceil
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
@@ -165,108 +164,4 @@ class GeometricSplineTracker : DiscTracker {
     }
 
     override fun dispose() = Unit
-}
-
-/**
- * What [AutoDiscTracker] needs from the platform detector, so the tracker's own
- * behaviour is testable without TFLite or a video file.
- */
-interface VideoDiscDetector {
-    val progress: Double
-    val statusMessage: String
-
-    /** Load the detector model, throwing if it cannot be loaded at all. */
-    suspend fun loadModel()
-
-    suspend fun processVideo(
-        videoPath: String,
-        fps: Double,
-        maxFrames: Int,
-        startMs: Long,
-        endMs: Long?,
-    ): FlightTrackingResult
-}
-
-/**
- * The fully automatic tracker: finds the disc with no user input at all.
- *
- * Delegates to the detector's track-by-detection pipeline, which discovers the
- * disc with a full-frame scan and then follows it frame-to-frame in a predicted
- * search window.
- */
-class AutoDiscTracker(private val detector: VideoDiscDetector) : DiscTracker {
-
-    override val progress: Double get() = detector.progress
-
-    override val statusMessage: String get() = detector.statusMessage
-
-    override suspend fun track(
-        session: TrackerSession,
-        // Ignored — this tracker discovers the disc itself. Callers pass an empty list.
-        seedPoints: List<TrackerSeedPoint>,
-    ): FlightTrackingResult {
-        // Load explicitly rather than leaning on a lazy load inside the
-        // pipeline, so a model that cannot load is reported as its own distinct
-        // failure instead of surfacing as an anonymous exception partway
-        // through a run.
-        try {
-            detector.loadModel()
-        } catch (e: Throwable) {
-            throw com.discflightschool.core.detection.DetectorModelUnavailableException(e)
-        }
-
-        val result = detector.processVideo(
-            videoPath = session.videoPath,
-            fps = session.fps,
-            maxFrames = framesForSession(session),
-            startMs = session.trimStartMs,
-            endMs = session.trimEndMs,
-        )
-
-        // The pipeline reports the dimensions of its decoded working frames —
-        // downscaled during extraction — not the video the player is showing.
-        // Re-state the session's own dimensions so anything reading these
-        // fields is not quietly handed the extraction resolution.
-        return FlightTrackingResult(
-            detections = result.detections,
-            videoWidth = session.videoWidth,
-            videoHeight = session.videoHeight,
-            fps = result.fps,
-            totalFrames = result.totalFrames,
-        )
-    }
-
-    /**
-     * Deliberately empty.
-     *
-     * The detector is app-scoped, while call sites dispose trackers in a
-     * `finally`. Forwarding this would close the shared TFLite interpreter for
-     * the rest of the app session. Unlike the hybrid tracker, this one
-     * constructs nothing of its own that needs releasing.
-     */
-    override fun dispose() = Unit
-
-    companion object {
-        /** An upper bound on the frames processed in one run. */
-        const val MAX_PROCESSED_FRAMES = 300
-
-        /**
-         * How many frames to process for [session], derived from the trimmed
-         * span rather than taking the 300-frame default.
-         *
-         * A six-second trim at 10fps is about 61 frames; processing 300 would
-         * spend five times as long walking past the end of the clip — and at
-         * this model's input size, every frame costs real wall-clock time.
-         */
-        fun framesForSession(session: TrackerSession): Int {
-            val endMs = session.trimEndMs ?: return MAX_PROCESSED_FRAMES
-
-            val spanMs = endMs - session.trimStartMs
-            if (spanMs <= 0) return 2
-
-            // +1 because a span of N frame-intervals contains N+1 frame boundaries.
-            val frames = ceil(spanMs / 1000.0 * session.fps).toInt() + 1
-            return frames.coerceIn(2, MAX_PROCESSED_FRAMES)
-        }
-    }
 }

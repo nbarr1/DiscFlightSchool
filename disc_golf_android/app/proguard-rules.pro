@@ -1,7 +1,5 @@
-# TensorFlow Lite loads delegates and ops reflectively from native code.
--keep class org.tensorflow.lite.** { *; }
--keep class org.tensorflow.lite.gpu.** { *; }
--dontwarn org.tensorflow.lite.gpu.GpuDelegateFactory$Options
+# ONNX Runtime's native library builds its Java result objects through JNI.
+-keep class ai.onnxruntime.** { *; }
 
 # ML Kit pose detection ships its model through reflective loaders.
 -keep class com.google.mlkit.** { *; }

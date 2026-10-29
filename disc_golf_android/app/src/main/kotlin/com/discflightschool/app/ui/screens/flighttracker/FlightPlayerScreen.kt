@@ -116,8 +116,7 @@ import com.discflightschool.core.detection.FlightTrackingResult
 import com.discflightschool.core.detection.assessDetectionQuality
 import com.discflightschool.core.detection.sampleSeedPoints
 import com.discflightschool.core.geometry.Vec2
-import com.discflightschool.core.tracking.AutoDiscTracker
-import com.discflightschool.core.tracking.CloudDiscTracker
+import com.discflightschool.core.tracking.WorkflowDiscTracker
 import com.discflightschool.core.tracking.FrameIndexing
 import com.discflightschool.core.tracking.GeometricSplineTracker
 import com.discflightschool.core.tracking.TrackerSeedPoint
@@ -214,12 +213,7 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
     var showCameraSheet by remember { mutableStateOf(false) }
     var busyMessage by remember { mutableStateOf<String?>(null) }
     var showDetectionDialog by remember { mutableStateOf(false) }
-    // The Roboflow run in progress, so the dialog can show its progress and
-    // cancel it. Null while the on-device detector runs, or nothing does.
-    var cloudTracker by remember { mutableStateOf<CloudDiscTracker?>(null) }
-    var cloudProgress by remember { mutableStateOf<Double?>(null) }
-    var cloudStatus by remember { mutableStateOf("") }
-    val autoDetecting = isDetecting || cloudTracker != null
+    val autoDetecting = isDetecting
     var exportProgress by remember { mutableStateOf<Float?>(null) }
 
     val result = workbench.flightResult
@@ -362,53 +356,22 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
     }
 
     /**
-     * Find the disc with no input from the user.
-     *
-     * The server's Roboflow Workflow runs when the app has a key for it: the
-     * key built into the app for the default server, or the user's own. When
-     * there is none, or the server can't be reached or refuses, the on-device
-     * detector runs instead, and a snackbar says why.
+     * Find the disc with no input from the user, on the phone: the Roboflow
+     * Workflow's RF-DETR model finds the disc and its OC-SORT tracker follows
+     * it through the clip.
      */
     suspend fun runAutoDetection() {
         if (autoDetecting) return
         player.pause()
         showDetectionDialog = true
         val session = buildSession()
-        var cloudFailure: String? = null
 
         try {
-            var tracked: FlightTrackingResult? = null
-            var confidenceFloor = container.discDetector.confidenceThreshold
-            if (container.trainingDataRepository.detectionApiKey != null) {
-                val tracker = CloudDiscTracker(container.discFlightClient) { fraction, status ->
-                    cloudProgress = fraction
-                    cloudStatus = status
-                }
-                cloudProgress = null
-                cloudStatus = "Starting..."
-                cloudTracker = tracker
-                try {
-                    tracked = tracker.track(session, emptyList())
-                    // The Workflow applies its own threshold, so the on-device
-                    // sensitivity setting says nothing about these matches.
-                    confidenceFloor = 0.0
-                } catch (e: DetectionCancelledException) {
-                    throw e
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    cloudFailure = e.message ?: "unknown error"
-                } finally {
-                    cloudTracker = null
-                }
-            }
-            if (tracked == null) {
-                val tracker = AutoDiscTracker(container.discDetector)
-                try {
-                    tracked = tracker.track(session, emptyList())
-                } finally {
-                    tracker.dispose()
-                }
+            val tracker = WorkflowDiscTracker(container.discDetector)
+            val tracked = try {
+                tracker.track(session, emptyList())
+            } finally {
+                tracker.dispose()
             }
             showDetectionDialog = false
 
@@ -425,17 +388,12 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
             resultSource = TrackSource.AUTO
             qualityReport = assessDetectionQuality(
                 result = tracked,
-                confidenceFloor = confidenceFloor,
+                confidenceFloor = WorkflowDiscTracker.CONFIDENCE_THRESHOLD,
             )
             phase = SetupPhase.RESULT
             // Rewind so the trail plays from the top rather than from wherever
             // the scrub position happened to be when detection started.
             player.seekTo(trimStartMs)
-            cloudFailure?.let { reason ->
-                snackbarHostState.showSnackbar(
-                    "Cloud detection didn't work ($reason), so the on-device detector ran instead.",
-                )
-            }
         } catch (e: DetectionCancelledException) {
             showDetectionDialog = false
             snackbarHostState.showSnackbar("Auto-detect cancelled — nothing was changed.")
@@ -443,12 +401,7 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
         } catch (e: DetectorModelUnavailableException) {
             showDetectionDialog = false
             snackbarHostState.showSnackbar(
-                if (cloudFailure != null) {
-                    "Cloud detection didn't work ($cloudFailure), and the on-device detector " +
-                        "couldn't load — mark the disc by hand for now."
-                } else {
-                    "The detector model couldn't load — mark the disc by hand for now."
-                },
+                "The detector model couldn't load — mark the disc by hand for now.",
             )
             showCameraSheet = true
         } catch (e: CancellationException) {
@@ -840,15 +793,8 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
     if (showModeSheet) {
         ChoiceSheet(
             title = "How should we find the disc?",
-            body = if (container.trainingDataRepository.detectionApiKey != null) {
-                "Auto-detect uploads this video to the Disc Flight School server, which finds " +
-                    "the disc in the trimmed part with Roboflow. If the server can't be reached, " +
-                    "it scans on your phone instead. Marking by hand is slower, but more " +
-                    "reliable on busy backgrounds."
-            } else {
-                "Auto-detect scans the clip for you. Marking by hand is slower, but more " +
-                    "reliable on busy backgrounds."
-            },
+            body = "Auto-detect scans the clip on your phone. Marking by hand is slower, but " +
+                "more reliable on busy backgrounds.",
             secondaryLabel = "Mark manually",
             primaryLabel = "Auto-detect",
             // Backing out of the first question means not tracking this clip
@@ -890,10 +836,7 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
     }
 
     if (showDetectionDialog) {
-        val cancelDetection: () -> Unit = {
-            val cloud = cloudTracker
-            if (cloud != null) cloud.cancel() else container.discDetector.cancelProcessing()
-        }
+        val cancelDetection: () -> Unit = { container.discDetector.cancelProcessing() }
         AlertDialog(
             // Back cancels, the same as the button: a run nobody can leave
             // except by finding the button is a trap.
@@ -902,25 +845,17 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
             title = { Text("Finding the disc") },
             text = {
                 Column {
-                    val inCloud = cloudTracker != null
-                    // The server knows the frame total only once processing
-                    // starts; until then the bar can't honestly show a share.
-                    val fraction = if (inCloud) cloudProgress else detectorProgress
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (fraction == null) {
-                            LinearProgressIndicator(modifier = Modifier.weight(1f))
-                        } else {
-                            LinearProgressIndicator(
-                                progress = { fraction.toFloat().coerceIn(0f, 1f) },
-                                modifier = Modifier.weight(1f),
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text("${(fraction * 100).roundToInt()}%")
-                        }
+                        LinearProgressIndicator(
+                            progress = { detectorProgress.toFloat().coerceIn(0f, 1f) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text("${(detectorProgress * 100).roundToInt()}%")
                     }
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        (if (inCloud) cloudStatus else detectorStatus).ifEmpty { "Starting..." },
+                        detectorStatus.ifEmpty { "Starting..." },
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Spacer(Modifier.height(8.dp))

@@ -139,14 +139,12 @@ class ServerUriTest {
     // ── server URL changes and the stored API key ────────────────────────
 
     private fun repository(
-        builtInClientKey: String = "",
         store: InMemoryKeyValueStore = InMemoryKeyValueStore(),
         secrets: InMemorySecretStore = InMemorySecretStore(),
     ) = TrainingDataRepository(
         store = store,
         secrets = secrets,
         manifestStore = InMemoryManifestStore(),
-        builtInClientKey = builtInClientKey,
     )
 
     @Test
@@ -212,21 +210,11 @@ class ServerUriTest {
         val secrets = InMemorySecretStore()
         secrets.write(TrainingDataRepository.API_KEY_KEY, "my-key")
 
-        val repository = repository(builtInClientKey = "shipped-key", store = store, secrets = secrets)
+        val repository = repository(store = store, secrets = secrets)
 
         assertEquals(TrainingDataRepository.DEFAULT_SERVER_URL, repository.serverUrl.value)
         assertNull(store.getString(TrainingDataRepository.SERVER_URL_KEY))
         assertEquals("my-key", repository.apiKey)
-    }
-
-    @Test
-    fun `the built-in key reaches the new default after a former default is migrated`() {
-        val store = InMemoryKeyValueStore()
-        store.putString(TrainingDataRepository.SERVER_URL_KEY, "https://discflightschool.onrender.com")
-
-        val repository = repository(builtInClientKey = "shipped-key", store = store)
-
-        assertEquals("shipped-key", repository.detectionApiKey)
     }
 
     @Test
@@ -241,41 +229,5 @@ class ServerUriTest {
             "https://my-server.example.com",
             store.getString(TrainingDataRepository.SERVER_URL_KEY),
         )
-    }
-
-    // ── which key the detection endpoints get ────────────────────────────
-
-    @Test
-    fun `the built-in client key goes to the default server`() {
-        val repository = repository(builtInClientKey = "shipped-key")
-
-        assertEquals("shipped-key", repository.detectionApiKey)
-    }
-
-    @Test
-    fun `the built-in client key never goes to another server`() {
-        val repository = repository(builtInClientKey = "shipped-key")
-
-        repository.setServerUrl("https://someone-elses-server.example.com")
-
-        assertNull(repository.detectionApiKey)
-    }
-
-    @Test
-    fun `the user's own key wins over the built-in one`() {
-        val repository = repository(builtInClientKey = "shipped-key")
-        repository.setServerUrl("https://my-server.example.com")
-        repository.setApiKey("my-key")
-
-        assertEquals("my-key", repository.detectionApiKey)
-    }
-
-    @Test
-    fun `a build without a client key has no detection key until the user adds one`() {
-        val repository = repository()
-
-        assertNull(repository.detectionApiKey)
-        repository.setApiKey("my-key")
-        assertEquals("my-key", repository.detectionApiKey)
     }
 }

@@ -14,3 +14,7 @@ key.properties
 .idea/
 *.iml
 captures/
+
+# The RF-DETR disc model (114 MB, over GitHub's file limit).
+# scripts/fetch_disc_model.py downloads it from Roboflow.
+app/src/main/assets/models/rfdetr/

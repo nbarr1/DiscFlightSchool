@@ -25,13 +25,22 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      # The Roboflow disc model is too large to commit, so every build
+      # downloads it. ROBOFLOW_API_KEY is the workspace's private key.
+      - name: Fetch the disc model
+        env:
+          ROBOFLOW_API_KEY: ${{ secrets.ROBOFLOW_API_KEY }}
+        run: python3 scripts/fetch_disc_model.py
+
       - name: Check required assets
         working-directory: disc_golf_android
         run: |
           for asset in \
             "app/src/main/assets/data/pro_baseline_db.json" \
             "app/src/main/assets/data/knowledge_base.json" \
-            "app/src/main/assets/models/disc_detector.tflite"; do
+            "app/src/main/assets/models/rfdetr/weights.onnx" \
+            "app/src/main/assets/models/rfdetr/inference_config.json" \
+            "app/src/main/assets/models/rfdetr/class_names.txt"; do
             if [ ! -f "$asset" ]; then
               echo "ERROR: Missing asset: $asset"
               exit 1
@@ -39,13 +48,8 @@ jobs:
           done
           echo "All assets present."
 
-      # The key the default server accepts on its Roboflow detection
-      # endpoints only. Without the secret the APK still builds, and its
-      # Auto-detect falls back to the on-device detector.
       - name: Build debug APK
         working-directory: disc_golf_android
-        env:
-          DFS_CLIENT_API_KEY: ${{ secrets.CLIENT_API_KEY }}
         run: ./gradlew --no-daemon :app:assembleDebug
 
       - name: Upload APK

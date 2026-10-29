@@ -3,8 +3,6 @@ package com.discflightschool.app
 import android.content.Context
 import com.discflightschool.app.data.AssetContent
 import com.discflightschool.app.data.EncryptedSecretStore
-import com.discflightschool.app.data.DiscDetectionClient
-import com.discflightschool.app.data.DiscFlightClient
 import com.discflightschool.app.data.FileManifestStore
 import com.discflightschool.app.data.FlightGalleryRepository
 import com.discflightschool.app.data.KnowledgeBaseRepository
@@ -13,7 +11,7 @@ import com.discflightschool.app.data.SharedPreferencesStore
 import com.discflightschool.app.data.TrainingDataCollector
 import com.discflightschool.app.data.VideoLibrary
 import com.discflightschool.app.data.migrateFlutterPreferences
-import com.discflightschool.app.detection.DiscDetector
+import com.discflightschool.app.detection.RfDetrDiscDetector
 import com.discflightschool.app.pose.PostureAnalyzer
 import com.discflightschool.app.ui.WorkbenchState
 import com.discflightschool.app.ui.screens.roulette.RoundPlayState
@@ -35,7 +33,7 @@ import java.io.File
  *
  * The detector and the pose analyzer hold native resources, so they live here
  * rather than in a screen's ViewModel — a tracker that disposed the shared
- * interpreter would break detection for the rest of the session.
+ * model session would break detection for the rest of the session.
  */
 class AppContainer(context: Context) {
 
@@ -70,7 +68,6 @@ class AppContainer(context: Context) {
         store = preferencesStore,
         secrets = secretStore,
         manifestStore = FileManifestStore(File(trainingDataDir, "manifest.json")),
-        builtInClientKey = BuildConfig.CLIENT_API_KEY,
     )
 
     private val assets = AssetContent(appContext)
@@ -86,11 +83,11 @@ class AppContainer(context: Context) {
         frameExtractor = frameExtractor,
     )
 
-    val discDetector = DiscDetector(
+    /** The Roboflow Workflow's disc model, run on the device. */
+    val discDetector = RfDetrDiscDetector(
         context = appContext,
-        settings = detectionSettings,
         frameExtractor = frameExtractor,
-        trainingDataDir = trainingDataDir,
+        settings = detectionSettings,
     )
 
     val postureAnalyzer = PostureAnalyzer(frameExtractor)
@@ -100,12 +97,6 @@ class AppContainer(context: Context) {
         frameExtractor = frameExtractor,
         dataDir = trainingDataDir,
     )
-
-    val discFlightClient = DiscFlightClient(
-        File(appContext.cacheDir, "disc_flight_results"),
-        trainingDataRepository,
-    )
-    val discDetectionClient = DiscDetectionClient(trainingDataRepository)
 
     /** The clip being worked on, shared across the screens of one flow. */
     val workbench = WorkbenchState()

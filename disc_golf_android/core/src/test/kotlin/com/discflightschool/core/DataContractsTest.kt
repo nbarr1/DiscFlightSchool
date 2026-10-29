@@ -1,6 +1,5 @@
 package com.discflightschool.core
 
-import com.discflightschool.core.model.DetectorModelVersion
 import com.discflightschool.core.model.FormSessionRecord
 import com.discflightschool.core.model.Hindrance
 import com.discflightschool.core.model.HoleScore
@@ -146,19 +145,6 @@ class DataContractsTest {
 
         assertEquals(ThrowTypes.BACKHAND, record.throwType)
         assertEquals(123.4, record.avgAngles.getValue("elbow"), 1e-9)
-    }
-
-    @Test
-    fun `DetectorModelVersion exposes the no-model sentinel`() {
-        val version = DetectorModelVersion.fromJson(
-            parse("""{"version": "none", "sha256": "", "url": ""}"""),
-        )
-        assertFalse(version.hasModel)
-
-        val real = DetectorModelVersion.fromJson(
-            parse("""{"version": "2026-05-07", "sha256": "abc", "url": "/api/model/download"}"""),
-        )
-        assertTrue(real.hasModel)
     }
 
     @Test

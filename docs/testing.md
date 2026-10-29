@@ -45,12 +45,6 @@ real image. Without it, the script sends a generated frame. The script fails
 unless the response contains the `predictions` output with its `image` and
 `predictions` fields. Each run spends inference credits.
 
-To check the Android side on a device, set the server URL and training API key
-in Training Settings, tap **Test cloud detection** in the **Cloud disc
-detection** card, and pick a photo of a disc. Confirm that the green box lands
-on the disc, that the summary line matches, and that a server error (for
-example, a stopped server) is shown as a message rather than a crash.
-
 ## Running the suites
 
 ```bash
@@ -104,7 +98,10 @@ Everything ported out of Dart that can be tested without a device lives in
 | `ScoringRepositoryTest.kt` | round persistence (including the undo/re-enter duplicate-save regression), corrupt-store resilience, statistics |
 | `PostureMathTest.kt` | lead/trail knee labelling per throw type, physiological-limit clamping vs dropping, angle and keypoint smoothing, pro deviation scoring |
 | `KnowledgeSearchTest.kt` | local keyword search: tokenizing, ranking, source citations, and the no-keyword and no-match messages |
-| `DiscDetectionTest.kt` | model-output parsing for both YOLO tensor layouts, input-layout detection, both preprocessing write orders, spatial-coherence filtering, smoothing, gap interpolation, frame-index alignment |
+| `DiscDetectionTest.kt` | candidate selection, spatial-coherence filtering, smoothing, gap interpolation, frame-index alignment |
+| `RfDetrTest.kt` | the RF-DETR package config (and refusing settings the port doesn't implement), Pillow's bilinear resize against `pil_resize_fixture.json`, normalization, and output decoding: top-k, the strict threshold, and box scaling |
+| `OcSortTrackerTest.kt` | the OC-SORT port against `ocsort_fixture.json`, which `trackers` 2.4.0 produced for six scenarios, plus id assignment and the confidence threshold |
+| `WorkflowDiscTrackerTest.kt` | each frame's disc choice, mapping 30 fps Workflow frames onto the session's frames, gap filling, the request sent to the detector, load failure, and the 300-frame cap |
 | `DetectionQualityTest.kt` | the coverage/interpolation/confidence heuristic, its thresholds against the user's sensitivity setting, and seed-point sampling |
 | `TrackerTest.kt` | the spline tracker, the frame budget derived from a trimmed span, and frame-index maths |
 | `WorldAnchorTest.kt` | the similarity transform that keeps a flight path pinned to the scene while the camera pans and zooms |
@@ -116,9 +113,7 @@ Everything ported out of Dart that can be tested without a device lives in
 Android module: `FormattingTest.kt` (scorecard and history readouts),
 `FrameIndexTest.kt` and `FrameForFractionTest.kt` (timestamp-to-frame maths),
 `FlightVideoExporterTest.kt` (which tracked frames get a pre-rendered
-overlay), and `DiscDetectionClientTest.kt` (the `POST /api/disc-detection`
-request, response parsing, error messages, and cancellation, against
-`MockWebServer`).
+overlay).
 
 ### What these tests deliberately do not cover
 
@@ -126,19 +121,16 @@ A JVM unit test cannot exercise anything that needs a real Android framework or
 native library. The following are **not** covered and still need a device or
 emulator:
 
-- `DiscDetector.processVideo()` end to end — needs `MediaMetadataRetriever` and
-  the TensorFlow Lite native library (including the GPU delegate path). Its
-  re-entrancy guard, cancellation, and buffer reallocation on model reload are
-  covered by inspection only.
+- `RfDetrDiscDetector` end to end — needs `MediaMetadataRetriever`, ONNX
+  Runtime's native library, and the downloaded model. Its re-entrancy guard and
+  cancellation are covered by inspection only.
 - `HybridDiscTracker.refine()` end to end — same reasons.
 - `PostureAnalyzer.analyze()` — needs ML Kit pose detection.
 - Every Compose screen, and the navigation graph wiring them together.
 - `FlightVideoExporter` — needs Media3 `Transformer` and a real encoder.
-- `loadDetectionPhoto()`, which decodes and re-encodes the photo picked for the
-  cloud detection test — needs `ImageDecoder` or `BitmapFactory`.
 - `EncryptedSharedPreferences` reads and writes, which fall back to an
   in-memory store when the keystore is unavailable.
-- Model download and upload against a real server.
+- Training uploads against a real server.
 
 ### TODO: walk the app on a device
 
@@ -148,58 +140,28 @@ prompts, video pickers returning a content URI the app has to copy, playback
 seeking landing on the frame the analysis measured, and state surviving a
 rotation or a trip through the background.
 
-### TODO: verify track-by-detection on a real video
+### TODO: verify the on-device Roboflow Workflow on a real video
 
-`DiscDetector` was built around a track-by-detection state machine
-(full-frame discovery → windowed tracking with velocity prediction → fall back
-to discovery after a short occlusion streak — see `detectInWindow`, `DiscTrack`,
-and the loop in `processVideo`), plus `MediaMetadataRetriever` frame extraction
-and an optional GPU delegate.
+Auto-detect runs the Workflow's RF-DETR Small model with ONNX Runtime and
+tracks it with the OC-SORT port (see "The on-device disc model" in
+`README.md`). The `:core` suite checks the preprocessing, decoding, and
+tracker against outputs of Roboflow's own Python libraries, but **nothing here
+has run the model through ONNX Runtime on a phone.**
 
-The bundled asset is now a genuine **YOLO11n@640** export — see the client
-facts in `README.md`. It arrived as `format="litert"`/`quantize="w8a32"`
-output from Ultralytics' current exporter, which (as of Ultralytics 8.4.83,
-when the standalone `tflite` format was removed) produces **NCHW**
-(`[1,3,640,640]`) rather than the NHWC layout the app originally assumed —
-`YoloOutput.detectInputLayout` and both `YoloPreprocessor` write paths handle
-this, covered at the pure-function level, but **none of it has run against a
-real interpreter yet.**
-The `:core` suite covers every pure function in isolation (candidate
-selection, coherence filtering, smoothing, interpolation, the NHWC/NCHW layout
-detection, and both preprocessing write patterns), but **nothing here
-exercises the state machine against real frames, frame extraction, or the GPU
-delegate — all of that needs a device and a real throw video.**
-
-**Before release, run a full tracking pass on a device and confirm:**
-- Frame extraction produces the expected sequence. `FrameExtractor` asks
-  `MediaMetadataRetriever` for `OPTION_CLOSEST`, not the cheaper
-  `OPTION_CLOSEST_SYNC`, so a frame should come back at the requested
-  timestamp rather than at the nearest keyframe — confirm that on a clip with
-  sparse keyframes, where snapping would be visible as an overlay lagging the
-  disc.
-- Discovery mode finds the disc leaving the hand/early flight, tracking mode
-  follows it through a full flight without losing the lock, and a lock lost to
-  occlusion (e.g. the disc crossing behind the thrower) is reacquired via
-  discovery rather than tracking a false candidate.
-- The resulting trajectory overlay is at least as accurate as the previous
-  (YOLOv8, full-frame-every-frame, 320-input) build on the same clip.
-- **Model swap.** The load log reports `input [1, 3, 640, 640] (NCHW)` /
-  `output [1, 5, 8400]` and raises no geometry warning, and detection still
-  works on a clip that worked before. This is the acceptance gate for the
-  upgrade — it's the one thing the pure-function tests genuinely cannot
-  cover, since it depends on the real interpreter accepting the buffer shape
-  `YoloPreprocessor` builds.
-- **Timing at 640.** Measure real ms/frame. Per-frame cost scales with input
-  area, so a 640 model is roughly 4× the 320 export. If a trimmed clip still
-  takes minutes with the reused direct buffers and the trim-derived frame
-  budget, the background-execution question below stops being optional.
-- The GPU delegate actually engages on a real device (check the load log) and
-  inference doesn't silently fall back to CPU-only in a way that regresses
-  processing time.
-- A second `processVideo()` call after a model reload still produces output —
-  the input and output buffers are invalidated and reallocated to the new
-  model's geometry on reload, and that path is untested against the real
-  interpreter.
+**Before release, fetch the model, build, and confirm on a device:**
+- The load log reports the model's inputs and outputs (`dets` and `labels`)
+  and the first run finds the disc.
+- The flight path matches what the hosted Workflow drew on the same clip.
+  Frames are decoded at 30 fps, and Android's decoder may differ slightly from
+  the server's, so expect close but not identical boxes.
+- **Timing.** Measure real ms/frame for RF-DETR Small at 512x512 on the CPU. A
+  trimmed clip is up to 300 frames, so a slow phone may take minutes.
+- **Memory.** The weights are about 114 MB, mapped from the APK; check that a
+  low-memory phone doesn't kill the app while the session loads.
+- Frame extraction asks `MediaMetadataRetriever` for `OPTION_CLOSEST`, not the
+  cheaper `OPTION_CLOSEST_SYNC`, so a frame should come back at the requested
+  timestamp rather than at the nearest keyframe. Confirm that on a clip with
+  sparse keyframes, where snapping would show as an overlay lagging the disc.
 
 Detection runs on a background dispatcher, but a long clip still ties the app
 to the foreground for the whole pass. Whether that needs a foreground service
@@ -208,7 +170,7 @@ from device numbers rather than in advance.
 
 ### TODO: verify the Full Auto flight-tracking flow on a device
 
-`AutoDiscTracker` and the Auto-detect entry point are covered by host tests
+`WorkflowDiscTracker` and the Auto-detect entry point are covered by host tests
 only at the pure-function level — the quality heuristic, seed-point sampling,
 frame-index maths, and the frame timestamps to sample. Everything that touches
 real frames still needs a device.
@@ -225,8 +187,8 @@ real frames still needs a device.
 - **Progress and cancel.** The bar advances smoothly (progress now notifies
   every frame, not every tenth) with real per-frame status. Cancel stops the
   run at the next frame and changes nothing. Then start a second run
-  immediately: if the lock leaked, it surfaces as the `StateError` from
-  `processVideo`.
+  immediately: if the lock leaked, it surfaces as the `IllegalStateException`
+  from `detectFrames`.
 - **Quality banner.** A clean clip raises no banner. A clip where the disc
   leaves frame early raises `lowCoverage`. Thresholds live in
   `DetectionQualityThresholds` and are first-pass guesses — retune them from
@@ -238,7 +200,7 @@ real frames still needs a device.
   again.
 - **Fresh install.** Uninstall, install, and go straight to Auto-detect without
   visiting Training Settings first. In the Flutter client nothing loaded the
-  model on a normal run, so the hybrid tracker silently skipped YOLO entirely
+  model on a normal run, so the hybrid tracker silently skipped the detector
   and refined against colour blobs; confirm the load happens and
   `HybridDiscTracker.usedDetectorModel` is true.
 - **Training-data offset.** With sample collection opted in and a trimmed clip,

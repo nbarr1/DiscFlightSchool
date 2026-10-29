@@ -8,9 +8,6 @@ permissions:
 # preprocessing settings and the ONNX graph's inputs and outputs.
 on:
   workflow_dispatch:
-  # TEMPORARY: runs from this branch while the on-device port is built; removed before review.
-  push:
-    branches: [claude/project-thread-my7ej4]
 
 jobs:
   fetch:

@@ -1,23 +1,13 @@
 package com.discflightschool.app.ui.screens.settings
 
 import android.content.Intent
-import android.graphics.Bitmap
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -38,7 +28,6 @@ import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -67,12 +56,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -80,16 +64,12 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.discflightschool.app.LocalAppContainer
-import com.discflightschool.app.data.CloudDiscDetections
-import com.discflightschool.app.data.loadDetectionPhoto
-import com.discflightschool.app.data.summary
 import com.discflightschool.app.ui.components.AppTopBar
 import com.discflightschool.app.ui.components.SectionCard
 import com.discflightschool.app.ui.theme.AppColors
 import com.discflightschool.core.data.TrainingDataRepository
 import java.io.File
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -124,41 +104,8 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
     var busyMessage by remember { mutableStateOf<String?>(null) }
     var trainingKeyDialog by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
-    var modelUpdatePrompt by remember { mutableStateOf(false) }
     var advancedExpanded by remember { mutableStateOf(false) }
     var hasTrainingKey by remember { mutableStateOf(training.hasApiKey) }
-    // The built-in client key also reaches the default server's detection
-    // endpoint, so cloud detection can work without a training key.
-    val hasDetectionKey = remember(serverUrl, hasTrainingKey) { training.detectionApiKey != null }
-    var modelVersion by remember { mutableStateOf(training.modelVersion) }
-    var detectionRunning by remember { mutableStateOf(false) }
-    var detectionPhoto by remember { mutableStateOf<Bitmap?>(null) }
-    var detectionResult by remember { mutableStateOf<CloudDiscDetections?>(null) }
-    var detectionError by remember { mutableStateOf<String?>(null) }
-
-    val detectionPhotoPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia(),
-    ) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            detectionRunning = true
-            detectionPhoto = null
-            detectionResult = null
-            detectionError = null
-            try {
-                val photo = loadDetectionPhoto(context.contentResolver, uri)
-                    ?: error("That photo couldn't be opened. Try a different one.")
-                detectionPhoto = photo.bitmap
-                detectionResult = container.discDetectionClient.detect(photo.jpeg)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                detectionError = e.message ?: "Cloud detection failed."
-            } finally {
-                detectionRunning = false
-            }
-        }
-    }
 
     val pendingCount = samples.count { !it.uploaded }
     val uploadedCount = samples.count { it.uploaded }
@@ -200,8 +147,9 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
             SectionCard(title = "Disc detection sensitivity") {
                 Column {
                     Text(
-                        "Lower detects more, and may include false positives. Higher is more " +
-                            "precise, and may miss a fast-moving disc.",
+                        "Used when refining a path you marked by hand. Lower detects more, and " +
+                            "may include false positives. Higher is more precise, and may miss a " +
+                            "fast-moving disc. Auto-detect uses the Roboflow Workflow's own setting.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -353,29 +301,6 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                 Text(if (samples.size == 1) "Export 1 sample" else "Export ${samples.size} samples")
             }
 
-            Spacer(Modifier.height(12.dp))
-
-            OutlinedButton(
-                onClick = {
-                    scope.launch {
-                        busyMessage = "Checking for a model update..."
-                        val hasUpdate = collector.checkForModelUpdate()
-                        busyMessage = null
-                        if (hasUpdate) {
-                            modelUpdatePrompt = true
-                        } else {
-                            snackbarHostState.showSnackbar("Model is up to date")
-                        }
-                    }
-                },
-                enabled = serverUrl.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Default.SystemUpdate, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Check for model update")
-            }
-
             Spacer(Modifier.height(24.dp))
 
             SectionCard {
@@ -436,66 +361,6 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                                 }
                             },
                         )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Model version: $modelVersion",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            SectionCard(title = "Cloud disc detection") {
-                Column {
-                    Text(
-                        "Send one photo to your server's Roboflow disc detector to check that " +
-                            "cloud detection works. Each test uses Roboflow inference credits.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Button(
-                        onClick = {
-                            detectionPhotoPicker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                            )
-                        },
-                        enabled = hasDetectionKey && !detectionRunning,
-                    ) {
-                        Icon(Icons.Default.CloudUpload, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Test cloud detection")
-                    }
-                    if (!hasDetectionKey) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Add the training API key under Advanced first.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (detectionRunning) {
-                        Spacer(Modifier.height(12.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            Spacer(Modifier.width(12.dp))
-                            Text("Detecting...", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    detectionError?.let { message ->
-                        Spacer(Modifier.height(12.dp))
-                        Text(message, color = MaterialTheme.colorScheme.error)
-                    }
-                    val photo = detectionPhoto
-                    val found = detectionResult
-                    if (photo != null && found != null) {
-                        Spacer(Modifier.height(12.dp))
-                        DetectionPreview(photo, found)
-                        Spacer(Modifier.height(8.dp))
-                        Text(found.summary(), fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -552,56 +417,6 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
         )
     }
 
-    if (modelUpdatePrompt) {
-        AlertDialog(
-            onDismissRequest = { modelUpdatePrompt = false },
-            title = { Text("Model update available") },
-            text = { Text("A newer disc detection model is available. Download it?") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        modelUpdatePrompt = false
-                        scope.launch {
-                            busyMessage = "Downloading model..."
-                            val downloaded = collector.downloadModel()
-                            // The download only proves the bytes arrived intact.
-                            // A model the interpreter refuses is worse than no
-                            // update, because the app would keep preferring it
-                            // on every later launch, so the reload decides
-                            // whether this counts as a success.
-                            val loaded = downloaded &&
-                                runCatching {
-                                    container.discDetector.loadModel(forceReload = true)
-                                }.isSuccess
-                            if (loaded) {
-                                modelVersion = training.modelVersion
-                            } else if (downloaded) {
-                                collector.revertToPreviousModel()
-                                runCatching {
-                                    container.discDetector.loadModel(forceReload = true)
-                                }
-                                modelVersion = training.modelVersion
-                            }
-                            busyMessage = null
-                            snackbarHostState.showSnackbar(
-                                when {
-                                    loaded -> "Model updated and loaded."
-                                    downloaded ->
-                                        "That model would not load. Keeping the previous one."
-                                    else -> "Download failed."
-                                },
-                            )
-                        }
-                    },
-                ) {
-                    Text("Download")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { modelUpdatePrompt = false }) { Text("Later") }
-            },
-        )
-    }
 
     if (confirmClear) {
         AlertDialog(
@@ -630,40 +445,6 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
     }
 }
 
-/** The photo that was sent, with a box on each disc the server found. */
-@Composable
-private fun DetectionPreview(photo: Bitmap, result: CloudDiscDetections) {
-    val image = remember(photo) { photo.asImageBitmap() }
-    Box(
-        Modifier
-            .heightIn(max = 320.dp)
-            .aspectRatio(photo.width.toFloat() / photo.height),
-    ) {
-        Image(
-            bitmap = image,
-            contentDescription = "Photo sent for cloud detection",
-            contentScale = ContentScale.FillBounds,
-            modifier = Modifier.fillMaxSize(),
-        )
-        Canvas(Modifier.fillMaxSize()) {
-            if (result.imageWidth <= 0 || result.imageHeight <= 0) return@Canvas
-            // Boxes are in pixels of the uploaded image, which is this photo.
-            val scaleX = size.width / result.imageWidth
-            val scaleY = size.height / result.imageHeight
-            for (box in result.detections) {
-                drawRect(
-                    color = AppColors.Good,
-                    topLeft = Offset(
-                        ((box.x - box.width / 2) * scaleX).toFloat(),
-                        ((box.y - box.height / 2) * scaleY).toFloat(),
-                    ),
-                    size = Size((box.width * scaleX).toFloat(), (box.height * scaleY).toFloat()),
-                    style = Stroke(width = 3.dp.toPx()),
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun StatRow(label: String, value: String) {
