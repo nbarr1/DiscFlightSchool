@@ -2,10 +2,11 @@ package com.discflightschool.app.ui.screens.knowledge
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -23,15 +25,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.heading
-import com.discflightschool.app.ui.components.readableWidth
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.discflightschool.app.LocalAppContainer
 import com.discflightschool.app.ui.components.AppTopBar
 import com.discflightschool.app.ui.components.LoadingState
+import com.discflightschool.app.ui.components.readableWidth
 import com.discflightschool.app.ui.theme.AppColors
 import com.discflightschool.core.model.KBArticle
 import com.discflightschool.core.model.KBStudy
@@ -72,69 +78,138 @@ fun CategoryScreen(
     val tips = repository.articles(category = categoryId, type = "tip")
     val faqs = repository.articles(category = categoryId, type = "faq")
 
+    // On a tablet the list and the answer sit side by side; on a phone a tap
+    // opens the answer as its own screen.
+    var selectedArticleId by rememberSaveable { mutableStateOf<String?>(null) }
+
     Scaffold(topBar = { AppTopBar(title = category.name, onBack = onBack) }) { padding ->
-        Column(
-            modifier = Modifier
+        BoxWithConstraints(
+            Modifier
                 .padding(padding)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .readableWidth()
-                .padding(16.dp),
+                .fillMaxSize(),
         ) {
-            Text(
-                category.description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = AppColors.Muted,
-            )
-
-            if (tips.isNotEmpty()) {
-                Spacer(Modifier.height(20.dp))
-                Text(
-                    "Tips",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+            val twoPane = maxWidth >= TWO_PANE_MIN_WIDTH
+            val list: @Composable (Modifier) -> Unit = { modifier ->
+                CategoryContent(
+                    description = category.description,
+                    tips = tips,
+                    faqs = faqs,
+                    accent = color,
+                    citationFor = { tip ->
+                        tip.sourceIds.firstOrNull()?.let { repository.study(it)?.citation }
+                    },
+                    selectedArticleId = if (twoPane) selectedArticleId else null,
+                    onOpenArticle = { id ->
+                        if (twoPane) selectedArticleId = id else onOpenArticle(id)
+                    },
+                    modifier = modifier,
                 )
-                Spacer(Modifier.height(8.dp))
-                tips.forEach { tip ->
-                    TipCard(
-                        tip = tip,
-                        citation = tip.sourceIds.firstOrNull()
-                            ?.let { repository.study(it)?.citation },
-                        accent = color,
+            }
+            if (twoPane) {
+                Row(Modifier.fillMaxSize()) {
+                    list(
+                        Modifier
+                            .weight(0.45f)
+                            .fillMaxHeight(),
                     )
-                    Spacer(Modifier.height(8.dp))
+                    VerticalDivider()
+                    val article = content.articles.firstOrNull { it.id == selectedArticleId }
+                    if (article == null) {
+                        Text(
+                            "Choose a question to read the answer here.",
+                            modifier = Modifier
+                                .weight(0.55f)
+                                .padding(32.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        ArticleContent(
+                            article = article,
+                            sources = article.sourceIds.mapNotNull { repository.study(it) },
+                            modifier = Modifier
+                                .weight(0.55f)
+                                .fillMaxHeight(),
+                        )
+                    }
                 }
+            } else {
+                list(Modifier.fillMaxSize())
             }
-
-            if (faqs.isNotEmpty()) {
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    "Frequently asked questions",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(8.dp))
-                faqs.forEach { faq ->
-                    FaqRow(faq, color) { onOpenArticle(faq.id) }
-                    Spacer(Modifier.height(4.dp))
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
         }
     }
 }
 
+/** The category's description, its tips, and its FAQ list, scrolling as one column. */
 @Composable
-private fun FaqRow(article: KBArticle, accent: Color, onClick: () -> Unit) {
+private fun CategoryContent(
+    description: String,
+    tips: List<KBArticle>,
+    faqs: List<KBArticle>,
+    accent: Color,
+    citationFor: (KBArticle) -> String?,
+    selectedArticleId: String?,
+    onOpenArticle: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .readableWidth()
+            .padding(16.dp),
+    ) {
+        Text(
+            description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        if (tips.isNotEmpty()) {
+            Spacer(Modifier.height(20.dp))
+            Text(
+                "Tips",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(8.dp))
+            tips.forEach { tip ->
+                TipCard(
+                    tip = tip,
+                    citation = citationFor(tip),
+                    accent = accent,
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+
+        if (faqs.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "Frequently asked questions",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(8.dp))
+            faqs.forEach { faq ->
+                FaqRow(faq, accent, selected = faq.id == selectedArticleId) { onOpenArticle(faq.id) }
+                Spacer(Modifier.height(4.dp))
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun FaqRow(article: KBArticle, accent: Color, selected: Boolean, onClick: () -> Unit) {
     Surface(
-        color = AppColors.Surface,
+        color = if (selected) accent.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(8.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
             modifier = Modifier
-                .clickable(onClick = onClick)
+                .selectable(selected = selected, onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -168,65 +243,78 @@ fun ArticleDetailScreen(articleId: String, onBack: () -> Unit) {
     }
 
     Scaffold(topBar = { AppTopBar(title = "Answer", onBack = onBack) }) { padding ->
-        Column(
+        ArticleContent(
+            article = article,
+            sources = article.sourceIds.mapNotNull { repository.study(it) },
             modifier = Modifier
                 .padding(padding)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .readableWidth()
-                .padding(16.dp),
-        ) {
+                .fillMaxSize(),
+        )
+    }
+}
+
+/** One answer in full: the question, the answer, key findings, and sources. */
+@Composable
+private fun ArticleContent(
+    article: KBArticle,
+    sources: List<KBStudy>,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .readableWidth()
+            .padding(16.dp),
+    ) {
+        Text(
+            article.question,
+            modifier = Modifier.semantics { heading() },
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(article.answer, style = MaterialTheme.typography.bodyLarge)
+
+        if (article.keyFindings.isNotEmpty()) {
+            Spacer(Modifier.height(20.dp))
             Text(
-                article.question,
-                modifier = Modifier.semantics { heading() },
-                style = MaterialTheme.typography.titleLarge,
+                "Key findings",
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
-            Spacer(Modifier.height(16.dp))
-            Text(article.answer, style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.height(8.dp))
+            article.keyFindings.forEach { finding ->
+                Row(Modifier.padding(bottom = 8.dp)) {
+                    Text("  •  ", fontWeight = FontWeight.Bold)
+                    Text(finding, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
 
-            if (article.keyFindings.isNotEmpty()) {
-                Spacer(Modifier.height(20.dp))
+        if (sources.isNotEmpty()) {
+            Spacer(Modifier.height(24.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.AutoMirrored.Filled.MenuBook,
+                    contentDescription = null,
+                    tint = AppColors.KnowledgeBase,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(8.dp))
                 Text(
-                    "Key findings",
+                    "Sources",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
-                Spacer(Modifier.height(8.dp))
-                article.keyFindings.forEach { finding ->
-                    Row(Modifier.padding(bottom = 8.dp)) {
-                        Text("  •  ", fontWeight = FontWeight.Bold)
-                        Text(finding, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
             }
-
-            val sources = article.sourceIds.mapNotNull { repository.study(it) }
-            if (sources.isNotEmpty()) {
-                Spacer(Modifier.height(24.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.MenuBook,
-                        contentDescription = null,
-                        tint = AppColors.KnowledgeBase,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "Sources",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
+            Spacer(Modifier.height(8.dp))
+            sources.forEach { study ->
+                SourceCard(study)
                 Spacer(Modifier.height(8.dp))
-                sources.forEach { study ->
-                    SourceCard(study)
-                    Spacer(Modifier.height(8.dp))
-                }
             }
-
-            Spacer(Modifier.height(24.dp))
         }
+
+        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -258,14 +346,17 @@ private fun SourceCard(study: KBStudy) {
         Text(
             study.summary,
             style = MaterialTheme.typography.bodySmall,
-            color = AppColors.Muted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(4.dp))
         Text(
             study.filename,
             style = MaterialTheme.typography.labelSmall,
-            color = AppColors.Muted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontStyle = FontStyle.Italic,
         )
     }
 }
+
+/** Material's expanded width class: room for the list and the answer side by side. */
+private val TWO_PANE_MIN_WIDTH = 840.dp

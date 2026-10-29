@@ -295,7 +295,7 @@ private fun SwitchRow(
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = AppColors.Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
@@ -315,7 +315,7 @@ private fun ParTile(hole: Int, par: Int, onClick: () -> Unit) {
                 .padding(vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("$hole", style = MaterialTheme.typography.labelSmall, color = AppColors.Muted)
+            Text("$hole", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
                 "$par",
                 style = MaterialTheme.typography.titleMedium,

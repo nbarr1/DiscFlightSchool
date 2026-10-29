@@ -13,7 +13,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.discflightschool.app.ui.Formatting
 import com.discflightschool.app.ui.theme.AppColors
 import com.discflightschool.core.posture.PostureMath
 import kotlin.math.roundToInt
@@ -31,38 +36,58 @@ data class PhaseMarker(
  *
  * The track is smoothed before drawing: raw per-frame landmark noise makes a
  * plot that looks like a seismograph, and the shape of the motion is the point.
- * Tapping or dragging scrubs the video to that frame.
+ * Tapping or dragging scrubs the video to that frame. TalkBack reads the
+ * angle's range and current value, and offers the phase markers as actions, so
+ * seeking does not depend on touching the plot.
  */
 @Composable
 fun AngleWaveform(
     angleData: List<Double>,
     currentFrame: Int,
     modifier: Modifier = Modifier,
+    label: String = "Angle",
     phaseMarkers: List<PhaseMarker> = emptyList(),
     onSeekToFraction: ((Double) -> Unit)? = null,
 ) {
     val smoothed = remember(angleData) { smooth(angleData) }
 
     Canvas(
-        modifier = modifier.then(
-            if (onSeekToFraction == null) {
-                Modifier
-            } else {
-                Modifier
-                    .pointerInput(angleData) {
-                        detectTapGestures { offset ->
-                            onSeekToFraction((offset.x / size.width).toDouble().coerceIn(0.0, 1.0))
+        modifier = modifier
+            .semantics {
+                contentDescription = waveformDescription(label, angleData, currentFrame)
+                if (onSeekToFraction != null) {
+                    customActions = listOf(
+                        CustomAccessibilityAction("Go to the start") {
+                            onSeekToFraction(0.0)
+                            true
+                        },
+                    ) + phaseMarkers.map { marker ->
+                        CustomAccessibilityAction("Go to ${marker.label}") {
+                            onSeekToFraction(marker.t)
+                            true
                         }
                     }
-                    .pointerInput(angleData) {
-                        detectHorizontalDragGestures { change, _ ->
-                            onSeekToFraction(
-                                (change.position.x / size.width).toDouble().coerceIn(0.0, 1.0),
-                            )
+                }
+            }
+            .then(
+                if (onSeekToFraction == null) {
+                    Modifier
+                } else {
+                    Modifier
+                        .pointerInput(angleData) {
+                            detectTapGestures { offset ->
+                                onSeekToFraction((offset.x / size.width).toDouble().coerceIn(0.0, 1.0))
+                            }
                         }
-                    }
-            },
-        ),
+                        .pointerInput(angleData) {
+                            detectHorizontalDragGestures { change, _ ->
+                                onSeekToFraction(
+                                    (change.position.x / size.width).toDouble().coerceIn(0.0, 1.0),
+                                )
+                            }
+                        }
+                },
+            ),
     ) {
         if (smoothed.isEmpty()) return@Canvas
 
@@ -147,6 +172,14 @@ fun AngleWaveform(
             }
         }
     }
+}
+
+/** What TalkBack reads for the plot: the angle's range, then where the clip is now. */
+private fun waveformDescription(label: String, data: List<Double>, currentFrame: Int): String {
+    if (data.isEmpty()) return "$label, no data"
+    val now = data[currentFrame.coerceIn(0, data.size - 1)]
+    return "$label from ${Formatting.degrees(data.min())} to ${Formatting.degrees(data.max())}, " +
+        "now ${Formatting.degrees(now)}"
 }
 
 /** A median pass to drop single-frame glitches, then two averaging passes. */

@@ -55,20 +55,16 @@ jobs:
           cache: pip
 
       # requirements-test.txt covers the server import chain, since
-      # training_server/__init__.py imports the FastAPI app. The three video
-      # packages are read out of requirements.txt rather than written here, so
-      # these pins cannot drift from production the way a hand-written list
-      # would. ultralytics is not needed and its torch dependency would add
-      # gigabytes to a job that never trains anything.
+      # training_server/__init__.py imports the FastAPI app, and
+      # requirements-roboflow.txt adds the video packages production installs.
+      # ultralytics is not needed and its torch dependency would add gigabytes
+      # to a job that never trains anything.
       - name: Install dependencies
         run: |
-          grep -E '^(inference-sdk|opencv-python-headless|numpy)' \
-            server/requirements.txt > "${RUNNER_TEMP}/roboflow-extra.txt"
-          cat "${RUNNER_TEMP}/roboflow-extra.txt"
           python -m pip install --upgrade pip
           python -m pip install \
             -r server/requirements-test.txt \
-            -r "${RUNNER_TEMP}/roboflow-extra.txt"
+            -r server/requirements-roboflow.txt
 
       # The URL is passed through the environment rather than interpolated into
       # the script, so a dispatch input cannot inject shell.

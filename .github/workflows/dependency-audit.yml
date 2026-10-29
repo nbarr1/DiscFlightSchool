@@ -42,6 +42,19 @@ jobs:
           --output=server-test-pip-audit.json
           -r server/requirements-test.txt
 
+      # inference-sdk caps Pillow below 13, so this set reports Pillow 12
+      # advisories until inference-sdk allows 13. It runs so they stay visible
+      # in the log and the uploaded report, but it doesn't fail the job.
+      - name: Audit server dependencies with the Roboflow packages
+        continue-on-error: true
+        run: >-
+          python -m pip_audit
+          --progress-spinner off
+          --format=json
+          --output=server-roboflow-pip-audit.json
+          -r server/requirements.txt
+          -r server/requirements-roboflow.txt
+
       - name: Upload pip-audit reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -50,6 +63,7 @@ jobs:
           path: |
             server-pip-audit.json
             server-test-pip-audit.json
+            server-roboflow-pip-audit.json
           if-no-files-found: ignore
 
 # There is no `osv-lockfile-audit` job any more. OSV-scanner needs a real

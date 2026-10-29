@@ -319,7 +319,7 @@ fun PlayRoundScreen(
                                     .padding(vertical = 4.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
-                                Text(player, color = AppColors.Muted)
+                                Text(player, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(
                                     "$strokes (${Formatting.scoreToPar(strokes - holePar)}) " +
                                         "${Formatting.decimal(average)}x",
@@ -470,7 +470,7 @@ fun PlayRoundScreen(
                                     "Challenges: shot type, disc, power, hindrance"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
-                                color = AppColors.Muted,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         Switch(
@@ -596,7 +596,7 @@ fun PlayRoundScreen(
 @Composable
 private fun StatItem(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = AppColors.Muted)
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(4.dp))
         Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
     }
@@ -642,7 +642,7 @@ private fun ThrowRow(record: ThrowRecord) {
             label,
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodySmall,
-            color = AppColors.Muted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -680,7 +680,7 @@ private fun ChallengeCard(challenge: RouletteResult, throwNumber: Int) {
                     Text(
                         "${Formatting.decimal(difficulty)}x",
                         fontWeight = FontWeight.Bold,
-                        color = AppColors.Background,
+                        color = MaterialTheme.colorScheme.background,
                     )
                 }
             }

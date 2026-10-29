@@ -1,0 +1,21 @@
+# Packages for the Roboflow endpoints (/api/disc-flight and /api/disc-detection).
+# Install together with requirements.txt, in one pip command so the two
+# resolve as one set:
+#
+#   python -m pip install -r requirements.txt -r requirements-roboflow.txt
+#
+# They're kept apart because inference-sdk 1.x requires pillow<13, which holds
+# the combined install on Pillow 12.x and its open advisories. Without this
+# file the server installs Pillow 13, and the two Roboflow endpoints fail when
+# called. Merge this file back into requirements.txt once inference-sdk
+# allows Pillow 13.
+
+# 1.6.0 is the floor the WebRTC code in training_server/disc_flight.py needs:
+# `InferenceConfiguration.api_key_transport` and `WebRTCSession.on_error`
+# both arrive in 1.x, and 0.x resolves to 0.64.8, where neither exists.
+inference-sdk[webrtc]>=1.6.0,<2.0.0
+opencv-python-headless>=4.10,<5.0
+# A 2.5 floor is uninstallable here twice over: numpy 2.5 needs Python 3.12
+# (the server image and the audit job run 3.11), and inference-sdk 1.x caps
+# numpy below 2.4. pip resolves the newest version both allow.
+numpy>=1.26,<3.0

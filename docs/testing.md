@@ -6,7 +6,8 @@ Automated backend and Android tests use fake HTTP/WebRTC responses and never
 spend inference credits. Run the server suite with `APP_API_KEY=test-key
 ./scripts/test_server.sh` and Android tests with `./scripts/test_android.sh`.
 
-For the opt-in real Workflow check, install `server/requirements.txt`, set
+For the opt-in real Workflow check, install `server/requirements.txt` and
+`server/requirements-roboflow.txt`, set
 `ROBOFLOW_API_KEY` and `ROBOFLOW_TEST_VIDEO` to a short throw, then run
 `python scripts/test_roboflow_integration.py`. The same check runs in CI as
 `Roboflow Workflow Smoke Test`, which is manual dispatch only because each run
@@ -36,7 +37,8 @@ Workflow and spends no credits. Its three tests that drive the real
 `Authorization: Bearer` header, the payload, and the retry count. They skip
 when `inference-sdk` isn't installed, which is the case in CI.
 
-For the opt-in real Workflow check, install `server/requirements.txt`, set
+For the opt-in real Workflow check, install `server/requirements.txt` and
+`server/requirements-roboflow.txt`, set
 `ROBOFLOW_API_KEY`, and run `python scripts/test_roboflow_image_workflow.py`.
 Set `ROBOFLOW_TEST_IMAGE` to a throw frame's path or `https://` URL to test a
 real image. Without it, the script sends a generated frame. The script fails

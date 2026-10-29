@@ -76,7 +76,7 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 
 ```bash
 cd server
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt -r requirements-roboflow.txt
 export APP_API_KEY=replace-with-a-long-random-secret
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```

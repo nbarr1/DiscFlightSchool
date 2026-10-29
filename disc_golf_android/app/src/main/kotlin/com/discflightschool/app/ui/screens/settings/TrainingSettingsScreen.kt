@@ -203,11 +203,11 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                         "Lower detects more, and may include false positives. Higher is more " +
                             "precise, and may miss a fast-moving disc.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = AppColors.Muted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Low", style = MaterialTheme.typography.labelSmall, color = AppColors.Muted)
+                        Text("Low", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Slider(
                             value = threshold.toFloat(),
                             onValueChange = {
@@ -219,7 +219,7 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                                 .weight(1f)
                                 .semantics { contentDescription = "Detection sensitivity" },
                         )
-                        Text("High", style = MaterialTheme.typography.labelSmall, color = AppColors.Muted)
+                        Text("High", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Text(
                         "Current: ${(threshold * 100).toInt()}% confidence required",
@@ -239,7 +239,7 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                             "When enabled, the frames you mark by hand during flight tracking " +
                                 "are saved so they can train the detection model.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = AppColors.Muted,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Switch(checked = isOptedIn, onCheckedChange = { training.setOptIn(it) })
@@ -440,7 +440,7 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                         Text(
                             "Model version: $modelVersion",
                             style = MaterialTheme.typography.labelSmall,
-                            color = AppColors.Muted,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -454,7 +454,7 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                         "Send one photo to your server's Roboflow disc detector to check that " +
                             "cloud detection works. Each test uses Roboflow inference credits.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = AppColors.Muted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(12.dp))
                     Button(
@@ -474,7 +474,7 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                         Text(
                             "Add the training API key under Advanced first.",
                             style = MaterialTheme.typography.labelSmall,
-                            color = AppColors.Muted,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     if (detectionRunning) {
@@ -482,7 +482,7 @@ fun TrainingSettingsScreen(onBack: () -> Unit, onOpenPrivacyPolicy: () -> Unit) 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.width(12.dp))
-                            Text("Detecting...", color = AppColors.Muted)
+                            Text("Detecting...", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     detectionError?.let { message ->
@@ -673,7 +673,7 @@ private fun StatRow(label: String, value: String) {
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(label, color = AppColors.Muted)
+        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, fontWeight = FontWeight.Bold)
     }
 }

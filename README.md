@@ -144,6 +144,7 @@ DiscFlightSchool/
 ├── server/                     # FastAPI training/model server
 │   ├── training_server/        # App factory, config, storage, training, validation, worker
 │   ├── requirements.txt        # Production runtime pins
+│   ├── requirements-roboflow.txt  # Roboflow endpoint packages (install with requirements.txt)
 │   ├── requirements-test.txt   # Test env pins (must agree; enforced by test_requirements.py)
 │   └── test_*.py               # Server tests
 └── docker-compose.yml          # API/worker/Postgres/Redis/MinIO scaffold
@@ -184,7 +185,7 @@ Local setup:
 ```bash
 python -m venv .venv
 . .venv/bin/activate
-pip install -r server/requirements.txt
+pip install -r server/requirements.txt -r server/requirements-roboflow.txt
 export APP_API_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
 export ROBOFLOW_API_KEY='your-server-side-key'
 uvicorn main:app --app-dir server --host 0.0.0.0 --port 8000

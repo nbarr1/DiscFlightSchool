@@ -167,7 +167,7 @@ private fun VideoCard(
 
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = AppColors.Surface,
+        color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.clickable(onClick = onPlay)) {
@@ -190,7 +190,7 @@ private fun VideoCard(
                     Icon(
                         Icons.Default.FlightTakeoff,
                         contentDescription = null,
-                        tint = AppColors.Muted,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(48.dp),
                     )
                 }
@@ -212,7 +212,7 @@ private fun VideoCard(
                     Text(
                         sizeLabel,
                         style = MaterialTheme.typography.labelSmall,
-                        color = AppColors.Muted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 IconButton(onClick = onPlay) {

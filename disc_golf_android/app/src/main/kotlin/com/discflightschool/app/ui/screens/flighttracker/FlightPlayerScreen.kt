@@ -49,8 +49,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -59,8 +59,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
@@ -85,6 +85,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -99,6 +101,7 @@ import com.discflightschool.app.ui.Formatting
 import com.discflightschool.app.ui.components.AppTopBar
 import com.discflightschool.app.ui.components.FlightPathOverlay
 import com.discflightschool.app.ui.components.LoadingState
+import com.discflightschool.app.ui.components.VideoWithControls
 import com.discflightschool.app.ui.theme.AppColors
 import com.discflightschool.app.video.FlightVideoExporter
 import com.discflightschool.app.video.VideoStage
@@ -628,197 +631,207 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
                 usedAnchoring = anchors.isNotEmpty() || pendingAnchor != null,
             )
 
-            // Taps and overlays live inside the stage, so they share the
-            // letterboxed image's coordinates rather than the whole pane's.
-            VideoStage(
-                player = player,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .onSizeChanged { videoSize = Size(it.width.toFloat(), it.height.toFloat()) }
-                        .pointerInput(phase, boxMode, targetLineMode, currentFrame) {
-                            detectTapGestures(
-                                onTap = { onCanvasTap(it) },
-                                onLongPress = { offset ->
-                                    player.pause()
-                                    magnifierAt = offset
+            VideoWithControls(
+                modifier = Modifier.weight(1f),
+                video = { videoModifier ->
+                    // Taps and overlays live inside the stage, so they share the
+                    // letterboxed image's coordinates rather than the whole pane's.
+                    VideoStage(
+                        player = player,
+                        modifier = videoModifier,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .onSizeChanged { videoSize = Size(it.width.toFloat(), it.height.toFloat()) }
+                                // Marking is by touch; this tells TalkBack users what
+                                // the area is and where the non-touch controls are.
+                                .semantics {
+                                    contentDescription = "Video frame. Tap the disc to mark it. " +
+                                        "The frame step buttons move between frames."
+                                }
+                                .pointerInput(phase, boxMode, targetLineMode, currentFrame) {
+                                    detectTapGestures(
+                                        onTap = { onCanvasTap(it) },
+                                        onLongPress = { offset ->
+                                            player.pause()
+                                            magnifierAt = offset
+                                        },
+                                        onPress = { offset ->
+                                            // A long press ends here, and that release
+                                            // is what places the point under the
+                                            // magnifier.
+                                            tryAwaitRelease()
+                                            if (magnifierAt != null) {
+                                                onCanvasTap(magnifierAt ?: offset)
+                                                magnifierAt = null
+                                            }
+                                        },
+                                    )
                                 },
-                                onPress = { offset ->
-                                    // A long press ends here, and that release
-                                    // is what places the point under the
-                                    // magnifier.
-                                    tryAwaitRelease()
-                                    if (magnifierAt != null) {
-                                        onCanvasTap(magnifierAt ?: offset)
-                                        magnifierAt = null
-                                    }
-                                },
+                        ) {
+                            if (showOverlay) {
+                                val tracked = result
+                                if (tracked != null && tracked.detections.isNotEmpty()) {
+                                    FlightPathOverlay(
+                                        result = tracked,
+                                        currentFrame = currentFrame,
+                                        showFullTrail = true,
+                                        showCurrentDisc = phase != SetupPhase.RESULT,
+                                        anchors = anchors.toList(),
+                                        targetLine = targetStart?.let { start ->
+                                            targetEnd?.let { end -> start to end }
+                                        },
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+
+                                if (phase == SetupPhase.MARKING) {
+                                    KeyframeMarkers(
+                                        keyframes = keyframes,
+                                        currentFrame = currentFrame,
+                                        pendingCorner = pendingBoxCorner,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+
+                                if (phase == SetupPhase.ANCHORING) {
+                                    AnchorMarkers(
+                                        anchors = anchors,
+                                        pending = pendingAnchor,
+                                        currentFrame = currentFrame,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            }
+
+                            val magnifier = magnifierAt
+                            val bitmap = magnifierBitmap
+                            if (magnifier != null && bitmap != null) {
+                                Magnifier(
+                                    bitmap = bitmap,
+                                    focus = magnifier,
+                                    canvasSize = videoSize,
+                                    offsetPx = with(density) {
+                                        IntOffset(
+                                            (magnifier.x - 70.dp.toPx()).roundToInt(),
+                                            (magnifier.y - 180.dp.toPx()).roundToInt(),
+                                        )
+                                    },
+                                )
+                            }
+
+                            if (targetLineMode) {
+                                Text(
+                                    text = if (targetStart == null) {
+                                        "Tap the start of your target line"
+                                    } else {
+                                        "Tap the target"
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .padding(8.dp)
+                                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color.White,
+                                )
+                            }
+                        }
+                    }
+                },
+                controls = {
+                    StatsBar(
+                        keyframeCount = keyframes.size,
+                        pointCount = result?.detections?.size,
+                        currentFrame = currentFrame,
+                    )
+
+                    PlaybackBar(
+                        positionMs = playback.positionMs,
+                        startMs = trimStartMs,
+                        endMs = trimEndMs ?: playback.durationMs,
+                        isPlaying = playback.isPlaying,
+                        onPlayPause = { if (playback.isPlaying) player.pause() else player.play() },
+                        onStep = { forward ->
+                            player.pause()
+                            val step = (1000 / TRACK_FPS).roundToInt()
+                            val target = playback.positionMs + if (forward) step else -step
+                            player.seekTo(
+                                target.coerceIn(trimStartMs, trimEndMs ?: playback.durationMs),
                             )
                         },
-                ) {
-                    if (showOverlay) {
-                        val tracked = result
-                        if (tracked != null && tracked.detections.isNotEmpty()) {
-                            FlightPathOverlay(
-                                result = tracked,
-                                currentFrame = currentFrame,
-                                showFullTrail = true,
-                                showCurrentDisc = phase != SetupPhase.RESULT,
-                                anchors = anchors.toList(),
-                                targetLine = targetStart?.let { start ->
-                                    targetEnd?.let { end -> start to end }
-                                },
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-
-                        if (phase == SetupPhase.MARKING) {
-                            KeyframeMarkers(
-                                keyframes = keyframes,
-                                currentFrame = currentFrame,
-                                pendingCorner = pendingBoxCorner,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-
-                        if (phase == SetupPhase.ANCHORING) {
-                            AnchorMarkers(
-                                anchors = anchors,
-                                pending = pendingAnchor,
-                                currentFrame = currentFrame,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                    }
-
-                    val magnifier = magnifierAt
-                    val bitmap = magnifierBitmap
-                    if (magnifier != null && bitmap != null) {
-                        Magnifier(
-                            bitmap = bitmap,
-                            focus = magnifier,
-                            canvasSize = videoSize,
-                            offsetPx = with(density) {
-                                IntOffset(
-                                    (magnifier.x - 70.dp.toPx()).roundToInt(),
-                                    (magnifier.y - 180.dp.toPx()).roundToInt(),
-                                )
-                            },
-                        )
-                    }
-
-                    if (targetLineMode) {
-                        Text(
-                            text = if (targetStart == null) {
-                                "Tap the start of your target line"
-                            } else {
-                                "Tap the target"
-                            },
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(8.dp)
-                                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                                .padding(horizontal = 14.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.White,
-                        )
-                    }
-                }
-            }
-
-            StatsBar(
-                keyframeCount = keyframes.size,
-                pointCount = result?.detections?.size,
-                currentFrame = currentFrame,
-            )
-
-            PlaybackBar(
-                positionMs = playback.positionMs,
-                startMs = trimStartMs,
-                endMs = trimEndMs ?: playback.durationMs,
-                isPlaying = playback.isPlaying,
-                onPlayPause = { if (playback.isPlaying) player.pause() else player.play() },
-                onStep = { forward ->
-                    player.pause()
-                    val step = (1000 / TRACK_FPS).roundToInt()
-                    val target = playback.positionMs + if (forward) step else -step
-                    player.seekTo(
-                        target.coerceIn(trimStartMs, trimEndMs ?: playback.durationMs),
+                        onSeek = { player.seekTo(it) },
                     )
-                },
-                onSeek = { player.seekTo(it) },
-            )
 
-            ActionBar(
-                phase = phase,
-                keyframeCount = keyframes.size,
-                anchorCount = anchors.size,
-                resultSource = resultSource,
-                isDetecting = autoDetecting,
-                showBoxToggle = isOptedIn,
-                boxMode = boxMode,
-                onToggleBoxMode = {
-                    boxMode = !boxMode
-                    pendingBoxCorner = null
-                },
-                onContinueFromAnchoring = { phase = SetupPhase.MARKING },
-                onRedoAnchors = {
-                    anchors.clear()
-                    pendingAnchor = null
-                },
-                onOpenAnchoring = { phase = SetupPhase.ANCHORING },
-                onUndo = {
-                    if (keyframes.isNotEmpty()) {
-                        keyframes.removeAt(keyframes.lastIndex)
-                        workbench.flightResult = null
-                        resultSource = null
-                        qualityReport = null
-                    }
-                },
-                onProcess = { scope.launch { processKeyframes() } },
-                onRefine = { scope.launch { refineWithDetection() } },
-                onAutoDetect = { scope.launch { runAutoDetection() } },
-                onClear = {
-                    // Clearing throws away every mark and anchor at once, so it
-                    // is one tap to do and one tap to take back.
-                    val keptKeyframes = keyframes.toList()
-                    val keptAnchors = anchors.toList()
-                    val keptResult = workbench.flightResult
-                    val keptSource = resultSource
-                    val keptReport = qualityReport
-                    keyframes.clear()
-                    anchors.clear()
-                    pendingAnchor = null
-                    pendingBoxCorner = null
-                    workbench.flightResult = null
-                    resultSource = null
-                    qualityReport = null
-                    phase = SetupPhase.MARKING
-                    scope.launch {
-                        val choice = snackbarHostState.showSnackbar(
-                            message = "Cleared ${keptKeyframes.size} points",
-                            actionLabel = "Undo",
-                            duration = SnackbarDuration.Long,
-                        )
-                        if (choice == SnackbarResult.ActionPerformed) {
-                            keyframes.addAll(keptKeyframes)
-                            anchors.addAll(keptAnchors)
-                            workbench.flightResult = keptResult
-                            resultSource = keptSource
-                            qualityReport = keptReport
-                        }
-                    }
-                },
-                onEditPoints = { convertResultToKeyframes() },
-                onBackToMarking = { phase = SetupPhase.MARKING },
-                onTargetLine = {
-                    targetLineMode = true
-                    targetStart = null
-                    targetEnd = null
+                    ActionBar(
+                        phase = phase,
+                        keyframeCount = keyframes.size,
+                        anchorCount = anchors.size,
+                        resultSource = resultSource,
+                        isDetecting = autoDetecting,
+                        showBoxToggle = isOptedIn,
+                        boxMode = boxMode,
+                        onToggleBoxMode = {
+                            boxMode = !boxMode
+                            pendingBoxCorner = null
+                        },
+                        onContinueFromAnchoring = { phase = SetupPhase.MARKING },
+                        onRedoAnchors = {
+                            anchors.clear()
+                            pendingAnchor = null
+                        },
+                        onOpenAnchoring = { phase = SetupPhase.ANCHORING },
+                        onUndo = {
+                            if (keyframes.isNotEmpty()) {
+                                keyframes.removeAt(keyframes.lastIndex)
+                                workbench.flightResult = null
+                                resultSource = null
+                                qualityReport = null
+                            }
+                        },
+                        onProcess = { scope.launch { processKeyframes() } },
+                        onRefine = { scope.launch { refineWithDetection() } },
+                        onAutoDetect = { scope.launch { runAutoDetection() } },
+                        onClear = {
+                            // Clearing throws away every mark and anchor at once, so it
+                            // is one tap to do and one tap to take back.
+                            val keptKeyframes = keyframes.toList()
+                            val keptAnchors = anchors.toList()
+                            val keptResult = workbench.flightResult
+                            val keptSource = resultSource
+                            val keptReport = qualityReport
+                            keyframes.clear()
+                            anchors.clear()
+                            pendingAnchor = null
+                            pendingBoxCorner = null
+                            workbench.flightResult = null
+                            resultSource = null
+                            qualityReport = null
+                            phase = SetupPhase.MARKING
+                            scope.launch {
+                                val choice = snackbarHostState.showSnackbar(
+                                    message = "Cleared ${keptKeyframes.size} points",
+                                    actionLabel = "Undo",
+                                    duration = SnackbarDuration.Long,
+                                )
+                                if (choice == SnackbarResult.ActionPerformed) {
+                                    keyframes.addAll(keptKeyframes)
+                                    anchors.addAll(keptAnchors)
+                                    workbench.flightResult = keptResult
+                                    resultSource = keptSource
+                                    qualityReport = keptReport
+                                }
+                            }
+                        },
+                        onEditPoints = { convertResultToKeyframes() },
+                        onBackToMarking = { phase = SetupPhase.MARKING },
+                        onTargetLine = {
+                            targetLineMode = true
+                            targetStart = null
+                            targetEnd = null
+                        },
+                    )
                 },
             )
         }
@@ -914,7 +927,7 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
                     Text(
                         "Keep the app open — this can take a minute.",
                         style = MaterialTheme.typography.labelSmall,
-                        color = AppColors.Muted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             },
@@ -955,7 +968,7 @@ fun FlightPlayerScreen(onBack: () -> Unit) {
                     Text(
                         "Drawing the trail into a copy of your video.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = AppColors.Muted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             },
@@ -980,7 +993,7 @@ private fun ChoiceSheet(
         // user on it.
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = AppColors.Background,
+        containerColor = MaterialTheme.colorScheme.background,
     ) {
         Column(Modifier.padding(start = 24.dp, top = 8.dp, end = 24.dp, bottom = 32.dp)) {
             Text(
@@ -989,7 +1002,7 @@ private fun ChoiceSheet(
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(8.dp))
-            Text(body, style = MaterialTheme.typography.bodyMedium, color = AppColors.Muted)
+            Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(28.dp))
             Row {
                 OutlinedButton(onClick = onSecondary, modifier = Modifier.weight(1f)) {
@@ -1052,7 +1065,7 @@ private fun PhaseBanner(
         Text(
             content.second,
             style = MaterialTheme.typography.labelMedium,
-            color = AppColors.Muted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -1252,7 +1265,7 @@ private fun StatChip(value: String, label: String, color: Color) {
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.bodyMedium,
         )
-        Text(label, style = MaterialTheme.typography.labelSmall, color = AppColors.Muted)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

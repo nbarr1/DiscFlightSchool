@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Surface
@@ -52,7 +53,11 @@ class MainActivity : ComponentActivity() {
                             // The top bars handle their own inset; the gesture bar
                             // would otherwise sit on top of scrolling content.
                             .windowInsetsPadding(WindowInsets.navigationBars)
-                            .consumeWindowInsets(WindowInsets.navigationBars),
+                            .consumeWindowInsets(WindowInsets.navigationBars)
+                            // Edge-to-edge stops adjustResize from shrinking the
+                            // window, so the keyboard inset is applied here, once,
+                            // for every screen with a text field.
+                            .imePadding(),
                     ) {
                         AppNavHost(
                             startOnHome = container.appPreferences.onboardingComplete,
