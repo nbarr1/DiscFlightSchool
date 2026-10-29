@@ -62,6 +62,15 @@ class EmptyClip(UnreadableVideo):
     """The requested start/end range holds no frames of the upload."""
 
 
+class RoboflowUnavailable(RuntimeError):
+    """Roboflow refused or could not open the WebRTC session.
+
+    Its message is the SDK's own description, which names the HTTP status and
+    Roboflow's response body, with the API key removed. It is logged in full
+    and never shown to the app.
+    """
+
+
 class JobCapacityError(RuntimeError):
     """The server is already running as many video jobs as it allows."""
 
@@ -247,11 +256,19 @@ class RoboflowVideoProcessor:
                 json.dumps({"event": "disc_flight.webrtc_frame_error", "frame_id": frame_id, "errors": messages})
             )
 
+        _redact_sdk_logs(self.settings.roboflow_api_key)
+        upload = {"sent": 0, "total": 0}
+
+        def on_upload_progress(sent: int, total: int) -> None:
+            upload["sent"], upload["total"] = sent, total
+
         client = InferenceHTTPClient(
             api_url="https://serverless.roboflow.com",
             api_key=self.settings.roboflow_api_key,
         ).configure(InferenceConfiguration(api_key_transport="header"))
-        source_stream = VideoFileSource(str(source), realtime_processing=False)
+        source_stream = VideoFileSource(
+            str(source), realtime_processing=False, on_upload_progress=on_upload_progress
+        )
         session = client.webrtc.stream(
             source=source_stream,
             workspace=WORKSPACE,
@@ -299,18 +316,33 @@ class RoboflowVideoProcessor:
                 raise RuntimeError("Installed inference-sdk session cannot be awaited")
             # SDK implementations enforce their own media timeout; additionally
             # reject a call that returns after our configured wall-clock limit.
-            waiter()
+            try:
+                waiter()
+            except RuntimeError as exc:
+                # The SDK raises this when /initialise_webrtc_worker fails, with
+                # the HTTP status and Roboflow's response in the message. That
+                # text is what tells a rejected key from exhausted credits or
+                # a renamed Workflow, so keep it for the log.
+                if "initialize WebRTC session" not in str(exc):
+                    raise
+                raise RoboflowUnavailable(
+                    _loggable_error(exc, self.settings.roboflow_api_key)
+                ) from exc
             if timed_out.is_set() or time.monotonic() - started > self.settings.disc_flight_session_timeout_seconds:
                 raise TimeoutError("Roboflow session timed out")
             if cancel.is_set():
                 raise Cancelled()
             if not frames:
                 # Two different failures end here, and telling them apart
-                # points at either the upload or the output routing.
+                # points at either the connection or the output routing. The
+                # upload was decoded before the session opened, so no frames
+                # at all means the connection carried nothing back, and how
+                # much of the upload went out says how far it got.
                 if data_messages == 0:
                     raise NoAnnotatedFrames(
-                        "Roboflow processed no frames. "
-                        "Check that the upload is a readable video file."
+                        "Roboflow processed no frames. The session ended after "
+                        f"{upload['sent']} of {upload['total'] or 'unknown'} upload chunks were sent; "
+                        "0 sent means the WebRTC connection never opened."
                     )
                 raise NoAnnotatedFrames(
                     f"Roboflow returned {data_messages} frames without an output_image. "
@@ -507,9 +539,14 @@ class DiscFlightJobManager:
             # status, so a poller that sees "failed" also sees why.
             job.error = _safe_error(exc)
             job.output_path.unlink(missing_ok=True)
-            event = {"event": "disc_flight.job_failed", "job_id": job.id, "error": type(exc).__name__}
-            if isinstance(exc, (NoAnnotatedFrames, UnreadableVideo)):
-                event["detail"] = str(exc)
+            # The detail is what makes a failure diagnosable from the log:
+            # without it every Roboflow failure reads as a bare RuntimeError.
+            event = {
+                "event": "disc_flight.job_failed",
+                "job_id": job.id,
+                "error": type(exc).__name__,
+                "detail": _loggable_error(exc, self.settings.roboflow_api_key),
+            }
             logger.error(json.dumps(event))
             job.finished_at = time.monotonic()
             job.status = "failed"
@@ -532,6 +569,8 @@ class DiscFlightJobManager:
 
 
 def _safe_error(exc: Exception) -> str:
+    if isinstance(exc, RoboflowUnavailable):
+        return "The disc-flight service could not reach the detector. Try again later."
     if isinstance(exc, TimeoutError):
         return "Disc processing timed out. Try a shorter video."
     if isinstance(exc, EmptyClip):
@@ -553,6 +592,39 @@ def _loggable_error(message: Any, api_key: str | None) -> str:
     if api_key:
         text = text.replace(api_key, "[redacted]")
     return text[:500]
+
+
+class _RedactKey(logging.Filter):
+    """Removes the Roboflow key from inference-sdk log records.
+
+    The SDK fetches its TURN configuration with the key in the query string,
+    and logs that URL when the request fails.
+    """
+
+    def __init__(self, api_key: str):
+        super().__init__()
+        self.api_key = api_key
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        if self.api_key in message:
+            record.msg = message.replace(self.api_key, "[redacted]")
+            record.args = ()
+        return True
+
+
+def _redact_sdk_logs(api_key: str | None) -> None:
+    """Attach `_RedactKey` to the SDK's log handlers.
+
+    Handlers, not loggers: a logger's filter sees only records logged on that
+    exact logger, while every SDK module logs on a child of `inference_sdk`,
+    whose handler the SDK installs (with propagation off) when it is imported.
+    """
+    if not api_key:
+        return
+    for handler in logging.getLogger("inference_sdk").handlers:
+        if not any(isinstance(f, _RedactKey) and f.api_key == api_key for f in handler.filters):
+            handler.addFilter(_RedactKey(api_key))
 
 
 def _output_value(value: Any) -> str | None:
