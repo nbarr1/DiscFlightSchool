@@ -42,30 +42,17 @@ object PrivacyPolicy {
                 "so you can choose an existing video, and saves analyzed videos to your " +
                 "gallery. " +
                 "By default, recorded video, extracted frames, and analysis results stay on " +
-                "your device. A video is uploaded only when you choose Auto-detect or cloud " +
-                "flight tracing, or opt in to training data collection (below).",
+                "your device. Images leave your device only if you opt in to training data " +
+                "collection (below).",
         ),
         Section(
             title = "On-device analysis",
-            body = "Pose detection (Form Coach) and marking the disc by hand in the Flight " +
-                "Tracker run entirely on your device, using bundled machine-learning models " +
-                "where needed. Your video is not sent to a server when you mark the disc by " +
-                "hand. When Auto-detect can't reach the server, it also runs on your device. " +
+            body = "Pose detection (Form Coach) and disc tracking in the Flight Tracker, both " +
+                "Auto-detect and marking the disc by hand, run entirely on your device, using " +
+                "machine-learning models bundled with the app. Your video is not sent to a " +
+                "server for analysis. " +
                 "Questions you ask in the Knowledge Base are answered from the research " +
                 "bundled with the app and never leave your device.",
-        ),
-        Section(
-            title = "Optional: cloud disc detection",
-            body = "When you tap \"Auto-detect\" in the flight tracker, or \"Trace in " +
-                "cloud,\" the selected video is sent to the Disc Flight School server, which " +
-                "securely submits it to Roboflow to detect the disc. For Auto-detect, only " +
-                "the trimmed part of the video is processed, and your device receives the " +
-                "disc's position in each frame. The source upload is removed after " +
-                "processing or cancellation. The results, including an annotated copy of " +
-                "the video, remain on the server so your device can download them, and the " +
-                "server deletes them 24 hours after processing finishes. Roboflow handles " +
-                "the video under its own privacy policy and data retention terms. If you do " +
-                "not want the video processed by these services, mark the disc by hand instead.",
         ),
         Section(
             title = "Optional: training data collection",

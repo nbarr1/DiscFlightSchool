@@ -26,11 +26,11 @@ The Gradle project has two modules:
 
 Implemented client areas currently present in source:
 
-- Flight Tracker screens, video playback, overlays, and disc-detection services. Automated detection is track-by-detection: full-frame YOLO discovery locates the disc, then windowed tracking with velocity prediction follows it frame-to-frame (falling back to discovery after a short occlusion streak) instead of re-scanning the whole frame every time. A user-seeded keyframe path (`GeometricSplineTracker`/`HybridDiscTracker` behind the `DiscTracker` interface) remains available as a manual/hybrid alternative when automated tracking needs a correction. After trimming, the user picks "Auto-detect" or "Mark manually": auto runs `AutoDiscTracker` over the trimmed clip with no taps, showing determinate progress with a cancel, then reports a low-confidence warning (coverage, interpolated share, and mean confidence relative to the user's own sensitivity setting — see `core/detection/DetectionQuality.kt`) and offers to convert the detected path into editable keyframes for hand-correction. Every tracker works in the trimmed frame space: frame 0 is the trim start, not the start of the file.
+- Flight Tracker screens, video playback, overlays, and disc-detection services. Automated detection runs the Roboflow Workflow `disc-golf-flight-tracker` on the phone: its RF-DETR Small disc model (ONNX Runtime) scores every frame at 30 fps, and an OC-SORT tracker ported from the Workflow's `trackers_ocsort@v1` step links the detections, with the Workflow's own settings (see "The on-device disc model" below). A user-seeded keyframe path (`GeometricSplineTracker`/`HybridDiscTracker` behind the `DiscTracker` interface) remains available as a manual/hybrid alternative; the hybrid tracker refines the hand-marked path with the same RF-DETR model, searching a window around each predicted position. After trimming, the user picks "Auto-detect" or "Mark manually": auto runs `WorkflowDiscTracker` over the trimmed clip with no taps, showing determinate progress with a cancel, then reports a low-confidence warning (coverage, interpolated share, and mean confidence relative to the Workflow's 0.15 threshold — see `core/detection/DetectionQuality.kt`) and offers to convert the detected path into editable keyframes for hand-correction. Every tracker works in the trimmed frame space: frame 0 is the trim start, not the start of the file.
 - Form Coach screens for video trimming, posture analysis, phase selection/comparison, pose correction, and session history.
 - Disc Roulette screens, scoring models, scoring repository, and roulette history.
 - Knowledge Base screens and local JSON-backed content models/repositories.
-- Training Settings for opt-in sample collection, server URL/API-key configuration, pending upload management, detector model update checks, and a cloud disc-detection test that sends one photo to the server's `POST /api/disc-detection`.
+- Training Settings for opt-in sample collection, server URL/API-key configuration, and pending upload management.
 
 Screen-to-screen state that is too large to encode in a navigation route — a
 pose analysis, a flight path — lives in `WorkbenchState`; the routes
@@ -46,11 +46,8 @@ Important client facts:
 - `compileSdk = 36`, `targetSdk = 36`, `minSdk = 24`.
 - Java/Kotlin target 17, with core library desugaring so `java.time` works at API 24.
 - Release builds require a complete `disc_golf_android/key.properties` signing config; unsigned local testing should use debug builds.
-- Bundled runtime assets live in `disc_golf_android/app/src/main/assets/`: `data/pro_baseline_db.json`, `data/knowledge_base.json`, and `models/disc_detector.tflite`.
-- The bundled/retrained detector's TFLite output format needs no client-side parsing changes between YOLOv8 and YOLO11: both export the same anchor-free `Detect` head shape (verified against the `ultralytics` source, not assumed). `DiscDetector` reads its input tensor size and channel order from the loaded model at load time rather than assuming a fixed resolution or layout.
-- **The bundled `disc_detector.tflite` is a genuine YOLO11n export at 640×640**, single class, dynamic-INT8-quantized (`quantize="w8a32"` — int8 weights, float32 activations, no calibration data needed). Read straight out of the flatbuffer to confirm rather than trust the filename: output `serving_default_output_0_output` is `[1,5,8400]` FLOAT32 — 8400 being 80²+40²+20², the anchor grid for a 640 input.
-- **The input tensor is NCHW (channel-first), `[1,3,640,640]`, not the NHWC (channel-last) layout the app originally assumed.** As of Ultralytics 8.4.83 the standalone `tflite` export format was removed; `format="tflite"` now silently redirects to the `litert` exporter, which traces the PyTorch model directly and produces NCHW — there is no supported flag to recover the old onnx2tf-based NHWC output. `YoloOutput.detectInputLayout` distinguishes the two by which post-batch dimension equals 3 (the channel count — unambiguous, since a real detector's spatial dimensions are always ≥32) and `YoloPreprocessor.writeNormalizedInput` writes the pixel buffer in whichever order the loaded model actually expects.
-- `DiscDetector` logs the loaded model's input/output shapes and detected channel order, and warns — but never fails — when the geometry doesn't match a single-class anchor-free `Detect` head: a non-multiple-of-32 input, an unexpected channel count, an anchor count that disagrees with the declared input size, or a shape it can't confidently classify as NHWC or NCHW. A model downloaded from the training server may legitimately ship at a different geometry, and refusing to load it would break detection outright instead of degrading.
+- Bundled runtime assets live in `disc_golf_android/app/src/main/assets/`: `data/pro_baseline_db.json`, `data/knowledge_base.json`, and the disc model in `models/rfdetr/` (`weights.onnx`, `inference_config.json`, `class_names.txt`, `package.json`).
+- **The disc model isn't committed.** Its weights are about 114 MB, over GitHub's file limit, so `models/rfdetr/` is git-ignored and `scripts/fetch_disc_model.py` downloads it (see "The on-device disc model"). A debug build without it installs, but Auto-detect reports that the model couldn't load; a release build stops with an error instead.
 
 #### Library choices carried over from the Flutter client
 
@@ -59,7 +56,7 @@ Important client facts:
 | `provider` | `AppContainer` + Compose state / `StateFlow` |
 | `video_player` | Media3 ExoPlayer (`SeekParameters.EXACT` for frame-accurate scrubbing) |
 | `ffmpeg_kit_flutter_new` | `MediaMetadataRetriever` for frame extraction, Media3 `Transformer` + `OverlayEffect` for the burned-in flight path |
-| `tflite_flutter` | `org.tensorflow:tensorflow-lite`, with the GPU delegate and a CPU fallback |
+| `tflite_flutter` | `com.microsoft.onnxruntime:onnxruntime-android`, running the Roboflow RF-DETR model on the CPU |
 | `google_mlkit_pose_detection` | `com.google.mlkit:pose-detection-accurate` |
 | `image_picker` / `file_picker` | `ActivityResultContracts.PickVisualMedia` / `CaptureVideo` |
 | `flutter_secure_storage` | `EncryptedSharedPreferences` |
@@ -107,7 +104,7 @@ Implemented server endpoints:
 Important server facts:
 
 - `APP_API_KEY` is required to start the server.
-- `CLIENT_API_KEY` is optional. The Android app ships with it, so it's accepted only by the Roboflow endpoints marked "client key" in the endpoint table, never by the training upload, export, or start endpoints. Anyone who extracts it from the app can spend Roboflow credits but can't read or change the dataset. For more information, see "The client key" later in this README.
+- `CLIENT_API_KEY` is optional, and it's accepted only by the Roboflow endpoints marked "client key" in the endpoint table, never by the training upload, export, or start endpoints. The Android app no longer sends it: disc detection runs on the device. For more information, see "The client key" later in this README.
 - Storage backend is selected automatically: `PostgresMinioStorage` (durable) when `DATABASE_URL`, `REDIS_URL`, and every `OBJECT_STORAGE_*` variable are set, otherwise `FileStorage` (filesystem, local dev, no infra required).
 - In durable mode, `POST /api/training/start` enqueues a job on a Redis list instead of spawning an in-process thread; `training_server.worker` consumes it, runs the same `yolo detect train`/`yolo export` sequence, and publishes the resulting model through the storage layer. Without durable config, `training_server.worker` falls back to its original placeholder behavior (log config booleans and sleep).
 - `server/dataset/dataset.yaml` (or, in durable mode, a materialized copy assembled from Postgres/MinIO) is generated at runtime if it is absent.
@@ -191,11 +188,10 @@ export ROBOFLOW_API_KEY='your-server-side-key'
 uvicorn main:app --app-dir server --host 0.0.0.0 --port 8000
 ```
 
-Release builds of the app send Auto-detect and cloud tracing to the default
-server with the client key they're built with (see "The client key"). To point
-a build at your own server instead, set the server URL and the matching
-`APP_API_KEY` in Android **Training Settings**, then run the client with
-Android Studio or:
+The app uses the server only for training uploads; disc detection runs on the
+device. To point a build at your own server, set the server URL and the
+matching `APP_API_KEY` in Android **Training Settings**, then run the client
+with Android Studio or:
 
 ```bash
 cd disc_golf_android
@@ -260,46 +256,25 @@ highest-confidence disc box in each frame, preferring the Workflow's
 
 Frame 0 is the first frame of the processed range, and `timeMs` counts from
 there. `x`/`y` is the box center, and every value is a fraction of the frame
-width or height. The Android flight player's **Auto-detect** turns this into
-its trajectory.
+width or height. The Android app doesn't call these endpoints: its
+**Auto-detect** runs the same Workflow on the device.
 
 #### The client key
 
-The app needs to reach the Roboflow endpoints without each user entering the
-server's `APP_API_KEY`. `CLIENT_API_KEY` is a second, separate server key for
-that:
+`CLIENT_API_KEY` is a second, separate server key that the Roboflow endpoints
+accept, so a client can reach them without the server's `APP_API_KEY`. Earlier
+Android builds shipped with it; builds from this version on run disc detection
+on the device and send no key to these endpoints.
 
-1. Generate a value: `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
-2. Set it as `CLIENT_API_KEY` in the server's environment (for Render, the
-   service's **Environment** settings), next to `ROBOFLOW_API_KEY`, and
-   redeploy.
-3. Add the same value as a GitHub repository secret named `CLIENT_API_KEY`.
-   `.github/workflows/build.yml` passes it to Gradle as `DFS_CLIENT_API_KEY`,
-   which builds it into `BuildConfig.CLIENT_API_KEY`.
-
-The app sends the built-in key only to the default server,
-`https://discflightschool-1.onrender.com`. A user who saves their own key in
-Training Settings sends that key instead, to whichever server they set. A
-build without the secret has an empty client key, and its Auto-detect falls
-back to the on-device detector unless the user saves a key.
-
-Earlier builds defaulted to `https://discflightschool.onrender.com`. An
-install that saved that URL is moved to the default when the app starts, and
-keeps any key the user saved. If Auto-detect or cloud tracing reports "Invalid
-or missing API key", check that the server's `CLIENT_API_KEY` matches the
-repository secret the APK was built with, and that no stale key is saved under
-Training Settings > Advanced: a saved key wins over the built-in one.
-
-Because the key is in every APK, treat it as public: it opens only the
-Roboflow endpoints, so its worst case is spent inference credits. The server
-bounds that: it runs at most `DISC_FLIGHT_MAX_ACTIVE_JOBS` video jobs at once,
-and limits client-key requests per caller (`CLIENT_RATE_LIMIT_PER_HOUR`) and
-in total (`CLIENT_GLOBAL_LIMIT_PER_HOUR`), answering 429 past either. On
-Render, set `TRUSTED_PROXY_HOPS=1` so the per-caller limit sees real client
-addresses. Set a usage alert in the Roboflow dashboard as well. To rotate it,
-change the server's `CLIENT_API_KEY` and the repository secret together, then
-ship a new build. Builds with the old key fall back to on-device detection
-until users update.
+Because a shipped key can be extracted from an APK, treat it as public: it
+opens only the Roboflow endpoints, so its worst case is spent inference
+credits. The server bounds that: it runs at most `DISC_FLIGHT_MAX_ACTIVE_JOBS`
+video jobs at once, and limits client-key requests per caller
+(`CLIENT_RATE_LIMIT_PER_HOUR`) and in total (`CLIENT_GLOBAL_LIMIT_PER_HOUR`),
+answering 429 past either. On Render, set `TRUSTED_PROXY_HOPS=1` so the
+per-caller limit sees real client addresses. Once no installed build sends
+the key, unset `CLIENT_API_KEY` on the server to close the endpoints to
+everything but `APP_API_KEY`.
 
 #### Single-image disc detection
 
@@ -382,15 +357,6 @@ it as a `disc_detection.failed` event with the request ID, the error type, and
 the upstream HTTP status when there is one. The call can block for about 90
 seconds when every attempt times out, and each call spends inference credits.
 
-In the Android app, the **Cloud disc detection** card in Training Settings
-calls this endpoint. **Test cloud detection** opens the photo picker, scales
-the photo so its longer side is at most 1,280 pixels, and sends it as a JPEG
-with that key. It then shows the photo with a box on each disc and
-a one-line summary. The button is enabled when the app has a key for the
-server: the built-in client key on the default server, or a saved training API
-key. `DiscDetectionClient` makes the request and reports the server's `error`
-message when a call fails.
-
 `server/test_disc_detection.py` covers the module and the endpoint by
 replaying a response captured from the real Workflow, so it needs no key and
 spends no credits. Its three tests that drive the real SDK against a local
@@ -422,6 +388,41 @@ cd disc_golf_android
 ./gradlew :core:test
 ```
 
+### The on-device disc model
+
+Auto-detect runs the Roboflow Workflow `disc-golf-flight-tracker` on the
+phone, with no server and no Roboflow credits:
+
+1. **Detect.** `RfDetrDiscDetector` runs the Workflow's model,
+   `disc-golf-tracer/disc-golf-flight-tracker-2-rfdetr-small-t1` (RF-DETR
+   Small, 512x512, Apache 2.0), with ONNX Runtime. `core/detection/RfDetr.kt`
+   ports Roboflow's preprocessing (Pillow's bilinear stretch resize, then
+   ImageNet normalization) and post-processing, and refuses a package whose
+   `inference_config.json` asks for anything it doesn't implement.
+2. **Filter and track.** `WorkflowDiscTracker` keeps the `disc` class above
+   the Workflow's 0.15 confidence and links frames with `OcSortTracker`, a
+   port of the `trackers` 2.4.0 OC-SORT the Workflow's `trackers_ocsort@v1`
+   step uses, with the same settings.
+3. **Pick each frame's disc** as the server did: the most confident tracked
+   box, otherwise the most confident detection.
+
+`OcSortTrackerTest` and `RfDetrTest` check the ports against fixtures the
+Python libraries produced (`scripts/generate_ocsort_fixture.py` and
+`scripts/generate_pil_resize_fixture.py`). Two things differ from the hosted
+Workflow: frames are decoded at 30 fps rather than the clip's own rate, and
+Android's decoder may produce slightly different pixels from the server's.
+
+The weights aren't committed. `scripts/fetch_disc_model.py` downloads
+Roboflow's ONNX export of the model from the same weights API self-hosted
+Inference uses, checks each file's MD5, and writes them to
+`disc_golf_android/app/src/main/assets/models/rfdetr/`. It needs the
+workspace's private key in `ROBOFLOW_API_KEY`, which never goes into the APK.
+CI runs it before every build from the `ROBOFLOW_API_KEY` repository secret,
+and `.github/workflows/fetch-roboflow-model.yml` prints the downloaded
+package's settings and graph. After retraining in Roboflow, run the script
+again (with `--model-id` if the Workflow's `model_id` input changed) and
+rebuild.
+
 ## Building a testable Android APK
 
 Prerequisites:
@@ -429,6 +430,11 @@ Prerequisites:
 1. Java 17.
 2. Android SDK with compile SDK 36 and build tools installed (`ANDROID_HOME`, or a `local.properties` naming `sdk.dir`).
 3. Network access for first-time dependency resolution unless dependencies are already cached.
+4. The disc model, downloaded once with the Roboflow workspace's private API key (see "The on-device disc model"):
+
+   ```bash
+   ROBOFLOW_API_KEY=... python3 scripts/fetch_disc_model.py
+   ```
 
 Recommended validation/build sequence:
 
@@ -468,7 +474,7 @@ its `signed-bundle` job signs with your upload key and attaches
 | `RELEASE_STORE_PASSWORD` | The keystore password. |
 | `RELEASE_KEY_ALIAS` | The key's alias in the keystore. |
 | `RELEASE_KEY_PASSWORD` | The key's password. |
-| `CLIENT_API_KEY` | The client key, as for the debug build. |
+| `ROBOFLOW_API_KEY` | The Roboflow workspace's private API key, for downloading the disc model. |
 
 ### The public privacy policy
 
@@ -486,23 +492,19 @@ differs from the in-app text in `PrivacyPolicy.kt`, so change both together.
 1. **TODO: build and run the Kotlin client on a device.** The rewrite has
    been verified at the logic level — `:core`'s suite covers every ported
    calculation, and `:app`'s unit tests cover the Android-free helpers — but
-   nothing here has exercised Compose, ML Kit, TensorFlow Lite, Media3, or
+   nothing here has exercised Compose, ML Kit, ONNX Runtime, Media3, or
    `MediaMetadataRetriever` against a real device. Assemble a debug APK and
    walk each feature end to end; `docs/testing.md` has the checklist.
-2. **TODO: verify the YOLO11n@640 detector on a real device with a real
-   throw video.** The `.tflite` swap and the NCHW-layout handling it required
-   (see the client facts above) are done, but none of it has run against a
-   real TFLite interpreter yet. Confirm the load log reports
-   `input [1, 3, 640, 640]` and `NCHW` before trusting anything else.
+2. **TODO: time the RF-DETR disc model on a real device.** Auto-detect runs
+   RF-DETR Small at 512x512 on up to 300 frames (10 seconds at 30 fps). Its
+   speed on a phone CPU hasn't been measured; the load log lists the model's
+   inputs and outputs, and each frame's progress is shown in the dialog.
 3. Keep docs synchronized with source whenever endpoints, assets, build settings, or runtime services change.
-4. **Measure detection timing at 640 and decide where inference runs.**
-   Per-frame cost scales with input area, so a 640 model is roughly 4× the 320
-   export's inference, output marshalling, and candidate scan. Detection
-   already runs off the main thread on a background dispatcher and reuses its
-   direct `ByteBuffer`s, and the frame budget is derived from the trimmed span
-   (a six-second trim is ~61 frames, not the 300-frame cap), but measure on a
-   device before deciding whether a foreground service or a `WorkManager` job
-   is needed for long clips. See `docs/testing.md`.
+4. **Decide where inference runs once it's timed.** Detection runs off the
+   main thread, and the frame budget is derived from the trimmed span (a
+   six-second trim is 181 frames at 30 fps, not the 300-frame cap). Measure
+   on a device before deciding whether a foreground service or a
+   `WorkManager` job is needed for long clips.
 
 ## Running the compose stack
 

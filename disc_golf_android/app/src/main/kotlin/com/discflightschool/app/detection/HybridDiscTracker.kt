@@ -29,7 +29,7 @@ import kotlinx.coroutines.withContext
  * elsewhere in the window must not hijack the path they are correcting.
  */
 class HybridDiscTracker(
-    private val detector: DiscDetector,
+    private val detector: RfDetrDiscDetector,
     private val frameExtractor: FrameExtractor,
     private val cacheDir: File,
     /** Optional disc colour, which adds blob matching alongside the detector. */
@@ -135,7 +135,7 @@ class HybridDiscTracker(
 
                 if (bitmap != null) {
                     val colorResult = targetHsv?.let { findColorBlob(bitmap, splinePos, it) }
-                    val yoloResult = if (detector.isModelLoaded.value) {
+                    val modelResult = if (detector.isModelLoaded.value) {
                         detector.detectInWindow(
                             bitmap = bitmap,
                             frameIndex = frame,
@@ -159,17 +159,17 @@ class HybridDiscTracker(
                     }
 
                     when {
-                        colorResult != null && yoloResult != null -> {
-                            if (colorResult.distanceTo(yoloResult) < AGREEMENT_DISTANCE) {
+                        colorResult != null && modelResult != null -> {
+                            if (colorResult.distanceTo(modelResult) < AGREEMENT_DISTANCE) {
                                 // Both agree: average the positions and trust it.
                                 position = Vec2(
-                                    (colorResult.x + yoloResult.x) / 2,
-                                    (colorResult.y + yoloResult.y) / 2,
+                                    (colorResult.x + modelResult.x) / 2,
+                                    (colorResult.y + modelResult.y) / 2,
                                 )
                                 confidence = AGREEMENT_CONFIDENCE
                             } else {
                                 // They disagree: prefer the trained model.
-                                position = yoloResult
+                                position = modelResult
                                 confidence = MODEL_CONFIDENCE
                             }
                         }
@@ -177,8 +177,8 @@ class HybridDiscTracker(
                             position = colorResult
                             confidence = COLOR_CONFIDENCE
                         }
-                        yoloResult != null -> {
-                            position = yoloResult
+                        modelResult != null -> {
+                            position = modelResult
                             confidence = MODEL_CONFIDENCE
                         }
                     }

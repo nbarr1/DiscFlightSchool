@@ -103,6 +103,49 @@ class FrameExtractor(private val io: CoroutineDispatcher = Dispatchers.IO) {
         frames
     }
 
+    /**
+     * Decode up to [maxFrames] frames at [fps] at the clip's full resolution
+     * and hand each to [block], one at a time, without writing them to disk.
+     *
+     * For the RF-DETR detector, which resizes the whole frame itself as
+     * Roboflow's preprocessing does; a frame already shrunk to the working
+     * width would reach the model with less detail than it was trained on.
+     * The bitmap is recycled after [block] returns. A frame the decoder cannot
+     * produce is skipped.
+     */
+    suspend fun forEachFullFrame(
+        videoPath: String,
+        fps: Double,
+        maxFrames: Int,
+        startMs: Long,
+        endMs: Long?,
+        block: suspend (index: Int, timeMs: Long, bitmap: Bitmap) -> Unit,
+    ) {
+        val retriever = MediaMetadataRetriever()
+        try {
+            withContext(io) { retriever.setDataSource(videoPath) }
+            val durationMs = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull()
+            val timestamps = FrameSampling.sampleTimestamps(fps, maxFrames, startMs, endMs, durationMs)
+            for ((index, timestampMs) in timestamps.withIndex()) {
+                currentCoroutineContext().ensureActive()
+                val bitmap = withContext(io) {
+                    runCatching {
+                        retriever.getFrameAtTime(timestampMs * 1000, MediaMetadataRetriever.OPTION_CLOSEST)
+                    }.getOrNull()
+                } ?: continue
+                try {
+                    block(index, timestampMs - startMs, bitmap)
+                } finally {
+                    bitmap.recycle()
+                }
+            }
+        } finally {
+            runCatching { retriever.release() }
+        }
+    }
+
     /** A single frame as a bitmap, downscaled to the working resolution. */
     suspend fun frameBitmapAt(videoPath: String, timestampMs: Long): Bitmap? = withContext(io) {
         val retriever = MediaMetadataRetriever()

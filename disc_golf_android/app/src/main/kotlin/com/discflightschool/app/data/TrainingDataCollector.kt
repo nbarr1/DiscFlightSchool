@@ -5,12 +5,8 @@ import android.util.Log
 import com.discflightschool.app.video.FrameExtractor
 import com.discflightschool.core.data.KeyframeData
 import com.discflightschool.core.data.TrainingDataRepository
-import com.discflightschool.core.model.DetectorModelVersion
 import com.discflightschool.core.model.TrainingSample
-import com.discflightschool.core.net.ServerUris
 import java.io.File
-import java.net.URI
-import java.security.MessageDigest
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipEntry
@@ -51,10 +47,6 @@ class TrainingDataCollector(
 
     private val imagesDir get() = File(dataDir, "images")
     private val labelsDir get() = File(dataDir, "labels")
-    private val modelsDir get() = File(dataDir, "models")
-
-    /** The version the last download replaced, for [revertToPreviousModel]. */
-    private var replacedModelVersion: String? = null
 
     /**
      * Save one training sample per keyframe, returning how many were written.
@@ -241,111 +233,15 @@ class TrainingDataCollector(
         }.onFailure { Log.w(TAG, "Failed to export training data", it) }.getOrNull()
     }
 
-    /** Delete every collected sample, keeping any downloaded model. */
+    /**
+     * Delete every collected sample, along with any detector model an earlier
+     * version of the app downloaded into the data directory.
+     */
     suspend fun clearAllData() = withContext(Dispatchers.IO) {
         runCatching {
-            dataDir.listFiles()?.forEach { entry ->
-                if (entry.name != "models") entry.deleteRecursively()
-            }
+            dataDir.listFiles()?.forEach { it.deleteRecursively() }
         }.onFailure { Log.w(TAG, "Failed to clear training data", it) }
         repository.clearSamples()
-    }
-
-    /** The server's advertised model version, or null when it cannot be read. */
-    suspend fun remoteModelVersion(): DetectorModelVersion? = withContext(Dispatchers.IO) {
-        val uri = repository.endpoint("/api/model/version") ?: return@withContext null
-        runCatching {
-            client.newCall(Request.Builder().url(uri.toURL()).build()).execute().use { response ->
-                if (!response.isSuccessful) return@runCatching null
-                val body = response.body?.string() ?: return@runCatching null
-                DetectorModelVersion.fromJson(json.parseToJsonElement(body).jsonObject)
-            }
-        }.onFailure { Log.w(TAG, "Failed to check the model version", it) }.getOrNull()
-    }
-
-    /** Whether the server advertises a model other than the installed one. */
-    suspend fun checkForModelUpdate(): Boolean {
-        val remote = remoteModelVersion() ?: return false
-        return remote.hasModel && remote.version != repository.modelVersion
-    }
-
-    /**
-     * Download the advertised model, verifying its hash before installing it.
-     *
-     * The server normally returns a relative path. An absolute URL pointing
-     * anywhere other than the configured origin is refused: this file is handed
-     * straight to the interpreter, so a redirect to another host — or to another
-     * port on the same host — is a code-execution path, not a convenience.
-     */
-    suspend fun downloadModel(): Boolean = withContext(Dispatchers.IO) {
-        val remote = remoteModelVersion() ?: return@withContext false
-        if (!remote.hasModel) return@withContext false
-
-        val serverUri = runCatching { URI(repository.serverUrl.value.trim()) }.getOrNull()
-            ?: return@withContext false
-        val modelUri = runCatching { serverUri.resolve(remote.url) }.getOrNull()
-            ?: return@withContext false
-
-        if (!ServerUris.isSameOrigin(serverUri, modelUri)) {
-            Log.w(TAG, "Rejected a model URL outside the configured server: $modelUri")
-            return@withContext false
-        }
-
-        runCatching {
-            client.newCall(Request.Builder().url(modelUri.toURL()).build()).execute().use { response ->
-                if (!response.isSuccessful) return@runCatching false
-                val bytes = response.body?.bytes() ?: return@runCatching false
-
-                val digest = MessageDigest.getInstance("SHA-256")
-                    .digest(bytes)
-                    .joinToString("") { "%02x".format(it) }
-                if (!digest.equals(remote.sha256, ignoreCase = true)) {
-                    Log.w(TAG, "Downloaded model hash mismatch: $digest")
-                    return@runCatching false
-                }
-
-                modelsDir.mkdirs()
-                val modelFile = File(modelsDir, MODEL_FILE)
-                // Kept until the interpreter has accepted the replacement: a
-                // model that fails to load would otherwise be preferred on
-                // every later launch, with no way back to a working one.
-                if (modelFile.exists()) {
-                    modelFile.copyTo(File(modelsDir, PREVIOUS_MODEL_FILE), overwrite = true)
-                }
-                replacedModelVersion = repository.modelVersion
-                modelFile.writeBytes(bytes)
-                repository.modelVersion = remote.version
-                Log.i(TAG, "Installed detector model version ${remote.version}")
-                true
-            }
-        }.onFailure { Log.w(TAG, "Failed to download the model", it) }.getOrDefault(false)
-    }
-
-    /**
-     * Put back whatever model was in place before the last download.
-     *
-     * With no earlier download to restore, the file is removed so the detector
-     * falls back to the model bundled in the APK.
-     */
-    suspend fun revertToPreviousModel(): Boolean = withContext(Dispatchers.IO) {
-        runCatching {
-            val modelFile = File(modelsDir, MODEL_FILE)
-            val backup = File(modelsDir, PREVIOUS_MODEL_FILE)
-            if (backup.exists()) {
-                backup.copyTo(modelFile, overwrite = true)
-                backup.delete()
-            } else {
-                modelFile.delete()
-            }
-            // Empty would stick as a stored value; the bundled version is what
-            // "no downloaded model" means.
-            repository.modelVersion = replacedModelVersion
-                ?: TrainingDataRepository.BUNDLED_MODEL_VERSION
-            replacedModelVersion = null
-            Log.i(TAG, "Reverted to the previous detector model")
-            true
-        }.onFailure { Log.w(TAG, "Could not revert the detector model", it) }
-            .getOrDefault(false)
     }
 
     /**
@@ -369,8 +265,6 @@ class TrainingDataCollector(
 
     private companion object {
         const val TAG = "TrainingDataCollector"
-        const val MODEL_FILE = "disc_detector.tflite"
-        const val PREVIOUS_MODEL_FILE = "disc_detector.previous.tflite"
         const val APP_VERSION = "1.0.0"
 
         /**

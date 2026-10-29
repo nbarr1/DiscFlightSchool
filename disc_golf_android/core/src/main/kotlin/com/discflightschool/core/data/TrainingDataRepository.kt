@@ -38,12 +38,6 @@ class TrainingDataRepository(
     private val store: KeyValueStore,
     private val secrets: SecretStore,
     private val manifestStore: ManifestStore,
-    /**
-     * The client key the app is built with, or empty. The default server
-     * accepts it on its Roboflow detection endpoints only, never for training
-     * uploads or exports.
-     */
-    private val builtInClientKey: String = "",
 ) {
 
     private val _isOptedIn = MutableStateFlow(store.getBoolean(OPT_IN_KEY) ?: false)
@@ -103,22 +97,6 @@ class TrainingDataRepository(
     /** The endpoint for [path], or null when the configured server is not usable. */
     fun endpoint(path: String): URI? = ServerUris.endpoint(_serverUrl.value, path)
 
-    /**
-     * The key for the server's Roboflow detection endpoints, or null when
-     * there is none to send.
-     *
-     * The user's own key wins. Otherwise the built-in client key is used, but
-     * only while the server is the default one: it was issued by that server,
-     * and sending it anywhere else would hand it to whoever runs that host.
-     */
-    val detectionApiKey: String?
-        get() {
-            _apiKey.value.takeIf { it.isNotEmpty() }?.let { return it }
-            if (builtInClientKey.isEmpty()) return null
-            val defaultOrigin = ServerUris.originOf(DEFAULT_SERVER_URL)
-            return builtInClientKey.takeIf { ServerUris.originOf(_serverUrl.value) == defaultOrigin }
-        }
-
     fun addSamples(samples: List<TrainingSample>) {
         if (samples.isEmpty()) return
         _samples.value = _samples.value + samples
@@ -137,10 +115,6 @@ class TrainingDataRepository(
         _samples.value = emptyList()
         saveManifest()
     }
-
-    var modelVersion: String
-        get() = store.getString(MODEL_VERSION_KEY) ?: BUNDLED_MODEL_VERSION
-        set(value) = store.putString(MODEL_VERSION_KEY, value)
 
     /**
      * The saved server URL, or the default when none is saved.
@@ -179,7 +153,6 @@ class TrainingDataRepository(
         const val OPT_IN_KEY = "training_opt_in"
         const val SERVER_URL_KEY = "training_server_url"
         const val API_KEY_KEY = "training_api_key"
-        const val MODEL_VERSION_KEY = "disc_model_version"
         const val DEFAULT_SERVER_URL = "https://discflightschool-1.onrender.com"
 
         /**
@@ -187,8 +160,6 @@ class TrainingDataRepository(
          * of them is replaced with [DEFAULT_SERVER_URL] when the app starts.
          */
         val FORMER_DEFAULT_SERVER_URLS = listOf("https://discflightschool.onrender.com")
-
-        const val BUNDLED_MODEL_VERSION = "bundled-1.0.0"
 
         /** The normalized bounding-box size used when a keyframe carries none. */
         const val DEFAULT_BOX_SIZE = 0.03

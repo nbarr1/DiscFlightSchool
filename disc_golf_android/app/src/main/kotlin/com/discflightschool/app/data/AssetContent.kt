@@ -27,7 +27,6 @@ class AssetContent(private val context: Context) {
     companion object {
         const val KNOWLEDGE_BASE = "data/knowledge_base.json"
         const val PRO_BASELINE = "data/pro_baseline_db.json"
-        const val DETECTOR_MODEL = "models/disc_detector.tflite"
     }
 }
 

@@ -20,17 +20,6 @@ val keystoreProperties = Properties().apply {
 val hasReleaseSigning = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
     .all { keystoreProperties.getProperty(it)?.isNotBlank() == true }
 
-// The key the default server accepts on its Roboflow detection endpoints, and
-// nowhere else. CI sets it from the CLIENT_API_KEY repository secret. Without
-// it the build still succeeds, and Auto-detect uses the on-device detector
-// unless the user saves their own key. Anyone can extract it from an APK,
-// which is why the server scopes it so narrowly: see the README's "The client
-// key".
-val clientApiKey = providers.environmentVariable("DFS_CLIENT_API_KEY").orElse("").get().trim()
-require(clientApiKey.all { it.isLetterOrDigit() || it == '-' || it == '_' }) {
-    "DFS_CLIENT_API_KEY may hold only letters, digits, '-' and '_'."
-}
-
 // An unsigned release build succeeds and produces an artifact nobody can
 // upload, and CI only ever builds debug, so nothing else would catch it.
 gradle.taskGraph.whenReady {
@@ -61,7 +50,6 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "CLIENT_API_KEY", "\"$clientApiKey\"")
     }
 
     signingConfigs {
@@ -103,7 +91,6 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = true
     }
 
     packaging {
@@ -113,9 +100,9 @@ android {
     }
 
     androidResources {
-        // The detector is already compressed; letting aapt deflate it would
-        // force a full decompress into memory before the interpreter can map it.
-        noCompress += "tflite"
+        // ONNX Runtime maps the RF-DETR weights straight out of the APK, which
+        // needs them stored uncompressed.
+        noCompress += "onnx"
     }
 
     sourceSets {
@@ -168,9 +155,7 @@ dependencies {
     implementation(libs.androidx.documentfile)
 
     implementation(libs.mlkit.pose.detection.accurate)
-    implementation(libs.tensorflow.lite)
-    implementation(libs.tensorflow.lite.gpu)
-    implementation(libs.tensorflow.lite.gpu.api)
+    implementation(libs.onnxruntime.android)
 
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
@@ -186,4 +171,16 @@ dependencies {
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+}
+
+// The RF-DETR disc model is not committed; scripts/fetch_disc_model.py
+// downloads it. A release without it would ship an Auto-detect that cannot
+// load, so stop the build instead.
+val discModel = file("src/main/assets/models/rfdetr/weights.onnx")
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    doFirst {
+        check(discModel.exists()) {
+            "Missing ${discModel.path}. Run ROBOFLOW_API_KEY=... python scripts/fetch_disc_model.py first."
+        }
+    }
 }

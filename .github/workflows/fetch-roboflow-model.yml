@@ -1,0 +1,39 @@
+name: Fetch Roboflow Model
+
+permissions:
+  contents: read
+
+# Checks that scripts/fetch_disc_model.py can download the disc model the app
+# ships, and prints what the app's detector needs to agree with: the
+# preprocessing settings and the ONNX graph's inputs and outputs.
+on:
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Download the model
+        env:
+          ROBOFLOW_API_KEY: ${{ secrets.ROBOFLOW_API_KEY }}
+        run: python scripts/fetch_disc_model.py
+      - name: Describe the model
+        run: |
+          python -m pip install --quiet onnx
+          cd disc_golf_android/app/src/main/assets/models/rfdetr
+          cat package.json inference_config.json class_names.txt
+          python - <<'PY'
+          import onnx
+          model = onnx.load("weights.onnx", load_external_data=False)
+          print("opset", [(o.domain, o.version) for o in model.opset_import])
+          for kind, values in (("input", model.graph.input), ("output", model.graph.output)):
+              for value in values:
+                  dims = [d.dim_value or d.dim_param for d in value.type.tensor_type.shape.dim]
+                  print(kind, value.name, onnx.TensorProto.DataType.Name(value.type.tensor_type.elem_type), dims)
+          print("ops", sorted({node.op_type for node in model.graph.node}))
+          PY
