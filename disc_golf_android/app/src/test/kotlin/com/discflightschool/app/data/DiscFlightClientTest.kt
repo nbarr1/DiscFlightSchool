@@ -156,7 +156,7 @@ class DiscFlightClientTest {
     fun `fetchTrack sends the trimmed range and returns the track`() = runBlocking {
         server.enqueue(json("""{"jobId":"one","status":"queued","jobToken":"owner"}"""))
         server.enqueue(json("""{"jobId":"one","status":"processing","framesProcessed":30,"totalFrames":61,"progress":0.49}"""))
-        server.enqueue(json("""{"jobId":"one","status":"complete","framesProcessed":61,"totalFrames":61}"""))
+        server.enqueue(json("""{"jobId":"one","status":"complete","framesProcessed":61,"totalFrames":61,"trackUrl":"/api/disc-flight/jobs/one/track"}"""))
         server.enqueue(
             json(
                 """{"fps":30.0,"frameCount":61,"detections":[
@@ -189,7 +189,7 @@ class DiscFlightClientTest {
     @Test
     fun `fetchTrack leaves out end_ms for a range that runs to the end`() = runBlocking {
         server.enqueue(json("""{"jobId":"one","status":"queued","jobToken":"owner"}"""))
-        server.enqueue(json("""{"jobId":"one","status":"complete"}"""))
+        server.enqueue(json("""{"jobId":"one","status":"complete","trackUrl":"/api/disc-flight/jobs/one/track"}"""))
         server.enqueue(json("""{"fps":30.0,"frameCount":0,"detections":[]}"""))
 
         client.fetchTrack(video.absolutePath, 0, null) { _, _ -> }
@@ -211,6 +211,20 @@ class DiscFlightClientTest {
         }
 
         assertEquals("The selected part of the video has no frames.", error.message)
+    }
+
+    @Test
+    fun `fetchTrack names a server too old to serve tracks`() {
+        server.enqueue(json("""{"jobId":"one","status":"queued","jobToken":"owner"}"""))
+        // What a release from before the track endpoint answers: no trackUrl.
+        server.enqueue(json("""{"jobId":"one","status":"complete","framesProcessed":90,"resultVideoUrl":"/r"}"""))
+
+        val error = assertThrows(IllegalStateException::class.java) {
+            runBlocking { client.fetchTrack(video.absolutePath, 0, null) { _, _ -> } }
+        }
+
+        assertEquals(OUTDATED_SERVER, error.message)
+        assertEquals(2, server.requestCount)
     }
 
     @Test
@@ -264,7 +278,7 @@ class DiscFlightClientTest {
     @Test
     fun `a finished fetchTrack leaves the job alone`() = runBlocking {
         server.enqueue(json("""{"jobId":"one","status":"queued","jobToken":"owner"}"""))
-        server.enqueue(json("""{"jobId":"one","status":"complete"}"""))
+        server.enqueue(json("""{"jobId":"one","status":"complete","trackUrl":"/api/disc-flight/jobs/one/track"}"""))
         server.enqueue(json("""{"fps":30.0,"frameCount":0,"detections":[]}"""))
 
         client.fetchTrack(video.absolutePath, 0, null) { _, _ -> }

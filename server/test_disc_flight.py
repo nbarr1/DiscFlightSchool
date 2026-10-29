@@ -21,8 +21,12 @@ from training_server.disc_flight import (
     EmptyClip,
     JobCapacityError,
     NoAnnotatedFrames,
+    RoboflowUnavailable,
     RoboflowVideoProcessor,
     UnreadableVideo,
+    _RedactKey,
+    _redact_sdk_logs,
+    _safe_error,
 )
 from training_server.storage import FileStorage
 
@@ -383,7 +387,8 @@ class _SdkRoutedSession:
     adding the frame's metadata when the handler takes a second parameter.
     """
 
-    def __init__(self, config, outputs_per_frame, first_frame_id=0):
+    def __init__(self, config, outputs_per_frame, first_frame_id=0, wait_error=None):
+        self.wait_error = wait_error
         self.config = config
         self.outputs_per_frame = outputs_per_frame
         self.first_frame_id = first_frame_id
@@ -398,6 +403,8 @@ class _SdkRoutedSession:
         self.on_error_handlers.append(handler)
 
     def wait(self):
+        if self.wait_error is not None:
+            raise self.wait_error
         requested = [*self.config.data_output, *self.config.stream_output]
         for frame_id, outputs in enumerate(self.outputs_per_frame, start=self.first_frame_id):
             metadata = types.SimpleNamespace(frame_id=frame_id)
@@ -449,7 +456,9 @@ def fake_video_stack(monkeypatch):
             return self
 
         def stream(self, source, workspace, workflow, image_input, config):
-            session = _SdkRoutedSession(config, state["outputs_per_frame"], state["first_frame_id"])
+            session = _SdkRoutedSession(
+                config, state["outputs_per_frame"], state["first_frame_id"], state.get("wait_error")
+            )
             state["sessions"].append(session)
             state["streamed_sources"] = [*state.get("streamed_sources", []), source]
             return session
@@ -620,12 +629,71 @@ def test_a_clip_past_the_end_of_the_upload_is_rejected(tmp_path, fake_video_stac
 
 def test_session_without_frames_names_the_reason(tmp_path, fake_video_stack):
     fake_video_stack["outputs_per_frame"] = []
-    with pytest.raises(NoAnnotatedFrames, match="processed no frames"):
+    with pytest.raises(NoAnnotatedFrames, match="processed no frames.*0 of unknown upload chunks"):
         _run_processor(tmp_path)
 
     fake_video_stack["outputs_per_frame"] = [{"disc_detections": {"predictions": []}}] * 2
     with pytest.raises(NoAnnotatedFrames, match="returned 2 frames without an output_image"):
         _run_processor(tmp_path)
+
+
+def test_a_refused_session_keeps_roboflow_s_answer_without_the_key(tmp_path, fake_video_stack):
+    # What inference-sdk raises when /initialise_webrtc_worker answers 401.
+    fake_video_stack["wait_error"] = RuntimeError(
+        "Failed to initialize WebRTC session (HTTP 401).\n"
+        "API URL: https://serverless.roboflow.com\n"
+        "Error: 401 Client Error for url: https://serverless.roboflow.com/x?api_key=server-only\n"
+        'Response: {"message": "Unauthorized api_key"}'
+    )
+    with pytest.raises(RoboflowUnavailable) as raised:
+        _run_processor(tmp_path)
+    detail = str(raised.value)
+    assert "HTTP 401" in detail and "Unauthorized api_key" in detail
+    assert "server-only" not in detail
+    assert _safe_error(raised.value) == "The disc-flight service could not reach the detector. Try again later."
+
+
+def test_other_sdk_runtime_errors_are_not_relabelled(tmp_path, fake_video_stack):
+    fake_video_stack["wait_error"] = RuntimeError("Cannot use closed WebRTCSession")
+    with pytest.raises(RuntimeError, match="closed WebRTCSession") as raised:
+        _run_processor(tmp_path)
+    assert not isinstance(raised.value, RoboflowUnavailable)
+
+
+def test_failed_jobs_log_their_detail_without_the_key(tmp_path, caplog):
+    class Refused:
+        def __call__(self, *args, **kwargs):
+            raise RoboflowUnavailable("HTTP 403 for ?api_key=server-only: out of credits")
+
+    settings = Settings(app_api_key="test-key", base_dir=tmp_path, roboflow_api_key="server-only")
+    manager = DiscFlightJobManager(settings, Refused)
+    client = TestClient(create_app(settings, FileStorage(settings), manager))
+    with caplog.at_level(logging.ERROR, logger="disc_flight_school.disc_flight"):
+        created = start(client).json()
+        result = wait_for_terminal(client, created["jobId"], created["jobToken"]).json()
+    assert result["error"] == "The disc-flight service could not reach the detector. Try again later."
+    [event] = [json.loads(record.getMessage()) for record in caplog.records]
+    assert event["error"] == "RoboflowUnavailable"
+    assert event["detail"] == "HTTP 403 for ?api_key=[redacted]: out of credits"
+    assert "server-only" not in caplog.text
+
+
+def test_the_sdk_s_own_log_lines_lose_the_key():
+    sdk_logger = logging.getLogger("inference_sdk")
+    handler = logging.Handler()
+    seen = []
+    handler.emit = lambda record: seen.append(record.getMessage())
+    sdk_logger.addHandler(handler)
+    try:
+        _redact_sdk_logs("server-only")
+        _redact_sdk_logs("server-only")  # idempotent per key
+        assert sum(isinstance(f, _RedactKey) for f in handler.filters) == 1
+        logging.getLogger("inference_sdk.webrtc.session").warning(
+            "Failed to fetch TURN config: %s", "/webrtc_turn_config?api_key=server-only"
+        )
+    finally:
+        sdk_logger.removeHandler(handler)
+    assert seen == ["Failed to fetch TURN config: /webrtc_turn_config?api_key=[redacted]"]
 
 
 def test_unreadable_upload_is_rejected_before_a_session_opens(tmp_path, fake_video_stack):

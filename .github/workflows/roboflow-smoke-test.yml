@@ -25,9 +25,6 @@ on:
           Leave empty to process the whole video.
         required: false
         type: string
-  # TEMPORARY: runs this branch's diagnosis once; removed before review.
-  push:
-    branches: [claude/project-thread-my7ej4]
 
 jobs:
   roboflow-smoke-test:

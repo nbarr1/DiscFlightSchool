@@ -214,6 +214,9 @@ class DiscFlightClient(
                     "finalizing" -> onProgress(1.0, "Finishing up...")
                     "complete" -> {
                         finished = true
+                        // Servers from before the track endpoint finish the job
+                        // but have no track to serve, and answer a bare 404.
+                        if (string(body, "trackUrl") == null) error(OUTDATED_SERVER)
                         val track = settings.endpoint("/api/disc-flight/jobs/$id/track")
                             ?: error("The server URL changed while processing.")
                         return try {
@@ -373,6 +376,9 @@ class DiscFlightClient(
 
 /** A response outside 2xx, carrying the server's own message when it sent one. */
 internal class HttpStatusException(val code: Int, message: String) : IOException(message)
+
+internal const val OUTDATED_SERVER =
+    "The server is running an older release without Auto-detect. Update the server, or mark the disc by hand."
 
 /** Retries of one status poll before the job is reported as failed: about 31 s in all. */
 private const val POLL_RETRIES = 5

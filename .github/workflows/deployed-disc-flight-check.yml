@@ -15,9 +15,6 @@ on:
         description: Server to check
         required: false
         default: https://discflightschool-1.onrender.com
-  # TEMPORARY: runs this branch's diagnosis once; removed before review.
-  push:
-    branches: [claude/project-thread-my7ej4]
 
 jobs:
   check:
