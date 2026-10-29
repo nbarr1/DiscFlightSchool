@@ -143,7 +143,7 @@ private fun StatChip(
             Spacer(Modifier.width(4.dp))
             Text(value, fontWeight = FontWeight.Bold)
         }
-        Text(label, style = MaterialTheme.typography.labelSmall, color = AppColors.Muted)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -154,7 +154,7 @@ private fun SpinCard(result: RouletteResult) {
 
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = AppColors.Surface,
+        color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
@@ -192,7 +192,7 @@ private fun SpinCard(result: RouletteResult) {
                     Text(
                         "${result.powerModifier.displayName} · ${result.hindrance.displayName}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = AppColors.Muted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -200,7 +200,7 @@ private fun SpinCard(result: RouletteResult) {
             Text(
                 Formatting.relativeDate(result.timestamp),
                 style = MaterialTheme.typography.labelSmall,
-                color = AppColors.Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

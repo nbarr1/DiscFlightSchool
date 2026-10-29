@@ -36,7 +36,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.discflightschool.app.ui.Formatting
 import com.discflightschool.app.ui.components.AppTopBar
-import com.discflightschool.app.ui.theme.AppColors
 import com.discflightschool.app.video.VideoSurface
 import com.discflightschool.app.video.rememberPlaybackState
 import com.discflightschool.app.video.rememberVideoPlayer
@@ -167,7 +166,7 @@ fun VideoPlaybackScreen(videoPath: String, onBack: () -> Unit) {
                     ) {
                         Text(
                             "${speed}x",
-                            color = AppColors.Accent,
+                            color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold,
                         )
                     }

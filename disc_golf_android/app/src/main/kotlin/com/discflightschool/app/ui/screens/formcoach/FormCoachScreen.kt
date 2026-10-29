@@ -236,7 +236,7 @@ fun FormCoachScreen(
                                 "Mirrors the angle analysis, so the throwing arm is always " +
                                     "scored as the dominant one.",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = AppColors.Muted,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         Switch(

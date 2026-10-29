@@ -213,3 +213,23 @@ The following commands are listed in priority order:
 7. **`/impeccable polish`:** Opt in to predictive Back, make the reduce-motion check update, and do a final pass.
 
 Re-run `/impeccable audit` after the fixes to compare scores.
+
+## Fixes applied
+
+The fixes listed in the following table were made on the same branch as this report. The app wasn't compiled when they were made, because `disc_golf_android/app/build.gradle.kts` on `main` has lost its Kotlin plugin and dependencies, so CI doesn't compile the app's Kotlin sources. The changed files pass a Kotlin syntax check, but the fixes still need a compile and a device check once a separate fix restores the build.
+
+| Finding | What changed |
+|---|---|
+| [P1] Outline contrast | `outline` is `#6B7A99` (3.69:1 on `surface`). The earlier value moves to `outlineVariant`, which dividers use. |
+| [P1] Purple and score contrast | `AppColors.Roulette` is `#CE93D8` (6.65:1 on `surface`) and `AppColors.Bad` is `#FF8A80` (6.96:1). The wheel keeps its deeper purples, which never carry text. Hole-tile stroke counts use `OnSurface`, and the score color stays on the tile's border and tint. |
+| [P1] Keyboard insets | `MainActivity` applies `imePadding()` once at the root, and `ResearchSearchScreen` no longer applies its own. |
+| [P1] Landscape video screens | A shared `VideoWithControls` layout in `Common.kt` puts the controls in a scrolling side column when the window is wider than it is tall and under 480dp tall. The flight player, pose correction, and trim screens use it. |
+| [P2] Canvases without TalkBack | `AngleWaveform` describes its range and current value and offers "Go to the start" and "Go to *phase*" actions. The form history trend chart has a description. The marking and pose canvases say what they're for and point to the frame step buttons. |
+| [P2] Color roles | 109 of the 140 neutral-color reads (`Muted`, `OnSurface`, `Surface`, `Background`, `TopBar`, `Accent`) now go through `MaterialTheme.colorScheme`. The other 31 are in draw scopes, `Modifier.background` and `border` calls, or plain functions, where a composable read isn't allowed. Feature accents and status colors stay as `AppColors` tokens. |
+| [P2] Predictive Back | The manifest sets `android:enableOnBackInvokedCallback="true"`. |
+| [P2] History badge at large font sizes | The score ring is a square of at least 56dp that grows with its content. |
+| [P2] Tablet layout | On windows 840dp and wider, a knowledge base category shows its questions and the selected answer side by side. |
+| [P2] List keys | The phase comparison, phase selector, and knowledge base grids use stable keys. The roulette history, par grid, and hole-tile grid keep index keys. The par and hole grids are positional, and stored history entries have no guaranteed-unique field, so a duplicate key would crash the list. |
+| [P3] Reduce motion | `rememberReduceMotion()` watches the system setting, so it updates while the screen is open. |
+| [P3] Home icon tile | `NavigationCard` draws the feature icon on its own, without the tinted tile. |
+| [P3] Product context | `PRODUCT.md` at the repository root records the product context. It was drafted from the repository, and its inferred facts are marked for the owner to confirm. |

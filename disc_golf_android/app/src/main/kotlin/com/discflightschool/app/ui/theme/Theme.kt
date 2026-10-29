@@ -24,13 +24,15 @@ object AppColors {
     /** Per-feature accents, used on the home cards and section headers. */
     val FlightTracker = Color(0xFF42A5F5)
     val FormCoach = Color(0xFFFFA726)
-    val Roulette = Color(0xFFAB47BC)
+    // A light tone, so the accent passes 4.5:1 as text on Surface and on its own
+    // 20% tint. The wheel keeps its deeper purples, which never carry text.
+    val Roulette = Color(0xFFCE93D8)
     val KnowledgeBase = Color(0xFF26A69A)
 
     /** Status colours shared by score chips, warnings, and quality badges. */
     val Good = Color(0xFF66BB6A)
     val Warning = Color(0xFFFFB74D)
-    val Bad = Color(0xFFEF5350)
+    val Bad = Color(0xFFFF8A80)
 }
 
 private val DiscFlightSchoolColorScheme = darkColorScheme(
@@ -47,7 +49,10 @@ private val DiscFlightSchoolColorScheme = darkColorScheme(
     surfaceVariant = Color(0xFF1E2A4A),
     onSurfaceVariant = AppColors.Muted,
     error = AppColors.Bad,
-    outline = Color(0xFF38455F),
+    // outline marks the edges people must find (text fields, outlined buttons)
+    // and needs 3:1 against surface; outlineVariant is for dividers only.
+    outline = Color(0xFF6B7A99),
+    outlineVariant = Color(0xFF38455F),
 )
 
 @Composable

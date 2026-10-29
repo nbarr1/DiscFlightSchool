@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.discflightschool.app.ui.components.AppTopBar
-import com.discflightschool.app.ui.theme.AppColors
 
 /**
  * The canonical privacy policy copy.
@@ -116,7 +115,7 @@ fun PrivacyPolicyScreen(onBack: () -> Unit) {
             Text(
                 "Last updated: ${PrivacyPolicy.LAST_UPDATED}",
                 style = MaterialTheme.typography.labelMedium,
-                color = AppColors.Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
             Text(PrivacyPolicy.INTRO, style = MaterialTheme.typography.bodyMedium)

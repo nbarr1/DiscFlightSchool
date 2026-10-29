@@ -122,13 +122,13 @@ fun ScorecardScreen(
             Spacer(Modifier.height(8.dp))
             Text(
                 "Started: ${Formatting.dateTime(round.startedAt)}",
-                color = AppColors.Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
             round.completedAt?.let {
                 Text(
                     "Completed: ${Formatting.dateTime(it)}",
-                    color = AppColors.Muted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -220,7 +220,7 @@ fun ScorecardScreen(
                 Spacer(Modifier.height(12.dp))
                 Text(
                     "Average multiplier: ${Formatting.decimal(score.averageMultiplier, 2)}x",
-                    color = AppColors.Muted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(24.dp))
@@ -259,7 +259,7 @@ private fun PlayerScorecard(
                     Text(
                         Formatting.scoreToPar(scoreToPar),
                         fontWeight = FontWeight.Bold,
-                        color = AppColors.Background,
+                        color = MaterialTheme.colorScheme.background,
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }
@@ -271,7 +271,7 @@ private fun PlayerScorecard(
                 Text(
                     "Hole by hole",
                     style = MaterialTheme.typography.labelLarge,
-                    color = AppColors.Muted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold,
                 )
                 Spacer(Modifier.height(12.dp))
@@ -329,18 +329,20 @@ private fun HoleTile(score: HoleScore, onClick: () -> Unit) {
         Text(
             "${score.holeNumber}",
             style = MaterialTheme.typography.labelSmall,
-            color = AppColors.Muted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
             "${score.strokes}",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
-            color = color,
+            // The tile's border and tint carry the score colour; the number
+            // itself stays high-contrast on every tint.
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             "${Formatting.decimal(score.averageMultiplier)}x",
             style = MaterialTheme.typography.labelSmall,
-            color = AppColors.Muted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -348,7 +350,7 @@ private fun HoleTile(score: HoleScore, onClick: () -> Unit) {
 @Composable
 private fun StatColumn(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = AppColors.Muted)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(4.dp))
         Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
     }
@@ -418,7 +420,7 @@ private fun Leaderboard(round: ScoredRound) {
                         Text(
                             "${index + 1}",
                             fontWeight = FontWeight.Bold,
-                            color = AppColors.Background,
+                            color = MaterialTheme.colorScheme.background,
                         )
                     }
                     Spacer(Modifier.width(12.dp))
@@ -437,7 +439,7 @@ private fun Leaderboard(round: ScoredRound) {
                             Text(
                                 "Weighted: ${Formatting.decimal(weighted)}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = AppColors.Muted,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }

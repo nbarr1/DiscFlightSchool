@@ -118,7 +118,7 @@ fun FlightTrackerScreen(onBack: () -> Unit, onVideoSelected: () -> Unit) {
             Text(
                 "Record or upload a video to map the flight path.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = AppColors.Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(24.dp))
 
@@ -147,7 +147,7 @@ fun FlightTrackerScreen(onBack: () -> Unit, onVideoSelected: () -> Unit) {
                     Text(
                         processing.totalFrames?.let { "${processing.framesProcessed} of $it frames" }
                             ?: "${processing.framesProcessed} frames processed",
-                        color = AppColors.Muted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 processing.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -206,7 +206,7 @@ fun FlightTrackerScreen(onBack: () -> Unit, onVideoSelected: () -> Unit) {
                 Text(
                     "Use a different clip",
                     style = MaterialTheme.typography.titleSmall,
-                    color = AppColors.Muted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(12.dp))
             }

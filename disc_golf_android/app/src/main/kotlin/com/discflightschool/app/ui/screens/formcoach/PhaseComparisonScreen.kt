@@ -116,7 +116,7 @@ fun PhaseComparisonScreen(onBack: () -> Unit) {
                 OverallScoreCard(comparisons.map { it.second })
             }
 
-            items(comparisons.size) { index ->
+            items(comparisons.size, key = { comparisons[it].first }) { index ->
                 val (phase, rows) = comparisons[index]
                 PhaseCard(
                     phase = phase,
@@ -181,7 +181,7 @@ private fun OverallScoreCard(phases: List<List<AngleComparison>>) {
                 "Average difference: ${Formatting.degrees(averageDifference)} across " +
                     "${rows.size} angles",
                 style = MaterialTheme.typography.bodySmall,
-                color = AppColors.Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
         }
@@ -221,7 +221,7 @@ private fun PhaseCard(
                 Icon(
                     if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                     contentDescription = if (expanded) "Collapse" else "Expand",
-                    tint = AppColors.Muted,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 

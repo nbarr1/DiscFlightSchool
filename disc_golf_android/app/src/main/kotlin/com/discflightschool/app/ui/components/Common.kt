@@ -1,10 +1,18 @@
 package com.discflightschool.app.ui.components
 
+import android.content.ContentResolver
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -12,7 +20,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
@@ -26,7 +36,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -37,7 +51,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.discflightschool.app.ui.theme.AppColors
+import androidx.compose.ui.unit.min
 
 /** The app bar every screen shares: a title, an optional back arrow, and actions. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,10 +72,10 @@ fun AppTopBar(
         },
         actions = { actions() },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = AppColors.TopBar,
-            titleContentColor = AppColors.OnSurface,
-            navigationIconContentColor = AppColors.OnSurface,
-            actionIconContentColor = AppColors.OnSurface,
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+            actionIconContentColor = MaterialTheme.colorScheme.onSurface,
         ),
     )
 }
@@ -71,14 +85,14 @@ fun AppTopBar(
 fun SectionCard(
     modifier: Modifier = Modifier,
     title: String? = null,
-    accent: Color = AppColors.Accent,
+    accent: Color = MaterialTheme.colorScheme.primary,
     contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable () -> Unit,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        color = AppColors.Surface,
+        color = MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp,
     ) {
         Column(Modifier.padding(contentPadding)) {
@@ -102,7 +116,7 @@ fun LabeledRow(
     label: String,
     value: String,
     icon: ImageVector,
-    iconTint: Color = AppColors.Accent,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, contentDescription = null, tint = iconTint)
@@ -111,7 +125,7 @@ fun LabeledRow(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                color = AppColors.Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 text = value,
@@ -139,7 +153,7 @@ fun EmptyState(
         Icon(
             icon,
             contentDescription = null,
-            tint = AppColors.Muted,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(64.dp),
         )
         Spacer(Modifier.size(16.dp))
@@ -153,7 +167,7 @@ fun EmptyState(
         Text(
             text = message,
             style = MaterialTheme.typography.bodyMedium,
-            color = AppColors.Muted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.size(20.dp))
@@ -169,9 +183,9 @@ fun LoadingState(message: String, modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        CircularProgressIndicator(color = AppColors.Accent)
+        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.size(16.dp))
-        Text(message, color = AppColors.Muted, textAlign = TextAlign.Center)
+        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
     }
 }
 
@@ -210,7 +224,7 @@ fun NavigationCard(
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(12.dp),
-        color = AppColors.Surface,
+        color = MaterialTheme.colorScheme.surface,
         tonalElevation = 4.dp,
         modifier = modifier.fillMaxWidth(),
     ) {
@@ -218,38 +232,33 @@ fun NavigationCard(
             modifier = Modifier.padding(20.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = accent.copy(alpha = 0.2f * contentAlpha),
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = accent.copy(alpha = contentAlpha),
-                    modifier = Modifier
-                        .padding(12.dp)
-                        .size(32.dp),
-                )
-            }
+            // A bare tinted icon: the feature colour identifies the card without
+            // a filled tile around it.
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = accent.copy(alpha = contentAlpha),
+                modifier = Modifier.size(32.dp),
+            )
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = AppColors.OnSurface.copy(alpha = contentAlpha),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha),
                 )
                 Spacer(Modifier.size(4.dp))
                 Text(
                     description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = AppColors.Muted.copy(alpha = contentAlpha),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
                 )
             }
             Icon(
                 Icons.AutoMirrored.Filled.ArrowForwardIos,
                 contentDescription = null,
-                tint = AppColors.Muted.copy(alpha = contentAlpha),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
                 modifier = Modifier.size(16.dp),
             )
         }
@@ -261,16 +270,77 @@ fun NavigationCard(
  *
  * Compose's own transitions follow the animator scale already; a hand-driven
  * [androidx.compose.animation.core.Animatable] spin does not, so the screens
- * that run one check this and skip straight to the result.
+ * that run one check this and skip straight to the result. The setting is
+ * watched rather than read once: the activity handles configuration changes
+ * itself, so a screen can stay composed while the user changes it.
  */
 @Composable
 fun rememberReduceMotion(): Boolean {
-    val context = LocalContext.current
-    return remember(context) {
-        android.provider.Settings.Global.getFloat(
-            context.contentResolver,
-            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
-            1f,
-        ) == 0f
+    val resolver = LocalContext.current.contentResolver
+    var reduceMotion by remember(resolver) { mutableStateOf(readReduceMotion(resolver)) }
+    DisposableEffect(resolver) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                reduceMotion = readReduceMotion(resolver)
+            }
+        }
+        resolver.registerContentObserver(
+            Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE),
+            false,
+            observer,
+        )
+        onDispose { resolver.unregisterContentObserver(observer) }
+    }
+    return reduceMotion
+}
+
+private fun readReduceMotion(resolver: ContentResolver): Boolean =
+    Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+
+/**
+ * A video and its controls: stacked on a tall window, side by side on a short,
+ * wide one.
+ *
+ * A phone in landscape has about 300dp under the top bar, and stacked control
+ * bars fill most of it, which leaves the video (the thing being tapped) as a
+ * strip. Side by side, the video keeps the full height and the controls scroll
+ * in their own column.
+ */
+@Composable
+fun VideoWithControls(
+    modifier: Modifier = Modifier,
+    video: @Composable (Modifier) -> Unit,
+    controls: @Composable ColumnScope.() -> Unit,
+) {
+    BoxWithConstraints(modifier) {
+        if (maxWidth > maxHeight && maxHeight < SHORT_WINDOW_HEIGHT) {
+            val controlsWidth = min(CONTROLS_COLUMN_WIDTH, maxWidth * 0.45f)
+            Row(Modifier.fillMaxSize()) {
+                video(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                )
+                Column(
+                    modifier = Modifier
+                        .width(controlsWidth)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState()),
+                    content = controls,
+                )
+            }
+        } else {
+            Column(Modifier.fillMaxSize()) {
+                video(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                )
+                controls()
+            }
+        }
     }
 }
+
+private val SHORT_WINDOW_HEIGHT = 480.dp
+private val CONTROLS_COLUMN_WIDTH = 360.dp
