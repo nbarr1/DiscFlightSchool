@@ -16,6 +16,11 @@ updates:
     directory: /server
     schedule:
       interval: weekly
+    ignore:
+      # Raising the numpy floor to 2.5 breaks installs on Python 3.11, which
+      # the server image still uses. Drop this once the image moves to 3.12.
+      - dependency-name: numpy
+        versions: [">=2.5"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
