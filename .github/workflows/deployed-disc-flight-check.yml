@@ -1,0 +1,52 @@
+name: Deployed Disc-Flight Check
+
+permissions:
+  contents: read
+
+# Manual only: every run sends a short synthetic clip through the deployed
+# server's /api/disc-flight endpoints, which spends Roboflow credits there.
+# Unlike the Roboflow Workflow Smoke Test, which calls Roboflow from the
+# runner, this exercises the server the app talks to, with its own key,
+# dependencies, and network.
+on:
+  workflow_dispatch:
+    inputs:
+      server_url:
+        description: Server to check
+        required: false
+        default: https://discflightschool-1.onrender.com
+  # TEMPORARY: runs this branch's diagnosis once; removed before review.
+  push:
+    branches: [claude/project-thread-my7ej4]
+
+jobs:
+  check:
+    name: Deployed server check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Prepare the test video
+        run: |
+          python -m pip install "opencv-python-headless>=4.10,<5.0" "numpy>=2.0,<2.4"
+          python scripts/make_synthetic_throw.py "${RUNNER_TEMP}/throw.mp4"
+
+      # CLIENT_API_KEY is the key the release build ships, so this checks the
+      # same key the app sends.
+      - name: Run a job on the deployed server
+        env:
+          DISC_FLIGHT_SERVER_URL: ${{ inputs.server_url || 'https://discflightschool-1.onrender.com' }}
+          DISC_FLIGHT_API_KEY: ${{ secrets.CLIENT_API_KEY }}
+        run: |
+          if [ -z "$DISC_FLIGHT_API_KEY" ]; then
+            echo "::error::The CLIENT_API_KEY repository secret is not set."
+            exit 1
+          fi
+          python scripts/check_deployed_disc_flight.py "${RUNNER_TEMP}/throw.mp4"
