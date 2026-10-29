@@ -19,4 +19,4 @@ pytest>=8.0.0
 # import TestClient` raises at import time without this. The server itself
 # never imports it, which is why it belongs here rather than in
 # requirements.txt.
-httpx2>=2.13.1,<3.0.0
+httpx2>=2.16.0,<3.0.0
