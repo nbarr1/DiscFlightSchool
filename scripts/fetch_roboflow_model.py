@@ -31,17 +31,20 @@ def fetch_workflow(api_key: str, workflow_id: str) -> dict:
     return json.loads(config) if isinstance(config, str) else config
 
 
-def model_ids(node) -> list[str]:
+def model_ids(node, defaults: dict[str, object]) -> list[str]:
+    """Every model_id in the spec, with `$inputs.x` resolved to the input's default."""
     found = []
     if isinstance(node, dict):
         for key, value in node.items():
             if key == "model_id" and isinstance(value, str):
-                found.append(value)
+                if value.startswith("$inputs."):
+                    value = defaults.get(value.removeprefix("$inputs."), value)
+                found.append(str(value))
             else:
-                found += model_ids(value)
+                found += model_ids(value, defaults)
     elif isinstance(node, list):
         for value in node:
-            found += model_ids(value)
+            found += model_ids(value, defaults)
     return found
 
 
@@ -53,14 +56,23 @@ def main() -> int:
     for workflow_id in WORKFLOWS:
         spec = fetch_workflow(api_key, workflow_id)
         (out / f"workflow-{workflow_id}.json").write_text(json.dumps(spec, indent=2))
-        print(f"Workflow {workflow_id}: steps", [step.get("type") for step in spec.get("steps", [])])
-        ids += model_ids(spec)
+        print(f"Workflow {workflow_id}:")
+        print(json.dumps(spec, indent=2))
+        definition = spec.get("specification", spec)
+        defaults = {
+            item["name"]: item["default_value"]
+            for item in definition.get("inputs", [])
+            if "default_value" in item
+        }
+        ids += model_ids(spec, defaults)
     ids = sorted(set(ids))
     print("Model IDs:", ids)
 
     from inference import get_model
 
     for model_id in ids:
+        if model_id.startswith("$"):
+            continue
         model = get_model(model_id=model_id, api_key=api_key)
         print(f"Loaded {model_id}: {type(model).__name__}")
         for attribute in ("cache_dir", "model_path", "onnx_path"):
