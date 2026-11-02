@@ -136,7 +136,7 @@ The recommended next steps are to fix the two contrast tokens in `Theme.kt`, whi
 
 - **Location:** `AndroidManifest.xml:23` (no `android:enableOnBackInvokedCallback`).
 - **Category:** Platform conformance
-- **Impact:** Back works on every screen, but the system's predictive back-to-home and cross-activity preview doesn't play, so the app feels a step behind other apps on Android 14 and later. Raising `targetSdk` (it's 34 today) is likely to make the predictive behavior the default, so it's worth testing before that change rather than after.
+- **Impact:** Back works on every screen, but the system's predictive back-to-home and cross-activity preview doesn't play, so the app feels a step behind other apps on Android 14 and later. Raising `targetSdk` (it was 34 when this audit ran, and `app/build.gradle.kts` has since raised it to 37) is likely to make the predictive behavior the default, so it's worth testing before that change rather than after.
 - **Guideline:** Android reference: "Honor the predictive Back gesture and Back button; never trap the user or hijack the gesture."
 - **Recommendation:** Add `android:enableOnBackInvokedCallback="true"` to the `<application>` tag. Then walk the `BackHandler` flows in `FlightTrackerScreen`, `VideoGalleryScreen`, and `PoseCorrectionScreen`, because those intercept Back on purpose.
 - **Suggested command:** `/impeccable polish`
