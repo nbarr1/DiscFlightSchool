@@ -20,7 +20,7 @@ The Gradle project has two modules:
   roulette, the knowledge-base search,
   the server-URL allow-listing, and every persisted model. Because it is
   Android-free, all of it runs under a normal JVM test task.
-- **`:app`** — the Android module: Compose UI, ML Kit and TensorFlow Lite
+- **`:app`** — the Android module: Compose UI, ML Kit and ONNX Runtime
   integration, Media3 playback and export, frame extraction, storage, and the
   network client.
 
@@ -39,11 +39,11 @@ themselves carry only identifiers. Persistence is `SharedPreferences`,
 
 Important client facts:
 
-- Gradle project: `disc_golf_android/`, modules `:app` and `:core`, built with the committed Gradle wrapper (8.11.1).
-- Android Gradle Plugin `8.9.1`, Kotlin `2.1.0`, Compose BOM `2024.12.01`.
+- Gradle project: `disc_golf_android/`, modules `:app` and `:core`, built with the committed Gradle wrapper (9.3.1).
+- Android Gradle Plugin `9.1.0`, Kotlin `2.4.21`, Compose BOM `2026.09.00`, all pinned in `disc_golf_android/gradle/libs.versions.toml`. AGP 9 compiles Kotlin itself, so the Kotlin Android plugin isn't applied.
 - Android application ID: `com.discflightschool.app`.
 - `versionCode = 1`, `versionName = "1.0.0"`, declared in `disc_golf_android/app/build.gradle.kts`.
-- `compileSdk = 36`, `targetSdk = 36`, `minSdk = 24`.
+- `compileSdk = 37`, `targetSdk = 37`, `minSdk = 24`.
 - Java/Kotlin target 17, with core library desugaring so `java.time` works at API 24.
 - Release builds require a complete `disc_golf_android/key.properties` signing config; unsigned local testing should use debug builds.
 - Bundled runtime assets live in `disc_golf_android/app/src/main/assets/`: `data/pro_baseline_db.json`, `data/knowledge_base.json`, and the disc model in `models/rfdetr/` (`weights.onnx`, `inference_config.json`, `class_names.txt`, `package.json`).
@@ -129,8 +129,8 @@ The root `docker-compose.yml` defines services for:
 DiscFlightSchool/
 ├── .github/workflows/          # GitHub Actions for the Android build/tests and server tests
 ├── disc_golf_android/          # Android application (Gradle)
-│   ├── app/                    # Android module: Compose UI, ML Kit, TFLite, Media3
-│   │   └── src/main/assets/    # JSON data and the bundled TFLite detector
+│   ├── app/                    # Android module: Compose UI, ML Kit, ONNX Runtime, Media3
+│   │   └── src/main/assets/    # JSON data and the downloaded RF-DETR disc model
 │   ├── core/                   # Pure Kotlin/JVM module: detection, tracking, posture,
 │   │                           #   scoring, and the persisted models, with its tests
 │   └── art/                    # Source artwork for the launcher icon and basket drawable
@@ -169,8 +169,9 @@ APP_API_KEY=test-key ./scripts/test_server.sh
 
 ### Roboflow disc-flight processing
 
-The Android Flight Tracker can preview an imported/recorded throw and send it
-to the existing FastAPI server. The server, never the application, reads
+The server can process a throw video with the hosted Roboflow Workflow. The
+Android app doesn't use this path: its Auto-detect runs the same Workflow on
+the device. The server, never the application, reads
 `ROBOFLOW_API_KEY`. It sends the entire video in frame order through one
 persistent WebRTC session for workspace `disc-golf-tracer`, Workflow
 `disc-golf-flight-tracker-1789645514948`, and image input `image`. The
@@ -428,7 +429,7 @@ rebuild.
 Prerequisites:
 
 1. Java 17.
-2. Android SDK with compile SDK 36 and build tools installed (`ANDROID_HOME`, or a `local.properties` naming `sdk.dir`).
+2. Android SDK with compile SDK 37 and build tools installed (`ANDROID_HOME`, or a `local.properties` naming `sdk.dir`).
 3. Network access for first-time dependency resolution unless dependencies are already cached.
 4. The disc model, downloaded once with the Roboflow workspace's private API key (see "The on-device disc model"):
 

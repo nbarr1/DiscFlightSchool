@@ -19,7 +19,7 @@ Disc Flight School turns a phone video of a throw into something a player can le
 
 ## Positioning
 
-The app analyzes on the device: disc tracking uses an on-device YOLO detector with an optional server fallback, and pose analysis uses ML Kit. Form feedback compares the player's joint angles at each throw phase with a pro baseline database, and knowledge base answers cite the studies behind them. _(inferred)_
+The app analyzes on the device: disc tracking runs the Roboflow RF-DETR Small model with ONNX Runtime and an OC-SORT tracker, with no server call, and pose analysis uses ML Kit. Form feedback compares the player's joint angles at each throw phase with a pro baseline database, and knowledge base answers cite the studies behind them. _(inferred)_
 
 ## Operating Context
 

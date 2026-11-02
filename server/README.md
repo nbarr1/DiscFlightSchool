@@ -36,7 +36,7 @@ This directory contains the FastAPI training/model-distribution server for DiscF
 | `OBJECT_STORAGE_SECRET_KEY` | No | none | Object storage secret key. |
 | `OBJECT_STORAGE_SECURE` | No | `true` | Whether the object storage client uses HTTPS. |
 | `ROBOFLOW_API_KEY` | No | none | Server-side Roboflow key for the disc-flight video jobs and `training_server/disc_detection.py`, which sends it only in the `Authorization: Bearer` header. |
-| `CLIENT_API_KEY` | No | none | A second key, built into the Android app, that the Roboflow endpoints (`/api/disc-flight/jobs...` and `/api/disc-detection`) accept in `X-App-Key` in place of `APP_API_KEY`. The training and export endpoints never accept it. Leave it unset to require `APP_API_KEY` everywhere. |
+| `CLIENT_API_KEY` | No | none | A second key that earlier Android builds shipped with (current builds run disc detection on the device and send no key), which the Roboflow endpoints (`/api/disc-flight/jobs...` and `/api/disc-detection`) accept in `X-App-Key` in place of `APP_API_KEY`. The training and export endpoints never accept it. Leave it unset to require `APP_API_KEY` everywhere. |
 | `UPLOAD_API_KEY` | No | none | A key that opens only `POST /api/training/upload`. Contributors can add samples with it but can't export the dataset, read stats, or start training. |
 | `DISC_FLIGHT_MAX_ACTIVE_JOBS` | No | `3` | Video jobs running at once, across every caller. A new job past this gets 429 with `Retry-After`, before its upload is copied. |
 | `CLIENT_RATE_LIMIT_PER_HOUR` | No | `30` | Roboflow requests (new video jobs plus single-image detections) one caller IP may make with `CLIENT_API_KEY` in any hour. `APP_API_KEY` requests aren't counted. |

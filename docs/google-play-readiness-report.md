@@ -25,8 +25,8 @@ This audit mirrors the format and scope of TennisScoring's `play_store_readiness
 > for what's now checked off. The findings and analysis in this document are
 > left as originally written for the audit trail; only the checklist reflects
 > current state. Still open: the public privacy-policy URL + Play Console Data
-> Safety form (owner/Console access), the signed release `.aab` pipeline
-> (needs a real keystore), and the `CAMERA` permission device verification.
+> Safety form (owner/Console access), the upload keystore and secrets for
+> the signed release job, which exists, and the `CAMERA` permission device verification.
 
 ---
 
@@ -148,7 +148,7 @@ The blocking gaps are almost entirely **compliance/store-listing gaps**, not cod
 
 ### ⚠️ High Priority
 - [x] **Explicitly pin `targetSdk = 35`** in `android/app/build.gradle.kts`; CI pins `flutter-version: '3.47.0'` in both workflows.
-- [ ] **Add a signed release `.aab` CI pipeline** (`flutter build appbundle --release` + keystore secrets) — none exists today; `build.yml` only produces a debug APK. Needs an owner-supplied keystore.
+- [x] **Add a signed release `.aab` CI pipeline** — `.github/workflows/release-build.yml`'s manual `signed-bundle` job builds and signs `app-release.aab`. It still needs the owner-supplied keystore and its secrets (see `README.md`).
 - [x] **Set `android:allowBackup="false"`** — set in `AndroidManifest.xml`, alongside a `network_security_config.xml` reference.
 - [ ] **Verify the `CAMERA` permission's actual runtime-prompt behavior** against `image_picker`'s documented interaction — still declared, still needs a real device to verify/decide whether to remove.
 - [x] **Document the `pubspec.yaml` build-number bump convention** — in root `README.md`, "Bumping the app version for a release."

@@ -21,13 +21,13 @@ accuracy on real footage. The optional `clip_ms` input, such as `500,2500`,
 processes only that range, as the app's Auto-detect does. The `video_url` has
 to download the file itself: a share page such as a Google Drive `.../view`
 link downloads HTML, which the script rejects before calling Roboflow. Confirm
-the generated MP4 opens, then verify on a device: pick and record, preview,
-process, progress/indeterminate processing, playback, sharing, retry,
-cancellation, and duplicate-tap prevention on the Flight Tracker screen, and
-Auto-detect on a trimmed clip in the flight player, including its fallback to
-the on-device detector with the network off. Do not mark the mobile
-integration verified until the annotated result plays there and Auto-detect
-draws the trail.
+the generated MP4 opens.
+
+The Android app doesn't call these server endpoints: Auto-detect runs the
+same Workflow on the device. On a device, verify pick and record, trimming,
+and Auto-detect on a trimmed clip in the flight player, with the network off
+to confirm nothing depends on the server. Do not mark the mobile integration
+verified until Auto-detect draws the trail there.
 
 ## Roboflow single-image detection
 
