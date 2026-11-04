@@ -25,7 +25,7 @@ import com.discflightschool.app.ui.components.AppTopBar
  */
 object PrivacyPolicy {
 
-    const val LAST_UPDATED = "October 2026"
+    const val LAST_UPDATED = "November 2026"
 
     const val INTRO = "Disc Flight School is a coaching and analysis tool. This policy " +
         "explains what the app accesses on your device, what it sends elsewhere, and " +
@@ -37,35 +37,26 @@ object PrivacyPolicy {
         Section(
             title = "Camera and photo library access",
             body = "Disc Flight School asks for camera access so you can record your " +
-                "throws for Form Coach and Flight Tracker. Your device's camera app makes " +
-                "the recording, including its sound. The app uses the system photo picker " +
-                "so you can choose an existing video, and saves analyzed videos to your " +
-                "gallery. " +
-                "By default, recorded video, extracted frames, and analysis results stay on " +
-                "your device. Images leave your device only if you opt in to training data " +
-                "collection (below).",
+                "throws for Form Coach. Your device's camera app makes the recording, " +
+                "including its sound. The app uses the system photo picker so you can " +
+                "choose an existing video. Recorded video, extracted frames, and analysis " +
+                "results stay on your device.",
         ),
         Section(
             title = "On-device analysis",
-            body = "Pose detection (Form Coach) and disc tracking in the Flight Tracker, both " +
-                "Auto-detect and marking the disc by hand, run entirely on your device, using " +
-                "machine-learning models bundled with the app. Your video is not sent to a " +
+            body = "Pose detection (Form Coach) runs entirely on your device, using a " +
+                "machine-learning model bundled with the app. Your video is not sent to a " +
                 "server for analysis. " +
                 "Questions you ask in the Knowledge Base are answered from the research " +
                 "bundled with the app and never leave your device.",
         ),
         Section(
-            title = "Optional: training data collection",
-            body = "In Training Settings, you can opt in to \"Help improve disc tracking.\" " +
-                "When enabled, still frames you manually mark during flight tracking are " +
-                "saved on your device. You can then choose to upload them to the Disc Flight " +
-                "School training server to help improve the disc-detection model, or export " +
-                "them yourself as a ZIP file to share however you like. Uploads only happen " +
-                "when you tap \"Upload,\" only over an encrypted (HTTPS) connection, and only " +
-                "once you have set a training API key. Uploaded images are used to train " +
-                "future versions of the on-device detection model. \"Clear all training data\" " +
-                "in Training Settings deletes the locally stored copies immediately, but does " +
-                "not retract copies already uploaded to the server.",
+            title = "Training data from earlier versions",
+            body = "Earlier versions of the app let you opt in to uploading still frames " +
+                "from flight tracking to the Disc Flight School training server, to help " +
+                "improve a disc-detection model. This version doesn't collect or upload " +
+                "training data. Frames uploaded from an earlier version remain on the " +
+                "training server until you ask for them to be deleted (see Contact).",
         ),
         Section(
             title = "What we don't collect",
@@ -75,11 +66,9 @@ object PrivacyPolicy {
         ),
         Section(
             title = "Data retention and deletion",
-            body = "Locally stored recordings, analysis results, and training samples remain " +
-                "on your device until you delete them yourself (via your device's " +
-                "storage/gallery, or \"Clear all training data\" in Training Settings) or " +
-                "uninstall the app. Training samples you have uploaded are retained on the " +
-                "training server to improve future model versions.",
+            body = "Locally stored recordings and analysis results remain on your device " +
+                "until you delete them yourself (via your device's storage or gallery) or " +
+                "uninstall the app.",
         ),
         Section(
             title = "Contact",

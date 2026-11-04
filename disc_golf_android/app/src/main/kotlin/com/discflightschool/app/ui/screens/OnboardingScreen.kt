@@ -29,7 +29,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.Casino
-import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -67,8 +66,8 @@ private val onboardingPages = listOf(
     OnboardingPage(
         icon = null,
         title = "Welcome to\nDisc Flight School",
-        body = "Your personal disc golf coach — analyze your form, track disc flight, " +
-            "and practice smarter with guided challenges.",
+        body = "Your personal disc golf coach — analyze your form and practice " +
+            "smarter with guided challenges.",
     ),
     OnboardingPage(
         icon = Icons.Default.AccessibilityNew,
@@ -76,13 +75,6 @@ private val onboardingPages = listOf(
         body = "Record a throw and let on-device pose detection score your technique. " +
             "Compare against pro baselines phase by phase and get targeted cues to fix " +
             "the angles that matter most.",
-    ),
-    OnboardingPage(
-        icon = Icons.Default.TrackChanges,
-        title = "Flight Tracker",
-        body = "Let the detector find the disc, or place markers yourself frame by frame " +
-            "to map the exact flight path. Zoom in for precise placement, draw a target " +
-            "line, and export the trajectory.",
     ),
     OnboardingPage(
         icon = Icons.Default.Casino,

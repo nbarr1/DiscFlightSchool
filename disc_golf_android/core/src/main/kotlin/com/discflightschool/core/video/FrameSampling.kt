@@ -1,4 +1,4 @@
-package com.discflightschool.core.detection
+package com.discflightschool.core.video
 
 import kotlin.math.floor
 import kotlin.math.roundToLong

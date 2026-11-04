@@ -10,8 +10,8 @@ import androidx.compose.ui.graphics.Color
 /**
  * The app runs dark at every system setting.
  *
- * Flight paths and pose skeletons are drawn as bright strokes over video, and a
- * light chrome around them washes out the contrast the overlays depend on.
+ * Pose skeletons are drawn as bright strokes over video, and a light chrome
+ * around them washes out the contrast the overlays depend on.
  */
 object AppColors {
     val Background = Color(0xFF1A1A2E)

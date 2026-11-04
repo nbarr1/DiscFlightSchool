@@ -6,18 +6,13 @@ import android.net.Uri
  * Every screen in the app, and the arguments needed to reach it.
  *
  * Only identifiers and small values travel through the back stack. A pose
- * analysis or a full flight path is held in [WorkbenchState] instead: those
- * objects are large, are edited in place across several screens, and would not
- * survive a route encode/decode round trip intact.
+ * analysis is held in [WorkbenchState] instead: it is large, is edited in
+ * place across several screens, and would not survive a route encode/decode
+ * round trip intact.
  */
 object Destinations {
     const val ONBOARDING = "onboarding"
     const val HOME = "home"
-
-    const val FLIGHT_TRACKER = "flight_tracker"
-    const val FLIGHT_TRIM = "flight_trim"
-    const val FLIGHT_PLAYER = "flight_player"
-    const val VIDEO_GALLERY = "video_gallery"
 
     const val FORM_COACH = "form_coach"
     const val FORM_TRIM = "form_trim"
@@ -34,7 +29,6 @@ object Destinations {
 
     const val KNOWLEDGE_BASE = "knowledge_base"
     const val KNOWLEDGE_SEARCH = "knowledge_search"
-    const val TRAINING_SETTINGS = "training_settings"
     const val PRIVACY_POLICY = "privacy_policy"
 
     /** Correcting the pose on one frame, by its index in the analysis. */

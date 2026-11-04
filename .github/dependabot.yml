@@ -1,6 +1,5 @@
-# Weekly update PRs for every dependency ecosystem in the repo. pip-audit in
-# dependency-audit.yml only covers the server's Python packages; this also
-# covers the Android app's Gradle dependencies and the workflows' actions.
+# Weekly update PRs for every dependency ecosystem in the repo: the Android
+# app's Gradle dependencies and the workflows' actions.
 version: 2
 updates:
   - package-ecosystem: gradle
@@ -12,19 +11,6 @@ updates:
         patterns: ["androidx.*"]
       kotlin:
         patterns: ["org.jetbrains.kotlin*", "org.jetbrains.kotlinx*"]
-  - package-ecosystem: pip
-    directory: /server
-    schedule:
-      interval: weekly
-    ignore:
-      # inference-sdk 1.6.x requires numpy<2.4, so a numpy 2.4 or later floor
-      # can't resolve. Drop this once inference-sdk allows newer numpy.
-      - dependency-name: numpy
-        versions: [">=2.4"]
-      # numpy 2.5 needs Python 3.12 and inference-sdk caps it below 2.4
-      # (see server/requirements.txt), so a raised floor only breaks installs.
-      - dependency-name: numpy
-        versions: [">=2.5"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

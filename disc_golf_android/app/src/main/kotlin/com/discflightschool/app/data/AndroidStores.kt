@@ -8,10 +8,8 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.discflightschool.core.data.FlutterPreferences
 import com.discflightschool.core.data.KeyValueStore
-import com.discflightschool.core.data.ManifestStore
 import com.discflightschool.core.data.SecretStore
 import java.io.ByteArrayInputStream
-import java.io.File
 import java.io.InputStream
 import java.io.ObjectInputStream
 import java.io.ObjectStreamClass
@@ -111,21 +109,6 @@ class EncryptedSecretStore(context: Context) : SecretStore {
 
     private companion object {
         const val TAG = "EncryptedSecretStore"
-    }
-}
-
-/** [ManifestStore] backed by a file in the app's private storage. */
-class FileManifestStore(private val file: File) : ManifestStore {
-
-    override fun read(): String? = runCatching {
-        if (file.exists()) file.readText() else null
-    }.getOrNull()
-
-    override fun write(content: String) {
-        runCatching {
-            file.parentFile?.mkdirs()
-            file.writeText(content)
-        }.onFailure { Log.w("FileManifestStore", "Failed to write ${file.name}", it) }
     }
 }
 

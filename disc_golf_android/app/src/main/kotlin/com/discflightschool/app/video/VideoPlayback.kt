@@ -137,9 +137,9 @@ fun rememberVideoAspectRatio(player: ExoPlayer): Float? {
  * The video, letterboxed inside [modifier], with [content] drawn over exactly
  * the image and nothing else.
  *
- * Overlays and taps have to share the video's coordinate space: a skeleton or a
- * flight path is stored in normalized 0-1 image coordinates, and a tap is read
- * back the same way. Drawing them over the full parent instead would stretch
+ * Overlays and taps have to share the video's coordinate space: a skeleton is
+ * stored in normalized 0-1 image coordinates, and a tap is read back the same
+ * way. Drawing them over the full parent instead would stretch
  * every position into the letterbox bars whenever the clip's aspect ratio
  * differs from the space on screen, and would map taps to the wrong pixel.
  */
