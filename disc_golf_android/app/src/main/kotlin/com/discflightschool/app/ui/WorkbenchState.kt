@@ -3,17 +3,15 @@ package com.discflightschool.app.ui
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.discflightschool.core.detection.FlightTrackingResult
 import com.discflightschool.core.model.FormAnalysis
 import com.discflightschool.core.model.ThrowTypes
-import com.discflightschool.core.tracking.TrackerSeedPoint
 
 /**
  * The clip being worked on and everything measured from it.
  *
- * Form Coach and Flight Tracker are each several screens deep — trim, then
- * mark, then analyse, then compare — all operating on one video. Passing a
- * whole analysis or flight path through navigation arguments would mean
+ * Form Coach is several screens deep — trim, then mark, then analyse, then
+ * compare — all operating on one video. Passing a whole analysis through
+ * navigation arguments would mean
  * serializing it at every step; holding it here keeps the routes to plain
  * identifiers and keeps a back-navigation from discarding work.
  *
@@ -62,30 +60,5 @@ class WorkbenchState {
         analysis = null
         proPhaseAngles = emptyMap()
         proDataWarnings = emptyList()
-    }
-
-    // ── Flight Tracker ───────────────────────────────────────────────────
-
-    var flightVideoPath by mutableStateOf<String?>(null)
-
-    /** The trimmed range every tracker frame index is relative to. */
-    var flightTrimStartMs by mutableStateOf(0L)
-    var flightTrimEndMs by mutableStateOf<Long?>(null)
-
-    var flightResult by mutableStateOf<FlightTrackingResult?>(null)
-
-    /** User-placed keyframes, kept so a converted auto path stays editable. */
-    var seedPoints by mutableStateOf<List<TrackerSeedPoint>>(emptyList())
-
-    /** True when the current path came from the detector rather than by hand. */
-    var flightWasAutoDetected by mutableStateOf(false)
-
-    fun startFlightSession(videoPath: String) {
-        flightVideoPath = videoPath
-        flightTrimStartMs = 0
-        flightTrimEndMs = null
-        flightResult = null
-        seedPoints = emptyList()
-        flightWasAutoDetected = false
     }
 }

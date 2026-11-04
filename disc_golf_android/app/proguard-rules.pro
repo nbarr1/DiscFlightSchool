@@ -1,6 +1,3 @@
-# ONNX Runtime's native library builds its Java result objects through JNI.
--keep class ai.onnxruntime.** { *; }
-
 # ML Kit pose detection ships its model through reflective loaders.
 -keep class com.google.mlkit.** { *; }
 -keep class com.google.android.gms.internal.mlkit_vision_pose** { *; }

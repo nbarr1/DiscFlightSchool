@@ -1,7 +1,5 @@
 package com.discflightschool.app.ui
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavType
@@ -12,8 +10,6 @@ import androidx.navigation.navArgument
 import com.discflightschool.app.LocalAppContainer
 import com.discflightschool.app.ui.screens.HomeScreen
 import com.discflightschool.app.ui.screens.OnboardingScreen
-import com.discflightschool.app.ui.screens.flighttracker.FlightPlayerScreen
-import com.discflightschool.app.ui.screens.flighttracker.FlightTrackerScreen
 import com.discflightschool.app.ui.screens.formcoach.FormCoachScreen
 import com.discflightschool.app.ui.screens.formcoach.FormHistoryScreen
 import com.discflightschool.app.ui.screens.formcoach.PhaseComparisonScreen
@@ -21,7 +17,6 @@ import com.discflightschool.app.ui.screens.formcoach.PhaseFrameSelectorScreen
 import com.discflightschool.app.ui.screens.formcoach.PoseCorrectionScreen
 import com.discflightschool.app.ui.screens.formcoach.PostureAnalysisScreen
 import com.discflightschool.app.ui.screens.formcoach.VideoTrimScreen
-import com.discflightschool.app.ui.screens.gallery.VideoGalleryScreen
 import com.discflightschool.app.ui.screens.knowledge.ArticleDetailScreen
 import com.discflightschool.app.ui.screens.knowledge.CategoryScreen
 import com.discflightschool.app.ui.screens.knowledge.KnowledgeBaseScreen
@@ -32,13 +27,12 @@ import com.discflightschool.app.ui.screens.roulette.RouletteScreen
 import com.discflightschool.app.ui.screens.roulette.ScorecardScreen
 import com.discflightschool.app.ui.screens.roulette.StartRoundScreen
 import com.discflightschool.app.ui.screens.settings.PrivacyPolicyScreen
-import com.discflightschool.app.ui.screens.settings.TrainingSettingsScreen
 
 /**
  * The single navigation graph for the app.
  *
  * Three of the flows replace the screen they came from rather than stacking on
- * it — trim to tracker, round setup to play, play to scorecard — because going
+ * it — trim to phase selection, round setup to play, play to scorecard — because going
  * back to a trimmer whose result has already been consumed, or to a round that
  * has just been scored, only ever produces a confusing half-state.
  */
@@ -64,50 +58,11 @@ fun AppNavHost(startOnHome: Boolean) {
 
         composable(Destinations.HOME) {
             HomeScreen(
-                onOpenFlightTracker = { navController.navigate(Destinations.FLIGHT_TRACKER) },
                 onOpenFormCoach = { navController.navigate(Destinations.FORM_COACH) },
                 onOpenRoulette = { navController.navigate(Destinations.ROULETTE) },
                 onOpenKnowledgeBase = { navController.navigate(Destinations.KNOWLEDGE_BASE) },
-                onOpenGallery = { navController.navigate(Destinations.VIDEO_GALLERY) },
-                onOpenSettings = { navController.navigate(Destinations.TRAINING_SETTINGS) },
+                onOpenPrivacyPolicy = { navController.navigate(Destinations.PRIVACY_POLICY) },
             )
-        }
-
-        // ── Flight Tracker ───────────────────────────────────────────────
-
-        composable(Destinations.FLIGHT_TRACKER) {
-            FlightTrackerScreen(
-                onBack = { navController.popBackStack() },
-                onVideoSelected = { navController.navigate(Destinations.FLIGHT_TRIM) },
-            )
-        }
-
-        composable(Destinations.FLIGHT_TRIM) {
-            WithVideo(workbench.flightVideoPath, onMissing = { navController.popBackStack() }) { path ->
-                VideoTrimScreen(
-                    videoPath = path,
-                    title = "Trim throw",
-                    confirmLabel = "Track flight",
-                    confirmIcon = Icons.Default.TrackChanges,
-                    nextStepHint = { "Next, choose how to find the disc" },
-                    onBack = { navController.popBackStack() },
-                    onConfirm = { startMs, endMs, _ ->
-                        workbench.flightTrimStartMs = startMs
-                        workbench.flightTrimEndMs = endMs
-                        navController.navigate(Destinations.FLIGHT_PLAYER) {
-                            popUpTo(Destinations.FLIGHT_TRIM) { inclusive = true }
-                        }
-                    },
-                )
-            }
-        }
-
-        composable(Destinations.FLIGHT_PLAYER) {
-            FlightPlayerScreen(onBack = { navController.popBackStack() })
-        }
-
-        composable(Destinations.VIDEO_GALLERY) {
-            VideoGalleryScreen(onBack = { navController.popBackStack() })
         }
 
         // ── Form Coach ───────────────────────────────────────────────────
@@ -236,7 +191,7 @@ fun AppNavHost(startOnHome: Boolean) {
             RouletteHistoryScreen(onBack = { navController.popBackStack() })
         }
 
-        // ── Knowledge base and settings ──────────────────────────────────
+        // ── Knowledge base and privacy policy ──────────────────────────────────
 
         composable(Destinations.KNOWLEDGE_BASE) {
             KnowledgeBaseScreen(
@@ -273,13 +228,6 @@ fun AppNavHost(startOnHome: Boolean) {
 
         composable(Destinations.KNOWLEDGE_SEARCH) {
             ResearchSearchScreen(onBack = { navController.popBackStack() })
-        }
-
-        composable(Destinations.TRAINING_SETTINGS) {
-            TrainingSettingsScreen(
-                onBack = { navController.popBackStack() },
-                onOpenPrivacyPolicy = { navController.navigate(Destinations.PRIVACY_POLICY) },
-            )
         }
 
         composable(Destinations.PRIVACY_POLICY) {

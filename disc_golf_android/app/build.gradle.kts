@@ -99,12 +99,6 @@ android {
         }
     }
 
-    androidResources {
-        // ONNX Runtime maps the RF-DETR weights straight out of the APK, which
-        // needs them stored uncompressed.
-        noCompress += "onnx"
-    }
-
     sourceSets {
         getByName("main") {
             kotlin.srcDir("src/main/kotlin")
@@ -148,16 +142,12 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.common)
-    implementation(libs.androidx.media3.transformer)
-    implementation(libs.androidx.media3.effect)
 
     implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.documentfile)
 
     implementation(libs.mlkit.pose.detection.accurate)
-    implementation(libs.onnxruntime.android)
 
-    implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
 
@@ -167,20 +157,8 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation(libs.okhttp.mockwebserver)
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }
 
-// The RF-DETR disc model is not committed; scripts/fetch_disc_model.py
-// downloads it. A release without it would ship an Auto-detect that cannot
-// load, so stop the build instead.
-val discModel = file("src/main/assets/models/rfdetr/weights.onnx")
-tasks.matching { it.name == "preReleaseBuild" }.configureEach {
-    doFirst {
-        check(discModel.exists()) {
-            "Missing ${discModel.path}. Run ROBOFLOW_API_KEY=... python scripts/fetch_disc_model.py first."
-        }
-    }
-}

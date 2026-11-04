@@ -15,6 +15,7 @@ key.properties
 *.iml
 captures/
 
-# The RF-DETR disc model (114 MB, over GitHub's file limit).
-# scripts/fetch_disc_model.py downloads it from Roboflow.
+# The RF-DETR disc model that the removed flight tracker downloaded (114 MB,
+# over GitHub's file limit). Kept ignored so a leftover local copy is never
+# committed; delete the folder, or it is still packaged into the APK.
 app/src/main/assets/models/rfdetr/

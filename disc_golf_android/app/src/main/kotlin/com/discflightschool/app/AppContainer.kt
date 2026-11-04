@@ -3,26 +3,19 @@ package com.discflightschool.app
 import android.content.Context
 import com.discflightschool.app.data.AssetContent
 import com.discflightschool.app.data.EncryptedSecretStore
-import com.discflightschool.app.data.FileManifestStore
-import com.discflightschool.app.data.FlightGalleryRepository
 import com.discflightschool.app.data.KnowledgeBaseRepository
 import com.discflightschool.app.data.ProBaselineRepository
 import com.discflightschool.app.data.SharedPreferencesStore
-import com.discflightschool.app.data.TrainingDataCollector
 import com.discflightschool.app.data.VideoLibrary
 import com.discflightschool.app.data.migrateFlutterPreferences
-import com.discflightschool.app.detection.RfDetrDiscDetector
 import com.discflightschool.app.pose.PostureAnalyzer
 import com.discflightschool.app.ui.WorkbenchState
 import com.discflightschool.app.ui.screens.roulette.RoundPlayState
 import com.discflightschool.app.video.FrameExtractor
 import com.discflightschool.core.data.AppPreferences
-import com.discflightschool.core.data.DetectionSettings
 import com.discflightschool.core.data.FormHistoryRepository
 import com.discflightschool.core.data.RouletteHistoryRepository
 import com.discflightschool.core.data.ScoringRepository
-import com.discflightschool.core.data.TrainingDataRepository
-import java.io.File
 
 /**
  * The app's long-lived objects, built once and shared by every screen.
@@ -31,9 +24,9 @@ import java.io.File
  * there are a dozen singletons and one lifetime, and a graph that can be read
  * top to bottom is worth more here than the wiring a framework would save.
  *
- * The detector and the pose analyzer hold native resources, so they live here
- * rather than in a screen's ViewModel — a tracker that disposed the shared
- * model session would break detection for the rest of the session.
+ * The pose analyzer holds native resources, so it lives here rather than in a
+ * screen's ViewModel — a screen that disposed the shared detector would break
+ * pose detection for the rest of the session.
  */
 class AppContainer(context: Context) {
 
@@ -52,23 +45,15 @@ class AppContainer(context: Context) {
         // search. That feature is gone, so nothing reads the key any more;
         // removing it keeps a credential from lingering on the device unused.
         it.delete(LEGACY_ANTHROPIC_API_KEY)
+        // The same for the removed disc-training uploads' server key.
+        it.delete(LEGACY_TRAINING_API_KEY)
     }
 
-    /** The root of everything the app collects for detector training. */
-    val trainingDataDir: File = File(appContext.filesDir, "training_data")
-
     val appPreferences = AppPreferences(preferencesStore)
-    val detectionSettings = DetectionSettings(preferencesStore)
 
     val scoringRepository = ScoringRepository(preferencesStore)
     val formHistoryRepository = FormHistoryRepository(preferencesStore)
     val rouletteHistoryRepository = RouletteHistoryRepository(preferencesStore)
-
-    val trainingDataRepository = TrainingDataRepository(
-        store = preferencesStore,
-        secrets = secretStore,
-        manifestStore = FileManifestStore(File(trainingDataDir, "manifest.json")),
-    )
 
     private val assets = AssetContent(appContext)
 
@@ -77,26 +62,8 @@ class AppContainer(context: Context) {
 
     val frameExtractor = FrameExtractor()
     val videoLibrary = VideoLibrary(appContext)
-    val flightGalleryRepository = FlightGalleryRepository(
-        context = appContext,
-        store = preferencesStore,
-        frameExtractor = frameExtractor,
-    )
-
-    /** The Roboflow Workflow's disc model, run on the device. */
-    val discDetector = RfDetrDiscDetector(
-        context = appContext,
-        frameExtractor = frameExtractor,
-        settings = detectionSettings,
-    )
 
     val postureAnalyzer = PostureAnalyzer(frameExtractor)
-
-    val trainingDataCollector = TrainingDataCollector(
-        repository = trainingDataRepository,
-        frameExtractor = frameExtractor,
-        dataDir = trainingDataDir,
-    )
 
     /** The clip being worked on, shared across the screens of one flow. */
     val workbench = WorkbenchState()
@@ -104,12 +71,14 @@ class AppContainer(context: Context) {
 
     /** Releases the native resources held for the life of the process. */
     fun shutdown() {
-        discDetector.close()
         postureAnalyzer.close()
     }
 
     private companion object {
         /** Where the removed AI search feature kept its key in encrypted storage. */
         const val LEGACY_ANTHROPIC_API_KEY = "anthropic_api_key"
+
+        /** Where the removed training-upload feature kept its server key. */
+        const val LEGACY_TRAINING_API_KEY = "training_api_key"
     }
 }

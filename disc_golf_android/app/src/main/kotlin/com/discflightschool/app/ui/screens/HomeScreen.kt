@@ -13,9 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.Casino
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.TrackChanges
-import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,24 +34,19 @@ import com.discflightschool.app.ui.components.NavigationCard
 import com.discflightschool.app.ui.components.readableWidth
 import com.discflightschool.app.ui.theme.AppColors
 
-/** The four things the app does, and the two places it keeps them. */
+/** The three things the app does, and its privacy policy. */
 @Composable
 fun HomeScreen(
-    onOpenFlightTracker: () -> Unit,
     onOpenFormCoach: () -> Unit,
     onOpenRoulette: () -> Unit,
     onOpenKnowledgeBase: () -> Unit,
-    onOpenGallery: () -> Unit,
-    onOpenSettings: () -> Unit,
+    onOpenPrivacyPolicy: () -> Unit,
 ) {
     Scaffold(
         topBar = {
             AppTopBar(title = "Disc Flight School") {
-                IconButton(onClick = onOpenGallery) {
-                    Icon(Icons.Default.VideoLibrary, contentDescription = "Flight path gallery")
-                }
-                IconButton(onClick = onOpenSettings) {
-                    Icon(Icons.Default.Settings, contentDescription = "Training settings")
+                IconButton(onClick = onOpenPrivacyPolicy) {
+                    Icon(Icons.Default.PrivacyTip, contentDescription = "Privacy policy")
                 }
             }
         },
@@ -85,14 +78,6 @@ fun HomeScreen(
             )
             Spacer(Modifier.height(32.dp))
 
-            NavigationCard(
-                title = "Flight Tracker",
-                description = "Track and analyze disc flight paths",
-                icon = Icons.Default.TrackChanges,
-                accent = AppColors.FlightTracker,
-                onClick = onOpenFlightTracker,
-            )
-            Spacer(Modifier.height(16.dp))
             NavigationCard(
                 title = "Form Coach",
                 description = "Analyze and improve your throwing form",
