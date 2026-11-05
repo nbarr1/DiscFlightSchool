@@ -7,6 +7,9 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
@@ -45,6 +48,7 @@ class MainActivity : ComponentActivity() {
         val container = (application as DiscFlightSchoolApplication).container
 
         setContent {
+            val cutoutSides = WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)
             DiscFlightSchoolTheme {
                 CompositionLocalProvider(LocalAppContainer provides container) {
                     Surface(
@@ -54,6 +58,11 @@ class MainActivity : ComponentActivity() {
                             // would otherwise sit on top of scrolling content.
                             .windowInsetsPadding(WindowInsets.navigationBars)
                             .consumeWindowInsets(WindowInsets.navigationBars)
+                            // In landscape the camera cutout sits on a side edge,
+                            // over the video and its control column; keep content
+                            // clear of it. The status-bar cutout is the top bar's.
+                            .windowInsetsPadding(cutoutSides)
+                            .consumeWindowInsets(cutoutSides)
                             // Edge-to-edge stops adjustResize from shrinking the
                             // window, so the keyboard inset is applied here, once,
                             // for every screen with a text field.

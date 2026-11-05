@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -38,7 +36,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -57,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import com.discflightschool.app.LocalAppContainer
 import com.discflightschool.app.ui.Formatting
 import com.discflightschool.app.ui.components.AppTopBar
+import com.discflightschool.app.ui.components.VideoWithControls
 import com.discflightschool.app.ui.theme.AppColors
 import com.discflightschool.app.video.VideoSurface
 import com.discflightschool.app.video.rememberPlaybackState
@@ -127,46 +125,26 @@ fun PhaseFrameSelectorScreen(onBack: () -> Unit, onAnalyze: () -> Unit) {
 
     Scaffold(
         topBar = { AppTopBar(title = "Select phase frames", onBack = onBack) },
-        // The screen's one forward action sits under the thumb, and says how
-        // far there is to go, instead of a disabled word in the app bar.
-        bottomBar = {
-            Surface(color = MaterialTheme.colorScheme.background) {
-                Button(
-                    onClick = { analyze() },
-                    enabled = allMarked,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                ) {
-                    val remaining = phases.count { it !in marks }
-                    Text(
-                        when (remaining) {
-                            0 -> "Analyze form"
-                            1 -> "Mark 1 more phase"
-                            else -> "Mark $remaining more phases"
-                        },
-                    )
-                }
-            }
-        },
     ) { padding ->
-        Column(
+        // On a short, wide window (a phone in landscape) the controls move to a
+        // scrolling side column. Stacked under the video, they would leave the
+        // video and the phase cards a few dozen dp between them.
+        VideoWithControls(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize(),
+            video = { videoModifier ->
+                Box(
+                    modifier = videoModifier.background(Color.Black),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    VideoSurface(player, Modifier.fillMaxSize())
+                }
+            },
         ) {
-            Box(
-                modifier = Modifier
-                    .weight(5f)
-                    .fillMaxWidth()
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center,
-            ) {
-                VideoSurface(player, Modifier.fillMaxSize())
-            }
-
             Column(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .background(Color.Black.copy(alpha = 0.85f))
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {
@@ -237,30 +215,57 @@ fun PhaseFrameSelectorScreen(onBack: () -> Unit, onAnalyze: () -> Unit) {
                 "Step frame by frame, then tap a phase card to mark it.",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(AppColors.Surface)
+                    .background(MaterialTheme.colorScheme.surface)
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
 
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                modifier = Modifier.weight(4f),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            // A plain grid rather than a lazy one: there are four or five
+            // phases, and the side column scrolls, which a lazy grid can't sit in.
+            Column(
+                modifier = Modifier.padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(phases.size, key = { phases[it] }) { index ->
-                    val phase = phases[index]
-                    PhaseCard(
-                        phase = phase,
-                        markedAtMs = marks[phase],
-                        onMark = {
-                            marks[phase] = playback.positionMs.coerceIn(startMs, endMs)
-                        },
-                    )
+                phases.chunked(2).forEach { pair ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        pair.forEach { phase ->
+                            Box(Modifier.weight(1f)) {
+                                PhaseCard(
+                                    phase = phase,
+                                    markedAtMs = marks[phase],
+                                    onMark = {
+                                        marks[phase] = playback.positionMs.coerceIn(startMs, endMs)
+                                    },
+                                )
+                            }
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
                 }
+            }
+
+            // The screen's one forward action sits under the thumb, and says how
+            // far there is to go, instead of a disabled word in the app bar.
+            Button(
+                onClick = { analyze() },
+                enabled = allMarked,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                val remaining = phases.count { it !in marks }
+                Text(
+                    when (remaining) {
+                        0 -> "Analyze form"
+                        1 -> "Mark 1 more phase"
+                        else -> "Mark $remaining more phases"
+                    },
+                )
             }
         }
     }

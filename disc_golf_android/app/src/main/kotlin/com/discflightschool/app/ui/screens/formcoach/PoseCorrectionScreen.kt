@@ -24,6 +24,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.Refresh
@@ -197,6 +201,28 @@ fun PoseCorrectionScreen(
         revision++
     }
 
+    // A non-drag route to the same correction: step the selected joint by a
+    // few dp per press, so a joint can be fixed without a precise drag.
+    fun nudgeSelected(dx: Float, dy: Float) {
+        val key = selectedLandmark ?: return
+        val frame = analysis.frames[currentFrame]
+        val point = frame.keyPoints[key] ?: return
+        if (videoSize == Size.Zero) return
+        val step = with(density) { NUDGE_STEP.toPx() }
+        val current = SkeletonOverlay.scalePoint(point, videoSize, frame)
+        moveSelectedTo(current + Offset(dx * step, dy * step))
+    }
+
+    // Selects the next joint the frame has, so a joint can be chosen without
+    // finding it on the video.
+    fun selectNextLandmark() {
+        val present = SkeletonOverlay.ADJUSTABLE_LANDMARKS
+            .filter { it in analysis.frames[currentFrame].keyPoints }
+        if (present.isEmpty()) return
+        val index = present.indexOf(selectedLandmark)
+        selectedLandmark = present[(index + 1) % present.size]
+    }
+
     fun moveAllBy(canvasDelta: Offset) {
         val frame = analysis.frames[currentFrame]
         if (frame.keyPoints.isEmpty() || videoSize == Size.Zero) return
@@ -353,7 +379,7 @@ fun PoseCorrectionScreen(
                                 // users what the area is.
                                 .semantics {
                                     contentDescription = "Video frame with the detected pose. " +
-                                        "Tap a joint, then drag it to correct it."
+                                        "Tap a joint, then drag it, or use Next joint and the arrow buttons."
                                 }
                                 .pointerInput(sequentialMode, sequentialReview, currentFrame) {
                                     detectTapGestures(
@@ -366,6 +392,7 @@ fun PoseCorrectionScreen(
                                                     position,
                                                     videoSize,
                                                     frame,
+                                                    thresholdPx = JOINT_HIT_RADIUS.toPx(),
                                                 )
                                             }
                                         },
@@ -376,6 +403,7 @@ fun PoseCorrectionScreen(
                                                 position,
                                                 videoSize,
                                                 analysis.frames[currentFrame],
+                                                thresholdPx = JOINT_HIT_RADIUS.toPx(),
                                             )
                                             magnifierAt = position
                                         },
@@ -522,15 +550,23 @@ fun PoseCorrectionScreen(
                             }
                         }
 
+                        if (!moveAllMode) {
+                            JointNudgeRow(
+                                selectedLabel = selectedLandmark?.let(::landmarkLabel),
+                                onSelectNext = { selectNextLandmark() },
+                                onNudge = { dx, dy -> nudgeSelected(dx, dy) },
+                            )
+                        }
+
                         Text(
                             text = when {
                                 moveAllMode ->
                                     "Drag anywhere to move the whole skeleton onto the thrower."
                                 selectedLandmark != null ->
-                                    "Dragging ${landmarkLabel(selectedLandmark!!)}. " +
+                                    "Drag ${landmarkLabel(selectedLandmark!!)} or use the arrows. " +
                                         "Long-press for a magnified view."
                                 else ->
-                                    "Tap a joint to select it, then drag to correct it. " +
+                                    "Tap a joint or choose Next joint, then drag or use the arrows. " +
                                         "Long-press to zoom."
                             },
                             modifier = Modifier
@@ -770,3 +806,46 @@ private fun landmarkLabel(key: String): String = key
     .replace(Regex("([A-Z])"), " $1")
     .trim()
     .lowercase()
+
+/**
+ * Selects a joint and steps it in four directions: the single-press route to
+ * a correction that otherwise needs a drag.
+ */
+@Composable
+private fun JointNudgeRow(
+    selectedLabel: String?,
+    onSelectNext: () -> Unit,
+    onNudge: (dx: Float, dy: Float) -> Unit,
+) {
+    val enabled = selectedLabel != null
+    val joint = selectedLabel ?: "joint"
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = onSelectNext) {
+            Text(if (enabled) "Next joint" else "Select a joint")
+        }
+        Spacer(Modifier.weight(1f))
+        IconButton(onClick = { onNudge(-1f, 0f) }, enabled = enabled) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Move $joint left")
+        }
+        IconButton(onClick = { onNudge(0f, -1f) }, enabled = enabled) {
+            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Move $joint up")
+        }
+        IconButton(onClick = { onNudge(0f, 1f) }, enabled = enabled) {
+            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Move $joint down")
+        }
+        IconButton(onClick = { onNudge(1f, 0f) }, enabled = enabled) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Move $joint right")
+        }
+    }
+}
+
+/** How far a tap may land from a joint and still select it: a 56dp target. */
+private val JOINT_HIT_RADIUS = 28.dp
+
+/** How far one arrow press moves the selected joint. */
+private val NUDGE_STEP = 2.dp

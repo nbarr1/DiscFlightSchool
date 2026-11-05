@@ -55,6 +55,8 @@ import com.discflightschool.app.ui.components.rememberReduceMotion
 import com.discflightschool.app.ui.components.readableWidth
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.Role
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material3.FilledTonalButton
@@ -516,8 +518,13 @@ fun PlayRoundScreen(
                         Spacer(Modifier.width(8.dp))
                         Text(if (isSpinning) "Spinning..." else "Spin")
                     }
-                } else {
-                    ChallengeCard(spun, currentThrows.size + 1)
+                }
+                // Always composed, so TalkBack hears the challenge when it
+                // replaces the wheel and the focused Spin button goes away.
+                Column(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }) {
+                    if (spun != null) ChallengeCard(spun, currentThrows.size + 1)
+                }
+                if (spun != null) {
                     Spacer(Modifier.height(24.dp))
                     // Two ways a throw ends: in the basket, or short of it. Holing
                     // out finishes the hole, so it is the filled action; Re-spin
