@@ -312,6 +312,9 @@ private fun PlayerScorecard(
 @Composable
 private fun HoleTile(score: HoleScore, onClick: () -> Unit) {
     val color = scoreColor(score.strokes - score.par)
+    // onSurfaceVariant falls to 3.8-4.1:1 on the score tints inside the card;
+    // a softened onSurface keeps the labels secondary and above 5:1 on all of them.
+    val labelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
     Column(
         modifier = Modifier
             .clip(RoundedCornerShape(4.dp))
@@ -329,7 +332,7 @@ private fun HoleTile(score: HoleScore, onClick: () -> Unit) {
         Text(
             "${score.holeNumber}",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = labelColor,
         )
         Text(
             "${score.strokes}",
@@ -342,7 +345,7 @@ private fun HoleTile(score: HoleScore, onClick: () -> Unit) {
         Text(
             "${Formatting.decimal(score.averageMultiplier)}x",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = labelColor,
         )
     }
 }
