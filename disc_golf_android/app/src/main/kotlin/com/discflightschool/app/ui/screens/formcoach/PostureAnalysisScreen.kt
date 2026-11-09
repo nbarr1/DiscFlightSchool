@@ -59,6 +59,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -493,10 +494,11 @@ fun PostureAnalysisScreen(
                 onSeekToFrame = { seekToFrame(it) },
             )
 
+            val savedSessions by container.formHistoryRepository.sessions.collectAsState()
             if (!analysis.isMock) {
                 ThrowDistanceCard(
                     sessionId = analysis.id,
-                    initialFeet = container.formHistoryRepository.sessions.value
+                    initialFeet = savedSessions
                         .firstOrNull { it.id == analysis.id }?.distanceFeet,
                     onSave = { feet ->
                         container.formHistoryRepository.setDistance(analysis.id, feet)
