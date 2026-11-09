@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -58,6 +59,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -69,6 +71,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.discflightschool.app.LocalAppContainer
@@ -491,6 +494,18 @@ fun PostureAnalysisScreen(
                 onSeekToFrame = { seekToFrame(it) },
             )
 
+            val savedSessions by container.formHistoryRepository.sessions.collectAsState()
+            if (!analysis.isMock) {
+                ThrowDistanceCard(
+                    sessionId = analysis.id,
+                    initialFeet = savedSessions
+                        .firstOrNull { it.id == analysis.id }?.distanceFeet,
+                    onSave = { feet ->
+                        container.formHistoryRepository.setDistance(analysis.id, feet)
+                    },
+                )
+            }
+
             Suggestions(
                 suggestions = suggestions,
                 ready = suggestionsReady,
@@ -499,6 +514,78 @@ fun PostureAnalysisScreen(
             )
 
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+/** The longest distance the field accepts, well past the world record. */
+private const val MAX_DISTANCE_FEET = 1500.0
+
+/**
+ * An optional field for how far the throw went, so the history can later show
+ * whether changes in form go with longer throws. Leaving it empty is fine.
+ */
+@Composable
+private fun ThrowDistanceCard(
+    sessionId: String,
+    initialFeet: Double?,
+    onSave: (Double?) -> Boolean,
+) {
+    var text by remember(sessionId) {
+        mutableStateOf(initialFeet?.roundToInt()?.toString().orEmpty())
+    }
+    var saved by remember(sessionId) { mutableStateOf(initialFeet) }
+
+    val entered: Double? = text.trim().toDoubleOrNull()
+    val isValid = text.isBlank() ||
+        (entered != null && entered > 0.0 && entered <= MAX_DISTANCE_FEET)
+    val pending: Double? = if (text.isBlank()) null else entered
+
+    SectionCard(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        title = "Throw distance (optional)",
+    ) {
+        Column {
+            Text(
+                "If you know how far this throw went, add it here. Your history " +
+                    "can then show whether changes in your form go with longer throws.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { input ->
+                        text = input.filter { it.isDigit() || it == '.' }.take(7)
+                    },
+                    label = { Text("Feet") },
+                    singleLine = true,
+                    isError = !isValid,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                TextButton(
+                    onClick = { if (onSave(pending)) saved = pending },
+                    enabled = isValid && pending != saved,
+                ) {
+                    Text(if (pending == null && saved != null) "Clear" else "Save")
+                }
+            }
+            if (!isValid) {
+                Text(
+                    "Enter a distance from 1 to 1,500 feet, or leave it empty.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AppColors.Bad,
+                )
+            } else if (saved != null && pending == saved) {
+                Text(
+                    "Saved with this session.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AppColors.Good,
+                )
+            }
         }
     }
 }

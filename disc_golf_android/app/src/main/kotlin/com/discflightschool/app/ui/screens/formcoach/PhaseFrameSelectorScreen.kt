@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FastForward
@@ -87,7 +88,7 @@ fun PhaseFrameSelectorScreen(onBack: () -> Unit, onAnalyze: () -> Unit) {
 
     val startMs = workbench.analysisStartMs
     val endMs = workbench.analysisEndMs
-    val phases = ProBaselineDatabase.phaseNames(workbench.throwType)
+    val phases = ProBaselineDatabase.markedPhaseNames(workbench.throwType)
 
     val player = rememberVideoPlayer(videoPath)
     val playback = rememberPlaybackState(player)
@@ -312,7 +313,7 @@ private fun PhaseCard(phase: String, markedAtMs: Long?, onMark: () -> Unit) {
                 color = if (isSet) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                if (markedAtMs != null) "Marked at ${seconds(markedAtMs)}" else "Tap to mark this frame",
+                if (markedAtMs != null) "Marked at ${seconds(markedAtMs)}" else phaseHint(phase),
                 style = MaterialTheme.typography.labelSmall,
                 color = accent,
             )
@@ -328,12 +329,19 @@ private fun PhaseCard(phase: String, markedAtMs: Long?, onMark: () -> Unit) {
     }
 }
 
+/** What an unmarked phase card asks for. */
+private fun phaseHint(phase: String): String = when (phase) {
+    ProBaselineDatabase.PLANT -> "First frame the front foot touches the ground"
+    else -> "Tap to mark this frame"
+}
+
 internal fun phaseIcon(phase: String): ImageVector = when (phase) {
     "reach_back" -> Icons.AutoMirrored.Filled.ArrowBack
     "power_pocket" -> Icons.Default.SportsHandball
     "release" -> Icons.Default.RocketLaunch
     "follow_through" -> Icons.AutoMirrored.Filled.Redo
     "wind_up" -> Icons.Default.RotateRight
+    ProBaselineDatabase.PLANT -> Icons.AutoMirrored.Filled.DirectionsWalk
     else -> Icons.Default.Flag
 }
 

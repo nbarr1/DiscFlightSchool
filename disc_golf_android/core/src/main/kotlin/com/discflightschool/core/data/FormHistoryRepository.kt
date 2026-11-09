@@ -22,6 +22,27 @@ class FormHistoryRepository(private val store: KeyValueStore) {
         persist()
     }
 
+    /**
+     * Record, change, or clear (with null) the distance the player reported
+     * for a saved session. Returns false when no session has that [id].
+     *
+     * A distance that isn't a positive, finite number is stored as null.
+     */
+    fun setDistance(id: String, distanceFeet: Double?): Boolean {
+        val clean = distanceFeet?.takeIf { it.isFinite() && it > 0.0 }
+        var found = false
+        _sessions.value = _sessions.value.map { record ->
+            if (record.id == id) {
+                found = true
+                record.copy(distanceFeet = clean)
+            } else {
+                record
+            }
+        }
+        if (found) persist()
+        return found
+    }
+
     fun clearHistory() {
         _sessions.value = emptyList()
         store.remove(KEY)

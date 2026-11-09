@@ -262,6 +262,23 @@ class ProBaselineDatabase(private val root: JsonObject) {
             }
 
         /**
+         * The phase the lead foot lands: the first frame the front foot touches
+         * the ground. Research on the backhand times lead-leg forces and knee
+         * extension from this moment (Tervonen 2025).
+         */
+        const val PLANT = "plant"
+
+        /**
+         * The phases a player marks, in the order they usually happen: the
+         * baseline phases plus [PLANT] after the reach back or wind-up.
+         *
+         * The pro baseline has no plant data, so pro comparison and scoring keep
+         * using [phaseNames] and ignore the plant mark.
+         */
+        fun markedPhaseNames(throwType: String): List<String> =
+            phaseNames(throwType).toMutableList().apply { add(1, PLANT) }
+
+        /**
          * Maps JSON angle keys to app angle keys.
          *
          * BH (RHBH): lead knee = right, trail knee = left.
