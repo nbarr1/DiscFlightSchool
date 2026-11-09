@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.double
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -21,6 +22,11 @@ data class FormSessionRecord(
     val frameCount: Int,
     /** Per-angle averages, kept for trend charting. */
     val avgAngles: Map<String, Double> = emptyMap(),
+    /**
+     * How far the throw went, in feet, as the player reported it. Optional:
+     * null when the player didn't enter a distance.
+     */
+    val distanceFeet: Double? = null,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("id", JsonPrimitive(id))
@@ -30,6 +36,7 @@ data class FormSessionRecord(
         put("proPlayer", proPlayer?.let { JsonPrimitive(it) } ?: JsonNull)
         put("frameCount", JsonPrimitive(frameCount))
         put("avgAngles", JsonObject(avgAngles.mapValues { JsonPrimitive(it.value) }))
+        put("distanceFeet", distanceFeet?.let { JsonPrimitive(it) } ?: JsonNull)
     }
 
     companion object {
@@ -42,6 +49,7 @@ data class FormSessionRecord(
             frameCount = json.getValue("frameCount").jsonPrimitive.double.toInt(),
             avgAngles = json["avgAngles"]?.jsonObject
                 ?.mapValues { it.value.jsonPrimitive.double } ?: emptyMap(),
+            distanceFeet = json["distanceFeet"]?.jsonPrimitive?.doubleOrNull,
         )
 
         private fun JsonPrimitive.contentOrNull(): String? =
