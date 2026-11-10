@@ -21,6 +21,9 @@ venv/
 .pytest_cache/
 *.egg-info/
 
+# Flight benchmark downloads (videos, frames, dataset exports)
+tools/flight-bench/data/
+
 # Local environment
 .env
 .env.local

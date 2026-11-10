@@ -28,7 +28,7 @@ The app analyzes on the device: pose analysis uses ML Kit, with no server call. 
 
 ## Capabilities and Constraints
 
-- Three features: Form Coach, Disc Roulette, and Knowledge Base. Flight tracking was removed to be rebuilt; see `docs/flight-tracking-rebuild-reference.md`.
+- Three features: Form Coach, Disc Roulette, and Knowledge Base. Flight tracking was removed to be rebuilt; see `docs/flight-tracking-plan.md`.
 - Native Android app in Kotlin and Jetpack Compose with Material 3. `minSdk` is 24.
 - The app uses a single dark theme on purpose. Light mode and Dynamic Color are out of scope unless this decision changes.
 - The in-app privacy policy (`PrivacyPolicy.kt`) must match `docs/privacy-policy.md`, and a test enforces this.

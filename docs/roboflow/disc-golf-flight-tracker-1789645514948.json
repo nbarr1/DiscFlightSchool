@@ -1,0 +1,185 @@
+{
+  "specification": {
+    "version": "1.0",
+    "inputs": [
+      {
+        "type": "WorkflowImage",
+        "name": "image"
+      }
+    ],
+    "steps": [
+      {
+        "type": "roboflow_core/inner_workflow@v1",
+        "name": "model",
+        "workflow_workspace_id": "disc-golf-tracer",
+        "workflow_id": "disc-golf-flight-tracker",
+        "workflow_version_id": null,
+        "parameter_bindings": {
+          "image": "$inputs.image",
+          "confidence": 0.15
+        }
+      },
+      {
+        "type": "roboflow_core/detections_filter@v1",
+        "name": "frisbee_filter",
+        "predictions": "$steps.model.predictions",
+        "operations": [
+          {
+            "type": "DetectionsFilter",
+            "filter_operation": {
+              "type": "StatementGroup",
+              "operator": "and",
+              "statements": [
+                {
+                  "type": "BinaryStatement",
+                  "left_operand": {
+                    "type": "DynamicOperand",
+                    "operand_name": "_",
+                    "operations": [
+                      {
+                        "type": "ExtractDetectionProperty",
+                        "property_name": "class_name"
+                      }
+                    ]
+                  },
+                  "comparator": {
+                    "type": "in (Sequence)"
+                  },
+                  "right_operand": {
+                    "type": "StaticOperand",
+                    "value": [
+                      "disc"
+                    ],
+                    "operations": []
+                  },
+                  "negate": false
+                }
+              ]
+            }
+          }
+        ],
+        "operations_parameters": {}
+      },
+      {
+        "type": "roboflow_core/trackers_ocsort@v1",
+        "name": "disc_tracker",
+        "image": "$inputs.image",
+        "detections": "$steps.frisbee_filter.predictions",
+        "minimum_consecutive_frames": 1,
+        "lost_track_buffer": 30,
+        "high_conf_det_threshold": 0.15,
+        "minimum_iou_threshold": 0.01,
+        "direction_consistency_weight": 0.4,
+        "delta_t": 2
+      },
+      {
+        "type": "roboflow_core/trace_visualization@v1",
+        "name": "flight_path",
+        "image": "$inputs.image",
+        "predictions": "$steps.disc_tracker.tracked_detections",
+        "color_axis": "TRACK",
+        "custom_colors": [
+          "#D7FF00"
+        ],
+        "trace_length": 120,
+        "thickness": 4,
+        "position": "CENTER"
+      },
+      {
+        "type": "roboflow_core/bounding_box_visualization@v1",
+        "name": "disc_box",
+        "image": "$steps.flight_path.image",
+        "predictions": "$steps.disc_tracker.tracked_detections",
+        "color_axis": "TRACK",
+        "custom_colors": [
+          "#D7FF00"
+        ],
+        "thickness": 3
+      },
+      {
+        "type": "roboflow_core/label_visualization@v2",
+        "name": "disc_label",
+        "image": "$steps.disc_box.image",
+        "predictions": "$steps.disc_tracker.tracked_detections",
+        "color_axis": "TRACK",
+        "custom_colors": [
+          "#D7FF00"
+        ],
+        "text": "Tracker Id",
+        "text_position": "TOP_LEFT",
+        "text_scale": 0.7,
+        "text_padding": 4
+      }
+    ],
+    "outputs": [
+      {
+        "type": "JsonField",
+        "name": "output_image",
+        "selector": "$steps.disc_label.image"
+      },
+      {
+        "type": "JsonField",
+        "name": "disc_detections",
+        "selector": "$steps.frisbee_filter.predictions"
+      },
+      {
+        "type": "JsonField",
+        "name": "tracked_disc",
+        "selector": "$steps.disc_tracker.tracked_detections"
+      }
+    ],
+    "metadata": {
+      "ui": {
+        "nodes": {
+          "$steps.model": {
+            "renderAs": "model"
+          }
+        },
+        "edges": [
+          {
+            "source": "$inputs",
+            "target": "$steps.model",
+            "inputProperty": "parameter_bindings",
+            "sourceSelector": "image"
+          },
+          {
+            "source": "$steps.model",
+            "target": "$steps.frisbee_filter",
+            "inputProperty": "predictions",
+            "sourceSelector": "predictions"
+          },
+          {
+            "source": "$steps.frisbee_filter",
+            "target": "$steps.disc_tracker",
+            "inputProperty": "detections",
+            "sourceSelector": "predictions"
+          },
+          {
+            "source": "$steps.disc_tracker",
+            "target": "$steps.flight_path",
+            "inputProperty": "predictions",
+            "sourceSelector": "tracked_detections"
+          },
+          {
+            "source": "$steps.flight_path",
+            "target": "$steps.disc_box",
+            "inputProperty": "image",
+            "sourceSelector": "image"
+          },
+          {
+            "source": "$steps.disc_box",
+            "target": "$steps.disc_label",
+            "inputProperty": "image",
+            "sourceSelector": "image"
+          },
+          {
+            "source": "$steps.disc_label",
+            "target": "$outputs",
+            "sourceSelector": "image"
+          }
+        ],
+        "groups": []
+      }
+    }
+  }
+}

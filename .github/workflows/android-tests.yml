@@ -72,3 +72,17 @@ jobs:
           name: lint-report
           path: disc_golf_android/app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
+
+  test-flight-bench:
+    name: Flight benchmark tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # The benchmark uses only the standard library, so the runner's own
+      # Python is enough.
+      - name: Run benchmark tests
+        working-directory: tools/flight-bench
+        run: python3 -m unittest discover -s tests
