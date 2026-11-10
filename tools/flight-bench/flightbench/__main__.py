@@ -1,6 +1,7 @@
 """Command line for the flight tracking benchmark.
 
     python -m flightbench import-coco <export dir> --out labels/x.json
+    python -m flightbench map-frames labels/x.json <export dir> <video dir>
     python -m flightbench leakage labels/x.json
     python -m flightbench score --truth labels/x.json --pred out.json
 """
@@ -30,6 +31,19 @@ def _import_coco(args: argparse.Namespace) -> int:
     Path(args.out).write_text(json.dumps(truth_set, indent=1) + "\n", encoding="utf-8")
     frames = sum(len(c["frames"]) for c in truth_set["clips"].values())
     print(f"wrote {len(truth_set['clips'])} clips and {frames} frames to {args.out}")
+    return 0
+
+
+def _map_frames(args: argparse.Namespace) -> int:
+    from .videoframes import apply_video_frames, match_export_to_videos
+
+    path = Path(args.truth)
+    truth_set = json.loads(path.read_text(encoding="utf-8"))
+    matches = match_export_to_videos(args.export_dir, args.video_dir)
+    apply_video_frames(truth_set, matches)
+    path.write_text(json.dumps(truth_set, indent=1) + "\n", encoding="utf-8")
+    for clip, body in truth_set["clips"].items():
+        print(f"  {body['frame_numbering']:5}  {clip}")
     return 0
 
 
@@ -84,6 +98,14 @@ def main(argv: list[str] | None = None) -> int:
     coco.add_argument("--source")
     coco.add_argument("--license")
     coco.set_defaults(run=_import_coco)
+
+    frames = commands.add_parser(
+        "map-frames", help="renumber labels by video frame (needs ffmpeg and numpy)"
+    )
+    frames.add_argument("truth")
+    frames.add_argument("export_dir")
+    frames.add_argument("video_dir")
+    frames.set_defaults(run=_map_frames)
 
     leak = commands.add_parser("leakage", help="list clips split across Roboflow splits")
     leak.add_argument("truth")

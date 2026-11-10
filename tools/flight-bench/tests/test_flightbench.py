@@ -195,6 +195,27 @@ class RoboflowImport(unittest.TestCase):
         self.assertEqual(main(["score", "--truth", str(out), "--pred", str(pred), "--enforce"]), 1)
 
 
+class VideoFrames(unittest.TestCase):
+    def test_renumbers_matched_clips_and_marks_the_rest(self):
+        from flightbench.videoframes import apply_video_frames
+
+        truth_set = {"clips": {
+            "one": {"width": 10, "height": 10, "frames": [
+                {"frame": 2, "visible": False}, {"frame": 1, "visible": False}]},
+            "two": {"width": 10, "height": 10, "frames": [{"frame": 1, "visible": False}]},
+        }}
+        video = {"file": "one.mp4", "frames": 40, "fps": 30.0}
+        matches = {"one": {"video": video, "frames": {"1": 0, "2": 9}}}
+        apply_video_frames(truth_set, matches)
+        one = truth_set["clips"]["one"]
+        self.assertEqual([(f["frame"], f["label_frame"]) for f in one["frames"]], [(0, 1), (9, 2)])
+        self.assertEqual((one["frame_numbering"], one["video"]), ("video", video))
+        self.assertEqual(truth_set["clips"]["two"]["frame_numbering"], "label")
+        # A second pass must not renumber again.
+        apply_video_frames(truth_set, matches)
+        self.assertEqual([f["frame"] for f in one["frames"]], [0, 9])
+
+
 class CommittedLabels(unittest.TestCase):
     def test_committed_truth_sets_parse_and_keep_clips_whole(self):
         labels = sorted((Path(__file__).parent.parent / "labels").glob("*.json"))

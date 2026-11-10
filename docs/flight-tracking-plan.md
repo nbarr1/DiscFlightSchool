@@ -49,11 +49,13 @@ Done:
 - `tools/flight-bench/labels/roboflow-v3.json` holds the Roboflow labels
   grouped by clip.
 
-Waiting on the original throw videos:
+- Each label in the nine clips with a video file is matched to its video
+  frame. The three YouTube clips have no video file.
 
-- Confirm how a label's frame number maps to a video frame.
-- Label consecutive frames on held-out clips, with handheld panning clips
-  first.
+Still to do:
+
+- Label consecutive frames on the held-out clips. Eight of the nine clips
+  with video have a label only every 7-16 frames.
 - Score the removed pipeline as the baseline, and adjust the targets.
 
 Findings so far:
@@ -64,7 +66,8 @@ Findings so far:
   throw.
 - No model on Roboflow was trained on the clip-level `train` split alone, so
   none can be scored fairly on the clip-level `test` split yet.
-- The labels were sampled with gaps and can't train a multi-frame method.
+- One clip is labeled on nearly every frame. The rest are labeled two to four
+  times per second, which can't train a multi-frame method.
 
 ### Phase 1: compare candidates offline
 

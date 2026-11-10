@@ -48,6 +48,13 @@ To rebuild the label file from a fresh Roboflow COCO export:
 python3 -m flightbench import-coco data/export --sizes data/sizes.json --out labels/roboflow-v3.json
 ```
 
+To renumber the labels by video frame, put each clip's video in `data/videos/`
+as `<clip>.mp4` and run the following command. It needs `ffmpeg` and `numpy`.
+
+```bash
+python3 -m flightbench map-frames labels/roboflow-v3.json data/export data/videos
+```
+
 `--sizes` is a JSON map of each original file name to `[width, height]`. The
 export is resized to 512x512, and the tolerance is measured in pixels of the
 original frame, so the original size has to come from somewhere else.
@@ -66,11 +73,19 @@ A prediction file looks like this:
     "frames": [{"frame": 5, "x": 0.41, "y": 0.52}]}}}
 ```
 
-A frame number is the number in the label's file name
-(`<clip>_frame_<number>.jpg`). The labels were extracted before this tool
-existed, and the repository doesn't record whether that number is the video's
-own frame index or a count of extracted frames. Confirm the mapping against
-the original videos before scoring a method that reads video.
+A clip's `frame_numbering` says what its frame numbers count:
+
+`video`
+: The 0-based index of the frame in the clip's video, in decode order. The
+  number from the label's file name is kept as `label_frame`. The nine clips
+  with a video file use this numbering.
+
+`label`
+: The number from the label's file name (`<clip>_frame_<number>.jpg`), which
+  counts extracted frames. The three YouTube clips use this numbering, because
+  their video files aren't available.
+
+A method that reads video must report video frame indexes.
 
 ## Metrics
 
@@ -114,10 +129,15 @@ of the three models on Roboflow meets that condition.
 ## Limits of the labels
 
 - There are 12 clips, and two of them supply 237 of the 423 frames.
-- The frames were sampled with gaps, so they can't train a method that needs
-  consecutive frames.
+- Only one clip is labeled on nearly every frame (145 of its 184 frames), and
+  the clip-level split puts it in `train`. The other eight clips with video
+  have a label every 7-16 frames, about two to four per second. The labels
+  can't train a method that needs consecutive frames, and they check a
+  trajectory at only a few points.
 - Three clips are YouTube Shorts and the rest came through messaging apps,
   which re-encode video. They may not look like a clip recorded in the app.
+- The nine clips with video are filmed from behind the thrower at about 30
+  frames per second. Eight are on wooded holes and one is in an open field.
 - The disc's longer side has a median of 24 pixels in the original frames
   (9 at the tenth percentile). Frames where the disc was too small for the
   labeler to see are likely missing, so the dataset understates how small the
