@@ -55,7 +55,11 @@ Done:
 Still to do:
 
 - Label consecutive frames on the held-out clips. Eight of the nine clips
-  with video have a label only every 7-16 frames.
+  with video have a label only every 7-16 frames. The 878 unlabeled flight
+  frames of the five held-out clips are uploaded to the Roboflow project as
+  `<clip>_vframe_<video frame>.jpg`, with the tag `dense-heldout`. The
+  version 3 model pre-labeled them, and the labels need a person's review
+  before they count as ground truth.
 - Score the removed pipeline as the baseline, and adjust the targets.
 
 Findings so far:
