@@ -1,0 +1,43 @@
+{
+  "specification": {
+    "version": "1.0",
+    "inputs": [
+      {
+        "type": "InferenceImage",
+        "name": "image"
+      }
+    ],
+    "steps": [
+      {
+        "type": "roboflow_core/inner_workflow@v1",
+        "name": "model",
+        "workflow_workspace_id": "disc-golf-tracer",
+        "workflow_id": "disc-golf-flight-tracker",
+        "workflow_version_id": null,
+        "parameter_bindings": {
+          "image": "$inputs.image",
+          "model_id": "disc-golf-tracer/disc-golf-flight-tracker-2-rfdetr-small-t1"
+        }
+      }
+    ],
+    "outputs": [
+      {
+        "type": "JsonField",
+        "name": "predictions",
+        "coordinates_system": "own",
+        "selector": "$steps.model.predictions"
+      }
+    ],
+    "metadata": {
+      "ui": {
+        "nodes": {
+          "$steps.model": {
+            "renderAs": "model"
+          }
+        },
+        "edges": [],
+        "groups": []
+      }
+    }
+  }
+}

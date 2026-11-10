@@ -13,6 +13,15 @@ CI runs them on every pull request (`.github/workflows/android-tests.yml`,
 which also runs Android Lint), and `release-build.yml` builds the minified
 release bundle.
 
+The flight tracking benchmark in `tools/flight-bench/` has its own tests,
+which need only Python:
+
+```bash
+cd tools/flight-bench && python3 -m unittest discover -s tests
+```
+
+CI runs them in the same workflow.
+
 ## Android coverage
 
 Everything ported out of Dart that can be tested without a device lives in

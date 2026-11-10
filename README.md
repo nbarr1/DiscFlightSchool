@@ -180,7 +180,8 @@ differs from the in-app text in `PrivacyPolicy.kt`, so change both together.
    nothing here has exercised Compose, ML Kit, Media3, or
    `MediaMetadataRetriever` against a real device. Assemble a debug APK and
    walk each feature end to end; `docs/testing.md` has the checklist.
-2. **Rebuild flight tracking.** Start from
-   [Flight tracking rebuild reference](docs/flight-tracking-rebuild-reference.md).
+2. **Rebuild flight tracking.** Follow the
+   [flight tracking rebuild plan](docs/flight-tracking-plan.md). Phase 0, the
+   benchmark in `tools/flight-bench/`, is in progress.
 3. Keep docs synchronized with source whenever assets, build settings, or
    runtime services change.

@@ -13,13 +13,12 @@ git show 6b54b28:disc_golf_android/core/src/main/kotlin/com/discflightschool/cor
 git checkout 6b54b28 -- <path>   # restore one file into the working tree
 ```
 
-## The Workflow definition file
+## The Workflow definition files
 
-The repository has never held the Roboflow Workflow's JSON definition. Every
-detail on this page comes from the removed source and the README. To make the
-JSON the source of truth for the rebuild, export it from the Roboflow app
-(Workflow editor, then the export or "Use JSON" option) and commit it next to
-this page, for example as `docs/roboflow/disc-golf-flight-tracker.json`.
+The Workflow definitions are in `docs/roboflow/`, read from the Roboflow
+workspace after the removal. The details on this page come from the removed
+source and the README, and they match those definitions. The rebuild's plan
+is in `docs/flight-tracking-plan.md`.
 
 ## Workflow identifiers
 
